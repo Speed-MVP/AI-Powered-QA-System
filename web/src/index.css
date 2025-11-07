@@ -5,7 +5,7 @@
 @tailwind utilities;
 
 @layer base {
-  :root {
+:root {
     --background: 255 255 255;
     --foreground: 17 24 39;
   }
@@ -17,14 +17,14 @@
 
   html {
     font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Helvetica Neue', 'Arial', sans-serif;
-    -webkit-font-smoothing: antialiased;
-    -moz-osx-font-smoothing: grayscale;
-  }
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
 
-  body {
+body {
     @apply bg-white dark:bg-gray-950 text-gray-900 dark:text-gray-50 font-sans;
     font-feature-settings: "rlig" 1, "calt" 1;
-  }
+}
 
   *,
   *::before,
@@ -33,7 +33,7 @@
     transition-property: color, background-color, border-color, box-shadow, fill, stroke;
     transition-timing-function: cubic-bezier(0.4, 0, 0.2, 1);
     transition-duration: 200ms;
-  }
+}
 
   /* Exclude animations and transforms from theme transitions */
   [class*="animate-"],
