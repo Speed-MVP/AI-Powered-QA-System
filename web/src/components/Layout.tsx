@@ -1,0 +1,103 @@
+import { Link, Outlet } from 'react-router-dom'
+import { useThemeStore } from '@/store/themeStore'
+import { Moon, Sun } from 'lucide-react'
+import { useEffect } from 'react'
+
+export function Layout() {
+  const theme = useThemeStore((state) => state.theme)
+  const toggleTheme = useThemeStore((state) => state.toggleTheme)
+
+  useEffect(() => {
+    document.documentElement.classList.toggle('dark', theme === 'dark')
+  }, [theme])
+
+  return (
+    <div className="min-h-screen bg-white dark:bg-[#0A0F1A]">
+      <nav className="border-b border-gray-200 dark:border-gray-800 bg-white/80 dark:bg-[#0A0F1A]/80 backdrop-blur-sm sticky top-0 z-50">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+          <div className="flex items-center justify-between h-16">
+            <div className="flex items-center flex-shrink-0">
+              <Link to="/" className="flex items-center space-x-2">
+                <div className="w-8 h-8 bg-gradient-to-br from-brand-500 to-brand-600 rounded-lg flex items-center justify-center">
+                  <span className="text-white font-bold text-lg">AI</span>
+                </div>
+                <span className="font-semibold text-gray-900 dark:text-white text-lg">
+                  QA System
+                </span>
+              </Link>
+            </div>
+
+            <div className="hidden md:flex items-center justify-center flex-1 space-x-8">
+              <Link
+                to="/test"
+                className="text-gray-600 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white text-sm font-medium"
+              >
+                Test
+              </Link>
+              <Link
+                to="/pricing"
+                className="text-gray-600 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white text-sm font-medium"
+              >
+                Pricing
+              </Link>
+              <Link
+                to="/features"
+                className="text-gray-600 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white text-sm font-medium"
+              >
+                Features
+              </Link>
+            </div>
+
+            <div className="flex items-center space-x-4 flex-shrink-0">
+              <button
+                onClick={toggleTheme}
+                className="p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800"
+                aria-label="Toggle theme"
+                type="button"
+              >
+                {theme === 'dark' ? (
+                  <Sun className="w-5 h-5 text-gray-600 dark:text-gray-300" />
+                ) : (
+                  <Moon className="w-5 h-5 text-gray-600 dark:text-gray-300" />
+                )}
+              </button>
+
+              <Link
+                to="/sign-in"
+                className="text-gray-600 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white text-sm font-medium"
+              >
+                Sign In
+              </Link>
+            </div>
+          </div>
+
+          <div className="md:hidden flex justify-center items-center space-x-6 pb-4">
+            <Link
+              to="/test"
+              className="text-gray-600 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white text-sm font-medium"
+            >
+              Test
+            </Link>
+            <Link
+              to="/pricing"
+              className="text-gray-600 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white text-sm font-medium"
+            >
+              Pricing
+            </Link>
+            <Link
+              to="/features"
+              className="text-gray-600 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white text-sm font-medium"
+            >
+              Features
+            </Link>
+          </div>
+        </div>
+      </nav>
+
+      <main>
+        <Outlet />
+      </main>
+    </div>
+  )
+}
+

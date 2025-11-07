@@ -1,31 +1,35 @@
-import { useState } from 'react'
-import './App.css'
+import { BrowserRouter, Routes, Route } from 'react-router-dom'
+import { Layout } from '@/components/Layout'
+import { Test } from '@/pages/Test'
+import { Home } from '@/pages/Home'
+import { Upload } from '@/pages/Upload'
+import { Dashboard } from '@/pages/Dashboard'
+import { Results } from '@/pages/Results'
+import { PolicyTemplates } from '@/pages/PolicyTemplates'
+import { Pricing } from '@/pages/Pricing'
+import { Features } from '@/pages/Features'
+import { SignIn } from '@/pages/SignIn'
 
 function App() {
-  const [count, setCount] = useState(0)
-
   return (
-    <div className="App">
-      <div>
-        <a href="https://vite.dev" target="_blank">
-          <img src="/vite.svg" className="logo" alt="Vite logo" />
-        </a>
-      </div>
-      <h1>Vite + React</h1>
-      <div className="card">
-        <button onClick={() => setCount((count) => count + 1)}>
-          count is {count}
-        </button>
-        <p>
-          Edit <code>src/App.tsx</code> and save to test HMR
-        </p>
-      </div>
-      <p className="read-the-docs">
-        Click on the Vite logo to learn more
-      </p>
-    </div>
+    <BrowserRouter>
+      <Routes>
+        <Route path="/" element={<Layout />}>
+          <Route index element={<Test />} />
+          <Route path="test" element={<Test />} />
+          <Route path="home" element={<Home />} />
+          <Route path="upload" element={<Upload />} />
+          <Route path="dashboard" element={<Dashboard />} />
+          <Route path="results" element={<Results />} />
+          <Route path="policy-templates" element={<PolicyTemplates />} />
+          <Route path="pricing" element={<Pricing />} />
+          <Route path="features" element={<Features />} />
+          <Route path="sign-in" element={<SignIn />} />
+          <Route path="login" element={<SignIn />} />
+        </Route>
+      </Routes>
+    </BrowserRouter>
   )
 }
 
 export default App
-
