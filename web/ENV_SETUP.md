@@ -1,6 +1,16 @@
 # Environment Variables Setup
 
-Create a `.env` file in the `web` directory with the following content:
+## Important: Never commit `.env` files!
+
+The `.env` file contains sensitive information and should never be committed to git. A `.env.example` file is provided as a template.
+
+Create a `.env` file in the `web` directory by copying the example:
+
+```bash
+cp .env.example .env
+```
+
+Then update the `.env` file with your actual values:
 
 ```env
 # Supabase Configuration
