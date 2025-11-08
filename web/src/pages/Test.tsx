@@ -1,6 +1,6 @@
 import { useCallback, useState } from 'react'
 import { useDropzone } from 'react-dropzone'
-import { Upload as UploadIcon, CheckCircle, Loader2, FileAudio, Play, BarChart3, Settings } from 'lucide-react'
+import { FaCloudUploadAlt, FaCheckCircle, FaSpinner, FaFileAudio, FaPlay, FaChartBar, FaCog } from 'react-icons/fa'
 import { usePolicyStore } from '@/store/policyStore'
 import { Link } from 'react-router-dom'
 
@@ -172,7 +172,26 @@ export function Test() {
   }
 
   return (
-    <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
+    <div className="min-h-screen relative overflow-hidden">
+      {/* Enhanced background lighting effects */}
+      <div className="fixed inset-0 -z-10 overflow-hidden pointer-events-none">
+        {/* Large ambient lights */}
+        <div className="absolute top-0 -right-40 w-[750px] h-[750px] bg-brand-400/11 dark:bg-brand-500/5.5 rounded-full blur-[110px]"></div>
+        <div className="absolute top-1/2 -left-40 w-[650px] h-[650px] bg-blue-400/9 dark:bg-blue-500/4.5 rounded-full blur-[95px]"></div>
+        <div className="absolute bottom-0 right-1/3 w-[600px] h-[600px] bg-purple-400/8 dark:bg-purple-500/4 rounded-full blur-[90px]"></div>
+        
+        {/* Medium accent lights */}
+        <div className="absolute top-1/4 left-1/4 w-[500px] h-[500px] bg-cyan-400/6 dark:bg-cyan-500/3 rounded-full blur-[80px]"></div>
+        <div className="absolute bottom-1/3 left-0 w-96 h-96 bg-emerald-400/5 dark:bg-emerald-500/2.5 rounded-full blur-3xl"></div>
+        
+        {/* Small highlight lights */}
+        <div className="absolute top-1/3 right-1/4 w-64 h-64 bg-indigo-400/4 dark:bg-indigo-500/2 rounded-full blur-2xl"></div>
+        
+        {/* Gradient overlays for depth */}
+        <div className="absolute inset-0 bg-gradient-to-br from-blue-50/10 via-transparent to-purple-50/5 dark:from-blue-900/5 dark:via-transparent dark:to-purple-900/3"></div>
+        <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_top_right,rgba(59,130,246,0.08),transparent_60%)] dark:bg-[radial-gradient(ellipse_at_top_right,rgba(59,130,246,0.04),transparent_60%)]"></div>
+      </div>
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12 relative">
       <div className="mb-8 flex items-center justify-between">
         <div>
           <h1 className="text-3xl font-bold text-gray-900 dark:text-white mb-2">
@@ -186,7 +205,7 @@ export function Test() {
           to="/policy-templates"
           className="px-4 py-2 bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded-lg hover:bg-gray-300 dark:hover:bg-gray-600 flex items-center space-x-2"
         >
-          <Settings className="w-4 h-4" />
+          <FaCog className="w-4 h-4" />
           <span>Configure Policies</span>
         </Link>
       </div>
@@ -228,7 +247,7 @@ export function Test() {
             `}
           >
             <input {...getInputProps()} />
-            <UploadIcon
+            <FaCloudUploadAlt
               className={`mx-auto h-12 w-12 mb-4 ${
                 isDragActive
                   ? 'text-brand-500'
@@ -256,7 +275,7 @@ export function Test() {
                     className="flex items-center justify-between p-3 bg-gray-50 dark:bg-gray-700/50 rounded-lg"
                   >
                     <div className="flex items-center space-x-3 flex-1 min-w-0">
-                      <FileAudio className="w-5 h-5 text-gray-400 dark:text-gray-500 flex-shrink-0" />
+                      <FaFileAudio className="w-5 h-5 text-gray-400 dark:text-gray-500 flex-shrink-0" />
                       <div className="flex-1 min-w-0">
                         <p className="text-sm font-medium text-gray-900 dark:text-white truncate">
                           {file.name}
@@ -272,19 +291,19 @@ export function Test() {
                           onClick={() => handleProcess(file)}
                           className="px-3 py-1.5 bg-brand-500 text-white text-sm rounded-lg hover:bg-brand-600 flex items-center space-x-1"
                         >
-                          <Play className="w-4 h-4" />
+                          <FaPlay className="w-4 h-4" />
                           <span>Process</span>
                         </button>
                       )}
                       {file.status === 'processing' && (
                         <div className="flex items-center space-x-2 text-brand-600 dark:text-brand-400">
-                          <Loader2 className="w-4 h-4 animate-spin" />
+                          <FaSpinner className="w-4 h-4 animate-spin" />
                           <span className="text-sm">Processing...</span>
                         </div>
                       )}
                       {file.status === 'completed' && (
                         <div className="flex items-center space-x-2 text-green-600 dark:text-green-400">
-                          <CheckCircle className="w-4 h-4" />
+                          <FaCheckCircle className="w-4 h-4" />
                           <span className="text-sm">Completed</span>
                         </div>
                       )}
@@ -306,7 +325,7 @@ export function Test() {
         <div>
           {isProcessing && (
             <div className="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 p-8 text-center">
-              <Loader2 className="w-12 h-12 text-brand-500 animate-spin mx-auto mb-4" />
+              <FaSpinner className="w-12 h-12 text-brand-500 animate-spin mx-auto mb-4" />
               <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-2">
                 Processing Recording...
               </h3>
@@ -324,7 +343,7 @@ export function Test() {
                   <h2 className="text-xl font-bold text-gray-900 dark:text-white">
                     Results: {selectedFile.name}
                   </h2>
-                  <BarChart3 className="w-6 h-6 text-brand-500" />
+                  <FaChartBar className="w-6 h-6 text-brand-500" />
                 </div>
                 <div className="text-center py-4">
                   <div className="text-5xl font-bold text-brand-600 dark:text-brand-400 mb-2">
@@ -436,7 +455,7 @@ export function Test() {
 
           {!isProcessing && !result && files.length === 0 && (
             <div className="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 p-8 text-center">
-              <BarChart3 className="w-12 h-12 text-gray-400 dark:text-gray-500 mx-auto mb-4" />
+              <FaChartBar className="w-12 h-12 text-gray-400 dark:text-gray-500 mx-auto mb-4" />
               <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-2">
                 No Results Yet
               </h3>
@@ -446,6 +465,7 @@ export function Test() {
             </div>
           )}
         </div>
+      </div>
       </div>
     </div>
   )

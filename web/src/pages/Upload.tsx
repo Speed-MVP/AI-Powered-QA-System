@@ -1,7 +1,7 @@
 import { useCallback, useState } from 'react'
 import { useDropzone } from 'react-dropzone'
 import { supabase } from '@/lib/supabase'
-import { Upload as UploadIcon, CheckCircle, AlertCircle, Loader2, FileAudio } from 'lucide-react'
+import { FaCloudUploadAlt, FaCheckCircle, FaExclamationCircle, FaSpinner, FaFileAudio } from 'react-icons/fa'
 
 interface UploadedFile {
   id: string
@@ -153,7 +153,14 @@ export function Upload() {
   }
 
   return (
-    <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
+    <div className="min-h-screen relative">
+      {/* Subtle background lighting effects */}
+      <div className="fixed inset-0 -z-10 overflow-hidden pointer-events-none">
+        <div className="absolute top-0 left-0 w-96 h-96 bg-brand-400/8 dark:bg-brand-500/3 rounded-full blur-3xl"></div>
+        <div className="absolute top-1/2 right-0 w-96 h-96 bg-blue-400/8 dark:bg-blue-500/3 rounded-full blur-3xl"></div>
+        <div className="absolute bottom-0 left-1/3 w-96 h-96 bg-purple-400/8 dark:bg-purple-500/3 rounded-full blur-3xl"></div>
+      </div>
+      <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-12 relative">
       <div className="mb-8">
         <h1 className="text-3xl font-bold text-gray-900 dark:text-white mb-2">
           Upload Recordings
@@ -176,7 +183,7 @@ export function Upload() {
         `}
       >
         <input {...getInputProps()} />
-        <UploadIcon
+        <FaCloudUploadAlt
           className={`mx-auto h-12 w-12 mb-4 ${
             isDragActive || isDragging
               ? 'text-brand-500'
@@ -207,7 +214,7 @@ export function Upload() {
               >
                 <div className="flex items-start justify-between">
                   <div className="flex items-start space-x-3 flex-1 min-w-0">
-                    <FileAudio className="w-5 h-5 text-gray-400 dark:text-gray-500 mt-0.5 flex-shrink-0" />
+                    <FaFileAudio className="w-5 h-5 text-gray-400 dark:text-gray-500 mt-0.5 flex-shrink-0" />
                     <div className="flex-1 min-w-0">
                       <p className="text-sm font-medium text-gray-900 dark:text-white truncate">
                         {file.name}
@@ -239,14 +246,14 @@ export function Upload() {
                   </div>
                   <div className="flex items-center space-x-2 ml-4">
                     {file.status === 'uploading' && (
-                      <Loader2 className="w-5 h-5 text-brand-500 animate-spin" />
+                      <FaSpinner className="w-5 h-5 text-brand-500 animate-spin" />
                     )}
                     {file.status === 'success' && (
-                      <CheckCircle className="w-5 h-5 text-green-500" />
+                      <FaCheckCircle className="w-5 h-5 text-green-500" />
                     )}
                     {file.status === 'error' && (
                       <>
-                        <AlertCircle className="w-5 h-5 text-red-500" />
+                        <FaExclamationCircle className="w-5 h-5 text-red-500" />
                         <button
                           onClick={() => removeFile(file.id)}
                           className="text-sm text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200"
@@ -262,6 +269,7 @@ export function Upload() {
           </div>
         </div>
       )}
+      </div>
     </div>
   )
 }

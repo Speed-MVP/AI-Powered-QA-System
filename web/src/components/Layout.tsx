@@ -1,7 +1,9 @@
 import { Link, Outlet } from 'react-router-dom'
 import { useThemeStore } from '@/store/themeStore'
-import { Moon, Sun } from 'lucide-react'
+import { Sun, Moon } from 'lucide-react'
 import { useEffect } from 'react'
+import { Footer } from './Footer'
+import { FloatingButtons } from './FloatingButtons'
 
 export function Layout() {
   const theme = useThemeStore((state) => state.theme)
@@ -12,7 +14,7 @@ export function Layout() {
   }, [theme])
 
   return (
-    <div className="min-h-screen bg-white dark:bg-[#0A0F1A]">
+    <div className="min-h-screen bg-white dark:bg-[#0A0F1A] flex flex-col">
       <nav className="border-b border-gray-200 dark:border-gray-800 bg-white/80 dark:bg-[#0A0F1A]/80 backdrop-blur-sm sticky top-0 z-50">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex items-center justify-between h-16">
@@ -28,6 +30,12 @@ export function Layout() {
             </div>
 
             <div className="hidden md:flex items-center justify-center flex-1 space-x-8">
+              <Link
+                to="/home"
+                className="text-gray-600 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white text-sm font-medium"
+              >
+                Home
+              </Link>
               <Link
                 to="/test"
                 className="text-gray-600 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white text-sm font-medium"
@@ -46,12 +54,18 @@ export function Layout() {
               >
                 Features
               </Link>
+              <Link
+                to="/faq"
+                className="text-gray-600 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white text-sm font-medium"
+              >
+                FAQ
+              </Link>
             </div>
 
-            <div className="flex items-center space-x-4 flex-shrink-0">
+            <div className="flex items-center space-x-3 flex-shrink-0">
               <button
                 onClick={toggleTheme}
-                className="p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800"
+                className="p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"
                 aria-label="Toggle theme"
                 type="button"
               >
@@ -64,7 +78,7 @@ export function Layout() {
 
               <Link
                 to="/sign-in"
-                className="text-gray-600 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white text-sm font-medium"
+                className="px-4 py-2 bg-brand-500 text-white rounded-lg hover:bg-brand-600 transition-colors text-sm font-semibold shadow-sm hover:shadow-md"
               >
                 Sign In
               </Link>
@@ -72,6 +86,12 @@ export function Layout() {
           </div>
 
           <div className="md:hidden flex justify-center items-center space-x-6 pb-4">
+            <Link
+              to="/home"
+              className="text-gray-600 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white text-sm font-medium"
+            >
+              Home
+            </Link>
             <Link
               to="/test"
               className="text-gray-600 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white text-sm font-medium"
@@ -90,13 +110,22 @@ export function Layout() {
             >
               Features
             </Link>
+            <Link
+              to="/faq"
+              className="text-gray-600 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white text-sm font-medium"
+            >
+              FAQ
+            </Link>
           </div>
         </div>
       </nav>
 
-      <main>
+      <main className="flex-1">
         <Outlet />
       </main>
+
+      <Footer />
+      <FloatingButtons />
     </div>
   )
 }

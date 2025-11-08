@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { usePolicyStore, type EvaluationCriteria } from '@/store/policyStore'
-import { Plus, Trash2, Edit2, Save, X, Check, AlertCircle } from 'lucide-react'
+import { FaPlus, FaTrash, FaEdit, FaSave, FaTimes, FaCheck, FaExclamationCircle } from 'react-icons/fa'
 
 export function PolicyTemplates() {
   const {
@@ -39,7 +39,14 @@ export function PolicyTemplates() {
   }
 
   return (
-    <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
+    <div className="min-h-screen relative">
+      {/* Subtle background lighting effects */}
+      <div className="fixed inset-0 -z-10 overflow-hidden pointer-events-none">
+        <div className="absolute top-0 right-0 w-96 h-96 bg-brand-400/8 dark:bg-brand-500/3 rounded-full blur-3xl"></div>
+        <div className="absolute top-1/3 left-0 w-96 h-96 bg-purple-400/8 dark:bg-purple-500/3 rounded-full blur-3xl"></div>
+        <div className="absolute bottom-0 right-1/4 w-96 h-96 bg-blue-400/8 dark:bg-blue-500/3 rounded-full blur-3xl"></div>
+      </div>
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12 relative">
       <div className="mb-8 flex items-center justify-between">
         <div>
           <h1 className="text-3xl font-bold text-gray-900 dark:text-white mb-2">
@@ -53,7 +60,7 @@ export function PolicyTemplates() {
           onClick={() => setShowNewTemplate(true)}
           className="px-4 py-2 bg-brand-500 text-white rounded-lg hover:bg-brand-600 flex items-center space-x-2"
         >
-          <Plus className="w-4 h-4" />
+          <FaPlus className="w-4 h-4" />
           <span>New Template</span>
         </button>
       </div>
@@ -185,7 +192,7 @@ export function PolicyTemplates() {
                           onClick={() => setEditingTemplate(template.id)}
                           className="p-2 text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white"
                         >
-                          <Edit2 className="w-4 h-4" />
+                          <FaEdit className="w-4 h-4" />
                         </button>
                       </>
                     )}
@@ -194,7 +201,7 @@ export function PolicyTemplates() {
                         onClick={() => setEditingTemplate(null)}
                         className="p-2 text-green-600 dark:text-green-400"
                       >
-                        <Save className="w-4 h-4" />
+                        <FaSave className="w-4 h-4" />
                       </button>
                     )}
                     <button
@@ -205,7 +212,7 @@ export function PolicyTemplates() {
                       }}
                       className="p-2 text-red-600 dark:text-red-400 hover:text-red-700 dark:hover:text-red-300"
                     >
-                      <Trash2 className="w-4 h-4" />
+                      <FaTrash className="w-4 h-4" />
                     </button>
                   </div>
                 </div>
@@ -228,7 +235,7 @@ export function PolicyTemplates() {
                     }}
                     className="px-3 py-1.5 bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded-lg hover:bg-gray-300 dark:hover:bg-gray-600 flex items-center space-x-1 text-sm"
                   >
-                    <Plus className="w-4 h-4" />
+                    <FaPlus className="w-4 h-4" />
                     <span>Add Criteria</span>
                   </button>
                 </div>
@@ -236,7 +243,7 @@ export function PolicyTemplates() {
                 {/* Weight Validation */}
                 {!weightsValid && template.criteria.length > 0 && (
                   <div className="mb-4 p-3 bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800 rounded-lg flex items-center space-x-2">
-                    <AlertCircle className="w-5 h-5 text-yellow-600 dark:text-yellow-400" />
+                    <FaExclamationCircle className="w-5 h-5 text-yellow-600 dark:text-yellow-400" />
                     <span className="text-sm text-yellow-800 dark:text-yellow-200">
                       Total weight must equal 100%. Current: {totalWeight(template.criteria).toFixed(1)}%
                     </span>
@@ -287,7 +294,7 @@ export function PolicyTemplates() {
                                     onClick={() => setEditingCriteria(criteria.id)}
                                     className="p-1.5 text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white"
                                   >
-                                    <Edit2 className="w-4 h-4" />
+                                    <FaEdit className="w-4 h-4" />
                                   </button>
                                   <button
                                     onClick={() => {
@@ -297,7 +304,7 @@ export function PolicyTemplates() {
                                     }}
                                     className="p-1.5 text-red-600 dark:text-red-400 hover:text-red-700 dark:hover:text-red-300"
                                   >
-                                    <Trash2 className="w-4 h-4" />
+                                    <FaTrash className="w-4 h-4" />
                                   </button>
                                 </div>
                               </div>
@@ -312,6 +319,7 @@ export function PolicyTemplates() {
             </div>
           )
         })}
+      </div>
       </div>
     </div>
   )
@@ -403,14 +411,14 @@ function CriteriaEditor({
           onClick={handleSave}
           className="px-4 py-2 bg-brand-500 text-white rounded-lg hover:bg-brand-600 flex items-center space-x-1"
         >
-          <Check className="w-4 h-4" />
+          <FaCheck className="w-4 h-4" />
           <span>Save</span>
         </button>
         <button
           onClick={onCancel}
           className="px-4 py-2 bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded-lg hover:bg-gray-300 dark:hover:bg-gray-600 flex items-center space-x-1"
         >
-          <X className="w-4 h-4" />
+          <FaTimes className="w-4 h-4" />
           <span>Cancel</span>
         </button>
       </div>
