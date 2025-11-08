@@ -1,24 +1,42 @@
-import { useCallback, useState } from 'react'
+import { useCallback, useState, useEffect, useRef } from 'react'
 import { useDropzone } from 'react-dropzone'
-import { FaCloudUploadAlt, FaCheckCircle, FaSpinner, FaFileAudio, FaPlay, FaChartBar, FaCog } from 'react-icons/fa'
-import { usePolicyStore } from '@/store/policyStore'
+import { FaCloudUploadAlt, FaCheckCircle, FaSpinner, FaFileAudio, FaPlay, FaChartBar, FaCog, FaExclamationCircle, FaTrash, FaRedo, FaVolumeUp, FaPause, FaHistory, FaTimes, FaUser } from 'react-icons/fa'
 import { Link } from 'react-router-dom'
+import { api } from '@/lib/api'
 
 interface UploadedFile {
   id: string
   name: string
   size: number
   file: File
-  status: 'uploaded' | 'processing' | 'completed' | 'error'
+  status: 'uploading' | 'uploaded' | 'processing' | 'completed' | 'error'
   progress: number
   error?: string
+  recordingId?: string
 }
 
 interface ProcessingResult {
   transcript: string
+  diarizedSegments?: Array<{
+    speaker: string
+    text: string
+    start: number
+    end: number
+  }> | null
   overallScore: number
   resolutionDetected: boolean
   resolutionConfidence: number
+  customerTone?: {
+    primary_emotion: string
+    confidence: number
+    description: string
+    emotional_journey?: Array<{
+      segment: string
+      emotion: string
+      intensity: string
+      evidence: string
+    }>
+  }
   categoryScores: {
     category: string
     score: number
@@ -28,16 +46,33 @@ interface ProcessingResult {
     type: string
     severity: 'critical' | 'major' | 'minor'
     description: string
-    timestamp: number
+    timestamp?: number
   }[]
 }
 
+interface RecordingHistory {
+  id: string
+  file_name: string
+  file_url: string
+  status: string
+  uploaded_at: string
+  processed_at: string | null
+  duration_seconds: number | null
+  error_message: string | null
+}
+
 export function Test() {
-  const { activeTemplate } = usePolicyStore()
   const [files, setFiles] = useState<UploadedFile[]>([])
   const [selectedFile, setSelectedFile] = useState<UploadedFile | null>(null)
   const [result, setResult] = useState<ProcessingResult | null>(null)
   const [isProcessing, setIsProcessing] = useState(false)
+  const [history, setHistory] = useState<RecordingHistory[]>([])
+  const [loadingHistory, setLoadingHistory] = useState(false)
+  const [audioUrl, setAudioUrl] = useState<string | null>(null)
+  const [isPlaying, setIsPlaying] = useState(false)
+  const [selectedRecordingId, setSelectedRecordingId] = useState<string | null>(null)
+  const audioRef = useRef<HTMLAudioElement | null>(null)
+  const [showHistory, setShowHistory] = useState(false)
 
   const formatFileSize = (bytes: number) => {
     if (bytes === 0) return '0 Bytes'
@@ -47,101 +82,364 @@ export function Test() {
     return Math.round(bytes / Math.pow(k, i) * 100) / 100 + ' ' + sizes[i]
   }
 
-  const simulateProcessing = async (file: UploadedFile) => {
-    setIsProcessing(true)
-    
-    // Simulate processing delay
-    await new Promise(resolve => setTimeout(resolve, 2000))
-    
-    // Use active template criteria or default
-    const criteria = activeTemplate?.criteria || []
-    
-    // Generate mock results based on template criteria
-    const categoryScores = criteria.map((criterion) => {
-      // Mock score based on category
-      const baseScore = Math.floor(Math.random() * 30) + 70 // 70-100
-      return {
-        category: criterion.categoryName,
-        score: baseScore,
-        feedback: `Evaluation based on: ${criterion.evaluationPrompt.substring(0, 100)}...`
-      }
-    })
-    
-    // Calculate weighted overall score
-    const totalWeight = criteria.reduce((sum, c) => sum + c.weight, 0)
-    const weightedScore = categoryScores.reduce((sum, cs) => {
-      const criterion = criteria.find(c => c.categoryName === cs.category)
-      return sum + (cs.score * (criterion?.weight || 0) / 100)
-    }, 0)
-    const overallScore = totalWeight > 0 ? Math.round(weightedScore) : 87
-    
-    // Mock processing result
-    const mockResult: ProcessingResult = {
-      transcript: `[Agent] Hello, thank you for calling. How can I assist you today?
-[Customer] Hi, I'm having an issue with my account.
-[Agent] I'd be happy to help you with that. Can you provide me with your account number?
-[Customer] Sure, it's 123456789.
-[Agent] Thank you. I can see your account here. What seems to be the issue?
-[Customer] I noticed a charge I don't recognize.
-[Agent] I understand your concern. Let me review your recent transactions... I can see that charge was for your monthly subscription. Does that help clarify?
-[Customer] Oh yes, that makes sense. Thank you!
-[Agent] You're welcome! Is there anything else I can help you with today?
-[Customer] No, that's all. Thanks again!
-[Agent] My pleasure. Have a great day!`,
-      overallScore,
-      resolutionDetected: true,
-      resolutionConfidence: 0.92,
-      categoryScores: categoryScores.length > 0 ? categoryScores : [
-        {
-          category: 'Compliance',
-          score: 95,
-          feedback: 'Agent followed all compliance guidelines and properly verified customer identity.'
-        },
-        {
-          category: 'Empathy',
-          score: 88,
-          feedback: 'Agent showed understanding and used appropriate empathetic language.'
-        },
-        {
-          category: 'Resolution',
-          score: 92,
-          feedback: 'Issue was resolved successfully with customer confirmation.'
-        }
-      ],
-      violations: [
-        {
-          type: 'Script Adherence',
-          severity: 'minor',
-          description: 'Agent slightly deviated from greeting script',
-          timestamp: 5.2
-        }
-      ]
+  const formatTime = (seconds: number) => {
+    const mins = Math.floor(seconds / 60)
+    const secs = Math.floor(seconds % 60)
+    return `${mins}:${secs.toString().padStart(2, '0')}`
+  }
+
+  const formatDate = (dateString: string) => {
+    const date = new Date(dateString)
+    return date.toLocaleString()
+  }
+
+  // Load recording history
+  const loadHistory = async () => {
+    try {
+      setLoadingHistory(true)
+      const recordings = await api.listRecordings({ limit: 50 })
+      setHistory(recordings)
+    } catch (error: any) {
+      console.error('Failed to load history:', error)
+    } finally {
+      setLoadingHistory(false)
     }
-    
-    setResult(mockResult)
-    setIsProcessing(false)
-    
-    // Update file status
-    setFiles(prev => prev.map(f => 
-      f.id === file.id 
-        ? { ...f, status: 'completed' as const }
-        : f
-    ))
+  }
+
+  // Load history on mount
+  useEffect(() => {
+    loadHistory()
+  }, [])
+
+  // Load audio URL for playback
+  const loadAudioUrl = async (recordingId: string) => {
+    try {
+      const { download_url } = await api.getDownloadUrl(recordingId)
+      setAudioUrl(download_url)
+      setSelectedRecordingId(recordingId)
+      if (audioRef.current) {
+        audioRef.current.src = download_url
+        audioRef.current.load()
+      }
+    } catch (error: any) {
+      console.error('Failed to load audio URL:', error)
+      alert('Failed to load audio file')
+    }
+  }
+
+  // Handle audio play/pause
+  const toggleAudio = () => {
+    if (audioRef.current) {
+      if (isPlaying) {
+        audioRef.current.pause()
+      } else {
+        audioRef.current.play()
+      }
+      setIsPlaying(!isPlaying)
+    }
+  }
+
+  // Handle audio ended
+  useEffect(() => {
+    const audio = audioRef.current
+    if (audio) {
+      audio.addEventListener('ended', () => setIsPlaying(false))
+      audio.addEventListener('play', () => setIsPlaying(true))
+      audio.addEventListener('pause', () => setIsPlaying(false))
+      return () => {
+        audio.removeEventListener('ended', () => setIsPlaying(false))
+        audio.removeEventListener('play', () => setIsPlaying(true))
+        audio.removeEventListener('pause', () => setIsPlaying(false))
+      }
+    }
+  }, [audioUrl])
+
+  // Delete recording
+  const handleDeleteRecording = async (recordingId: string) => {
+    if (!confirm('Are you sure you want to delete this recording? This will permanently delete the file from storage.')) {
+      return
+    }
+
+    try {
+      await api.deleteRecording(recordingId)
+      setHistory(prev => prev.filter(r => r.id !== recordingId))
+      if (selectedRecordingId === recordingId) {
+        setSelectedRecordingId(null)
+        setAudioUrl(null)
+        setResult(null)
+      }
+      alert('Recording deleted successfully')
+    } catch (error: any) {
+      console.error('Failed to delete recording:', error)
+      alert('Failed to delete recording: ' + (error.message || 'Unknown error'))
+    }
+  }
+
+  // Reevaluate recording
+  const handleReevaluate = async (recordingId: string) => {
+    if (!confirm('This will re-evaluate the recording. Continue?')) {
+      return
+    }
+
+    try {
+      await api.reevaluateRecording(recordingId)
+      alert('Re-evaluation started. Please wait for processing to complete.')
+      // Reload history to update status
+      await loadHistory()
+      // If this is the selected recording, start polling for results
+      const recording = history.find(r => r.id === recordingId)
+      if (recording) {
+        setIsProcessing(true)
+        setResult(null)
+        // Poll for results
+        const poll = async () => {
+          try {
+            const updated = await api.getRecording(recordingId)
+            if (updated.status === 'completed') {
+              // Load results
+              const evaluation = await api.getEvaluation(recordingId)
+              const transcriptData = await api.getTranscript(recordingId)
+              
+              const processingResult: ProcessingResult = {
+                transcript: transcriptData.transcript_text,
+                diarizedSegments: transcriptData.diarized_segments || null,
+                overallScore: evaluation.overall_score,
+                resolutionDetected: evaluation.resolution_detected,
+                resolutionConfidence: evaluation.resolution_confidence,
+                categoryScores: evaluation.category_scores.map(cs => ({
+                  category: cs.category_name,
+                  score: cs.score,
+                  feedback: cs.feedback || ''
+                })),
+                violations: evaluation.policy_violations.map(v => ({
+                  type: v.violation_type,
+                  severity: v.severity as 'critical' | 'major' | 'minor',
+                  description: v.description
+                }))
+              }
+              
+              setResult(processingResult)
+              setIsProcessing(false)
+              await loadHistory()
+            } else if (updated.status === 'failed') {
+              alert('Re-evaluation failed: ' + (updated.error_message || 'Unknown error'))
+              setIsProcessing(false)
+              await loadHistory()
+            } else {
+              // Continue polling
+              setTimeout(poll, 5000)
+            }
+          } catch (error: any) {
+            console.error('Polling error:', error)
+            setIsProcessing(false)
+          }
+        }
+        poll()
+      }
+    } catch (error: any) {
+      console.error('Failed to reevaluate:', error)
+      alert('Failed to start re-evaluation: ' + (error.message || 'Unknown error'))
+    }
+  }
+
+  // Load recording results
+  const loadRecordingResults = async (recordingId: string) => {
+    try {
+      setIsProcessing(true)
+      setResult(null)
+      setSelectedRecordingId(recordingId)
+      
+      const recording = await api.getRecording(recordingId)
+      if (recording.status === 'completed') {
+        const evaluation = await api.getEvaluation(recordingId)
+        const transcriptData = await api.getTranscript(recordingId)
+        
+        const processingResult: ProcessingResult = {
+          transcript: transcriptData.transcript_text,
+          diarizedSegments: transcriptData.diarized_segments || null,
+          overallScore: evaluation.overall_score,
+          resolutionDetected: evaluation.resolution_detected,
+          resolutionConfidence: evaluation.resolution_confidence,
+          categoryScores: evaluation.category_scores.map(cs => ({
+            category: cs.category_name,
+            score: cs.score,
+            feedback: cs.feedback || ''
+          })),
+          violations: evaluation.policy_violations.map(v => ({
+            type: v.violation_type,
+            severity: v.severity as 'critical' | 'major' | 'minor',
+            description: v.description
+          }))
+        }
+        
+        setResult(processingResult)
+      } else {
+        alert('Recording is not yet processed. Status: ' + recording.status)
+      }
+      setIsProcessing(false)
+    } catch (error: any) {
+      console.error('Failed to load results:', error)
+      alert('Failed to load results: ' + (error.message || 'Unknown error'))
+      setIsProcessing(false)
+    }
+  }
+
+  // Upload file to backend (using direct upload to avoid CORS)
+  const uploadFile = async (file: File) => {
+    const fileId = crypto.randomUUID()
+    const fileObj: UploadedFile = {
+      id: fileId,
+      name: file.name,
+      size: file.size,
+      file,
+      status: 'uploading',
+      progress: 0,
+    }
+
+    setFiles((prev) => [...prev, fileObj])
+
+    try {
+      // Upload file directly through backend (avoids CORS issues)
+      setFiles(prev => prev.map(f => 
+        f.id === fileId ? { ...f, progress: 20 } : f
+      ))
+
+      const recording = await api.uploadFileDirect(file, (progress) => {
+        setFiles(prev => prev.map(f => 
+          f.id === fileId ? { ...f, progress: 20 + (progress * 0.8) } : f
+        ))
+      })
+
+      // Update file status
+      setFiles(prev => prev.map(f => 
+        f.id === fileId 
+          ? { 
+              ...f, 
+              status: 'uploaded' as const, 
+              progress: 100,
+              recordingId: recording.id
+            } 
+          : f
+      ))
+      
+      // Reload history to show new recording
+      await loadHistory()
+    } catch (error: any) {
+      console.error('Upload error:', error)
+      setFiles(prev => prev.map(f => 
+        f.id === fileId 
+          ? { 
+              ...f, 
+              status: 'error' as const, 
+              error: error.message || 'Upload failed' 
+            } 
+          : f
+      ))
+    }
+  }
+
+  // Poll for recording status and results
+  const pollRecordingStatus = async (recordingId: string, fileId: string) => {
+    const maxAttempts = 60 // 5 minutes max (5 second intervals)
+    let attempts = 0
+
+    const poll = async () => {
+      try {
+        const recording = await api.getRecording(recordingId)
+        
+        if (recording.status === 'completed') {
+          // Get evaluation results
+          try {
+            const evaluation = await api.getEvaluation(recordingId)
+            
+            // Get transcript with diarized segments
+            let transcript = 'Transcript not available'
+            let diarizedSegments: Array<{speaker: string, text: string, start: number, end: number}> | null = null
+            try {
+              const transcriptData = await api.getTranscript(recordingId)
+              transcript = transcriptData.transcript_text
+              diarizedSegments = transcriptData.diarized_segments || null
+            } catch (transcriptError) {
+              console.warn('Could not fetch transcript:', transcriptError)
+            }
+            
+            // Transform evaluation data to ProcessingResult format
+            const processingResult: ProcessingResult = {
+              transcript,
+              diarizedSegments,
+              overallScore: evaluation.overall_score,
+              resolutionDetected: evaluation.resolution_detected,
+              resolutionConfidence: evaluation.resolution_confidence,
+              customerTone: evaluation.customer_tone ? {
+                primary_emotion: evaluation.customer_tone.primary_emotion,
+                confidence: evaluation.customer_tone.confidence,
+                description: evaluation.customer_tone.description,
+                emotional_journey: evaluation.customer_tone.emotional_journey
+              } : undefined,
+              categoryScores: evaluation.category_scores.map(cs => ({
+                category: cs.category_name,
+                score: cs.score,
+                feedback: cs.feedback || ''
+              })),
+              violations: evaluation.policy_violations.map(v => ({
+                type: v.violation_type,
+                severity: v.severity as 'critical' | 'major' | 'minor',
+                description: v.description
+              }))
+            }
+            
+            setResult(processingResult)
+            setIsProcessing(false)
+            
+            setFiles(prev => prev.map(f => 
+              f.id === fileId 
+                ? { ...f, status: 'completed' as const }
+                : f
+            ))
+          } catch (evalError: any) {
+            // Evaluation might not be ready yet, continue polling
+            if (attempts < maxAttempts) {
+              setTimeout(poll, 5000)
+              attempts++
+            } else {
+              throw new Error('Evaluation timeout - processing may still be in progress')
+            }
+          }
+        } else if (recording.status === 'failed') {
+          throw new Error(recording.error_message || 'Processing failed')
+        } else if (recording.status === 'processing' || recording.status === 'queued') {
+          // Continue polling
+          if (attempts < maxAttempts) {
+            setTimeout(poll, 5000)
+            attempts++
+          } else {
+            throw new Error('Processing timeout - please check the recording status later')
+          }
+        }
+      } catch (error: any) {
+        console.error('Polling error:', error)
+        setIsProcessing(false)
+        setFiles(prev => prev.map(f => 
+          f.id === fileId 
+            ? { 
+                ...f, 
+                status: 'error' as const, 
+                error: error.message || 'Failed to get processing status' 
+              } 
+            : f
+        ))
+      }
+    }
+
+    // Start polling
+    poll()
   }
 
   const onDrop = useCallback((acceptedFiles: File[]) => {
     acceptedFiles.forEach((file) => {
-      const fileObj: UploadedFile = {
-        id: crypto.randomUUID(),
-        name: file.name,
-        size: file.size,
-        file,
-        status: 'uploaded',
-        progress: 100,
-      }
-      setFiles((prev) => [...prev, fileObj])
+      uploadFile(file)
     })
-  }, [])
+  }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
   const { getRootProps, getInputProps, isDragActive } = useDropzone({
     onDrop,
@@ -161,14 +459,26 @@ export function Test() {
   }
 
   const handleProcess = async (file: UploadedFile) => {
+    if (!file.recordingId) {
+      setFiles(prev => prev.map(f => 
+        f.id === file.id 
+          ? { ...f, status: 'error' as const, error: 'No recording ID found' }
+          : f
+      ))
+      return
+    }
+
     setSelectedFile(file)
     setResult(null)
+    setIsProcessing(true)
     setFiles(prev => prev.map(f => 
       f.id === file.id 
         ? { ...f, status: 'processing' as const }
         : f
     ))
-    await simulateProcessing(file)
+    
+    // Start polling for results
+    await pollRecordingStatus(file.recordingId, file.id)
   }
 
   return (
@@ -201,34 +511,170 @@ export function Test() {
             Upload recordings to test the AI-powered quality assurance flow
           </p>
         </div>
-        <Link
-          to="/policy-templates"
-          className="px-4 py-2 bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded-lg hover:bg-gray-300 dark:hover:bg-gray-600 flex items-center space-x-2"
-        >
-          <FaCog className="w-4 h-4" />
-          <span>Configure Policies</span>
-        </Link>
+        <div className="flex items-center space-x-2">
+          <button
+            onClick={() => {
+              setShowHistory(!showHistory)
+              if (!showHistory) {
+                loadHistory()
+              }
+            }}
+            className="px-4 py-2 bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded-lg hover:bg-gray-300 dark:hover:bg-gray-600 flex items-center space-x-2"
+          >
+            <FaHistory className="w-4 h-4" />
+            <span>{showHistory ? 'Hide History' : 'Show History'}</span>
+          </button>
+          <Link
+            to="/policy-templates"
+            className="px-4 py-2 bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded-lg hover:bg-gray-300 dark:hover:bg-gray-600 flex items-center space-x-2"
+          >
+            <FaCog className="w-4 h-4" />
+            <span>Configure Policies</span>
+          </Link>
+        </div>
       </div>
 
+
       {/* Active Template Info */}
-      {activeTemplate && (
-        <div className="mb-6 p-4 bg-brand-50 dark:bg-brand-900/20 border border-brand-200 dark:border-brand-800 rounded-lg">
+      <TemplateInfo />
+
+      {/* Audio Player */}
+      {audioUrl && (
+        <div className="mb-6 bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 p-4">
           <div className="flex items-center justify-between">
-            <div>
-              <p className="text-sm font-medium text-brand-900 dark:text-brand-200">
-                Active Policy Template: {activeTemplate.name}
-              </p>
-              <p className="text-xs text-brand-700 dark:text-brand-300 mt-1">
-                {activeTemplate.criteria.length} evaluation criteria configured
-              </p>
+            <div className="flex items-center space-x-4 flex-1">
+              <button
+                onClick={toggleAudio}
+                className="p-3 bg-brand-500 text-white rounded-full hover:bg-brand-600 flex items-center justify-center"
+              >
+                {isPlaying ? <FaPause className="w-4 h-4" /> : <FaPlay className="w-4 h-4" />}
+              </button>
+              <div className="flex-1">
+                <p className="text-sm font-medium text-gray-900 dark:text-white">
+                  {history.find(r => r.id === selectedRecordingId)?.file_name || 'Audio File'}
+                </p>
+                <audio ref={audioRef} controls className="w-full mt-2" style={{ height: '32px' }}>
+                  Your browser does not support the audio element.
+                </audio>
+              </div>
             </div>
-            <Link
-              to="/policy-templates"
-              className="text-sm text-brand-600 dark:text-brand-400 hover:text-brand-700 dark:hover:text-brand-300"
+            <button
+              onClick={() => {
+                setAudioUrl(null)
+                setSelectedRecordingId(null)
+                if (audioRef.current) {
+                  audioRef.current.pause()
+                  audioRef.current.src = ''
+                }
+                setIsPlaying(false)
+              }}
+              className="ml-4 text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200"
             >
-              Edit Template →
-            </Link>
+              <FaTimes className="w-4 h-4" />
+            </button>
           </div>
+        </div>
+      )}
+
+      {/* Recording History */}
+      {showHistory && (
+        <div className="mb-6 bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 p-6">
+          <div className="flex items-center justify-between mb-4">
+            <h2 className="text-lg font-semibold text-gray-900 dark:text-white flex items-center space-x-2">
+              <FaHistory className="w-5 h-5" />
+              <span>Recording History</span>
+            </h2>
+            <button
+              onClick={loadHistory}
+              disabled={loadingHistory}
+              className="px-3 py-1.5 bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded-lg hover:bg-gray-300 dark:hover:bg-gray-600 flex items-center space-x-2 text-sm disabled:opacity-50"
+            >
+              <FaSpinner className={`w-4 h-4 ${loadingHistory ? 'animate-spin' : ''}`} />
+              <span>Refresh</span>
+            </button>
+          </div>
+          {loadingHistory ? (
+            <div className="text-center py-8">
+              <FaSpinner className="w-8 h-8 text-brand-500 animate-spin mx-auto mb-2" />
+              <p className="text-gray-600 dark:text-gray-400">Loading history...</p>
+            </div>
+          ) : history.length === 0 ? (
+            <div className="text-center py-8 text-gray-500 dark:text-gray-400">
+              <p>No recordings found. Upload a file to get started.</p>
+            </div>
+          ) : (
+            <div className="space-y-3 max-h-96 overflow-y-auto">
+              {history.map((recording) => (
+                <div
+                  key={recording.id}
+                  className="p-4 bg-gray-50 dark:bg-gray-700/50 rounded-lg border border-gray-200 dark:border-gray-600"
+                >
+                  <div className="flex items-center justify-between">
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center space-x-3">
+                        <FaFileAudio className="w-5 h-5 text-gray-400 dark:text-gray-500 flex-shrink-0" />
+                        <div className="flex-1 min-w-0">
+                          <p className="text-sm font-medium text-gray-900 dark:text-white truncate">
+                            {recording.file_name}
+                          </p>
+                          <div className="flex items-center space-x-4 mt-1">
+                            <span className={`text-xs px-2 py-1 rounded ${
+                              recording.status === 'completed' 
+                                ? 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300'
+                                : recording.status === 'processing' || recording.status === 'queued'
+                                ? 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-300'
+                                : recording.status === 'failed'
+                                ? 'bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-300'
+                                : 'bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-300'
+                            }`}>
+                              {recording.status}
+                            </span>
+                            <span className="text-xs text-gray-500 dark:text-gray-400">
+                              {formatDate(recording.uploaded_at)}
+                            </span>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                    <div className="flex items-center space-x-2 ml-4">
+                      <button
+                        onClick={() => loadAudioUrl(recording.id)}
+                        className="p-2 text-blue-600 dark:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-900/20 rounded"
+                        title="Listen to audio"
+                      >
+                        <FaVolumeUp className="w-4 h-4" />
+                      </button>
+                      {recording.status === 'completed' && (
+                        <>
+                          <button
+                            onClick={() => loadRecordingResults(recording.id)}
+                            className="p-2 text-green-600 dark:text-green-400 hover:bg-green-50 dark:hover:bg-green-900/20 rounded"
+                            title="View results"
+                          >
+                            <FaChartBar className="w-4 h-4" />
+                          </button>
+                          <button
+                            onClick={() => handleReevaluate(recording.id)}
+                            className="p-2 text-purple-600 dark:text-purple-400 hover:bg-purple-50 dark:hover:bg-purple-900/20 rounded"
+                            title="Re-evaluate"
+                          >
+                            <FaRedo className="w-4 h-4" />
+                          </button>
+                        </>
+                      )}
+                      <button
+                        onClick={() => handleDeleteRecording(recording.id)}
+                        className="p-2 text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 rounded"
+                        title="Delete recording"
+                      >
+                        <FaTrash className="w-4 h-4" />
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
         </div>
       )}
 
@@ -286,6 +732,14 @@ export function Test() {
                       </div>
                     </div>
                     <div className="flex items-center space-x-2">
+                      {file.status === 'uploading' && (
+                        <div className="flex items-center space-x-2">
+                          <FaSpinner className="w-4 h-4 animate-spin text-brand-500" />
+                          <span className="text-sm text-gray-600 dark:text-gray-400">
+                            Uploading... {file.progress}%
+                          </span>
+                        </div>
+                      )}
                       {file.status === 'uploaded' && (
                         <button
                           onClick={() => handleProcess(file)}
@@ -305,6 +759,12 @@ export function Test() {
                         <div className="flex items-center space-x-2 text-green-600 dark:text-green-400">
                           <FaCheckCircle className="w-4 h-4" />
                           <span className="text-sm">Completed</span>
+                        </div>
+                      )}
+                      {file.status === 'error' && (
+                        <div className="flex items-center space-x-2 text-red-600 dark:text-red-400">
+                          <FaExclamationCircle className="w-4 h-4" />
+                          <span className="text-xs">{file.error}</span>
                         </div>
                       )}
                       <button
@@ -368,6 +828,80 @@ export function Test() {
                   </div>
                 </div>
               </div>
+
+              {/* Customer Tone */}
+              {result.customerTone && (
+                <div className="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 p-6">
+                  <div className="flex items-center justify-between mb-4">
+                    <h3 className="text-lg font-semibold text-gray-900 dark:text-white flex items-center space-x-2">
+                      <FaUser className="w-5 h-5 text-purple-500" />
+                      <span>Customer Tone Analysis</span>
+                    </h3>
+                  </div>
+                  <div className="space-y-4">
+                    <div className="flex items-center space-x-4">
+                      <div className="flex-1">
+                        <div className="flex items-center space-x-2 mb-2">
+                          <span className="text-sm font-medium text-gray-700 dark:text-gray-300">Primary Emotion:</span>
+                          <span className={`px-3 py-1 rounded-full text-sm font-semibold ${
+                            result.customerTone.primary_emotion === 'angry' || result.customerTone.primary_emotion === 'frustrated'
+                              ? 'bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-300'
+                              : result.customerTone.primary_emotion === 'satisfied' || result.customerTone.primary_emotion === 'happy'
+                              ? 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300'
+                              : result.customerTone.primary_emotion === 'neutral' || result.customerTone.primary_emotion === 'calm'
+                              ? 'bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-300'
+                              : result.customerTone.primary_emotion === 'disappointed' || result.customerTone.primary_emotion === 'confused'
+                              ? 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-300'
+                              : 'bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-300'
+                          }`}>
+                            {result.customerTone.primary_emotion.charAt(0).toUpperCase() + result.customerTone.primary_emotion.slice(1)}
+                          </span>
+                          <span className="text-xs text-gray-500 dark:text-gray-400">
+                            ({(result.customerTone.confidence * 100).toFixed(0)}% confidence)
+                          </span>
+                        </div>
+                        <p className="text-sm text-gray-600 dark:text-gray-400">
+                          {result.customerTone.description}
+                        </p>
+                      </div>
+                    </div>
+                    
+                    {result.customerTone.emotional_journey && result.customerTone.emotional_journey.length > 0 && (
+                      <div className="mt-4 pt-4 border-t border-gray-200 dark:border-gray-700">
+                        <h4 className="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-3">Emotional Journey</h4>
+                        <div className="space-y-3">
+                          {result.customerTone.emotional_journey.map((journey, idx) => (
+                            <div key={idx} className="p-3 bg-gray-50 dark:bg-gray-900/50 rounded-lg border border-gray-200 dark:border-gray-700">
+                              <div className="flex items-center space-x-2 mb-2">
+                                <span className="text-xs font-medium text-gray-600 dark:text-gray-400 uppercase">
+                                  {journey.segment}
+                                </span>
+                                <span className={`text-xs px-2 py-0.5 rounded ${
+                                  journey.emotion === 'angry' || journey.emotion === 'frustrated'
+                                    ? 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-300'
+                                    : journey.emotion === 'satisfied' || journey.emotion === 'happy'
+                                    ? 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-300'
+                                    : journey.emotion === 'neutral' || journey.emotion === 'calm'
+                                    ? 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300'
+                                    : 'bg-gray-100 text-gray-700 dark:bg-gray-700 dark:text-gray-300'
+                                }`}>
+                                  {journey.emotion}
+                                </span>
+                                <span className="text-xs text-gray-500 dark:text-gray-400">
+                                  ({journey.intensity} intensity)
+                                </span>
+                              </div>
+                              <p className="text-xs text-gray-600 dark:text-gray-400 italic">
+                                "{journey.evidence}"
+                              </p>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
 
               {/* Category Scores */}
               <div className="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 p-6">
@@ -444,10 +978,53 @@ export function Test() {
                 <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">
                   Transcript
                 </h3>
-                <div className="bg-gray-50 dark:bg-gray-900 rounded-lg p-4 max-h-64 overflow-y-auto">
-                  <pre className="text-sm text-gray-700 dark:text-gray-300 whitespace-pre-wrap font-mono">
-                    {result.transcript}
-                  </pre>
+                <div className="bg-gray-50 dark:bg-gray-900 rounded-lg p-4 max-h-96 overflow-y-auto">
+                  {result.diarizedSegments && result.diarizedSegments.length > 0 ? (
+                    <div className="space-y-3">
+                      {result.diarizedSegments.map((segment, index) => {
+                        const isCaller = segment.speaker === 'caller'
+                        const isAgent = segment.speaker === 'agent' || segment.speaker.startsWith('agent')
+                        const speakerLabel = isCaller ? 'Caller' : isAgent ? 'Agent' : segment.speaker
+                        
+                        return (
+                          <div
+                            key={index}
+                            className={`p-3 rounded-lg ${
+                              isCaller
+                                ? 'bg-blue-50 dark:bg-blue-900/20 border-l-4 border-blue-500'
+                                : isAgent
+                                ? 'bg-green-50 dark:bg-green-900/20 border-l-4 border-green-500'
+                                : 'bg-gray-100 dark:bg-gray-800 border-l-4 border-gray-400'
+                            }`}
+                          >
+                            <div className="flex items-start justify-between mb-1">
+                              <span
+                                className={`text-xs font-semibold uppercase ${
+                                  isCaller
+                                    ? 'text-blue-700 dark:text-blue-300'
+                                    : isAgent
+                                    ? 'text-green-700 dark:text-green-300'
+                                    : 'text-gray-600 dark:text-gray-400'
+                                }`}
+                              >
+                                {speakerLabel}
+                              </span>
+                              <span className="text-xs text-gray-500 dark:text-gray-400">
+                                {formatTime(segment.start)} - {formatTime(segment.end)}
+                              </span>
+                            </div>
+                            <p className="text-sm text-gray-700 dark:text-gray-300 whitespace-pre-wrap">
+                              {segment.text}
+                            </p>
+                          </div>
+                        )
+                      })}
+                    </div>
+                  ) : (
+                    <pre className="text-sm text-gray-700 dark:text-gray-300 whitespace-pre-wrap font-mono">
+                      {result.transcript}
+                    </pre>
+                  )}
                 </div>
               </div>
             </div>
@@ -466,6 +1043,51 @@ export function Test() {
           )}
         </div>
       </div>
+      </div>
+    </div>
+  )
+}
+
+// Component to show active template info
+function TemplateInfo() {
+  const [activeTemplate, setActiveTemplate] = useState<any>(null)
+  const [loading, setLoading] = useState(true)
+
+  useEffect(() => {
+    const loadTemplate = async () => {
+      try {
+        const templates = await api.getTemplates()
+        const active = templates.find(t => t.is_active) || null
+        setActiveTemplate(active)
+      } catch (err) {
+        // Silently fail - template info is optional
+        console.warn('Could not load templates:', err)
+      } finally {
+        setLoading(false)
+      }
+    }
+    loadTemplate()
+  }, [])
+
+  if (loading || !activeTemplate) return null
+
+  return (
+    <div className="mb-6 p-4 bg-brand-50 dark:bg-brand-900/20 border border-brand-200 dark:border-brand-800 rounded-lg">
+      <div className="flex items-center justify-between">
+        <div>
+          <p className="text-sm font-medium text-brand-900 dark:text-brand-200">
+            Active Policy Template: {activeTemplate.template_name}
+          </p>
+          <p className="text-xs text-brand-700 dark:text-brand-300 mt-1">
+            {activeTemplate.criteria.length} evaluation criteria configured
+          </p>
+        </div>
+        <Link
+          to="/policy-templates"
+          className="text-sm text-brand-600 dark:text-brand-400 hover:text-brand-700 dark:hover:text-brand-300"
+        >
+          Edit Template →
+        </Link>
       </div>
     </div>
   )
