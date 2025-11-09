@@ -1,5 +1,6 @@
 // API client for FastAPI backend
-
+// In production, VITE_API_URL must be set in Vercel environment variables
+// For local development, defaults to http://localhost:8000
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000'
 
 interface ApiError {

@@ -31,11 +31,21 @@ Vercel will automatically detect the Vite project and configure build settings.
 
 ### 3. Set Environment Variables
 
-In **Settings** → **Environment Variables**, add:
+**CRITICAL:** You must set `VITE_API_URL` in Vercel for production to work!
 
-```
-VITE_API_URL=https://your-backend-api-url.com
-```
+1. Go to **Settings** → **Environment Variables**
+2. Click **Add New**
+3. Add the following:
+
+**Key:** `VITE_API_URL`  
+**Value:** Your deployed backend URL (e.g., `https://your-service-123456.a.run.app` for Cloud Run)
+
+**Important:**
+- ⚠️ **If you don't set this, the app will try to use `http://localhost:8000` which won't work in production!**
+- The URL should be your deployed backend (Cloud Run, Railway, Render, etc.)
+- Do NOT include a port number unless your backend uses a non-standard port
+- Must start with `https://` for production
+- After adding, you MUST redeploy for the change to take effect (Vite embeds env vars at build time)
 
 ### 4. Deploy
 
@@ -73,8 +83,17 @@ CORS_ORIGINS=https://your-app.vercel.app,http://localhost:5173
 ### Environment Variables Not Working
 
 - Ensure variables are prefixed with `VITE_`
-- Redeploy after adding/changing environment variables
-- Variables are embedded at build time, not runtime
+- **You MUST redeploy after adding/changing environment variables** (they're embedded at build time, not runtime)
+- Check that `VITE_API_URL` is set correctly in Vercel dashboard
+- Verify the backend URL is accessible (try opening it in a browser)
+- Check browser console for API errors - if you see requests to `localhost:8000`, the env var wasn't set
+
+### API Calls Going to localhost:8000
+
+If your deployed app is trying to call `http://localhost:8000`:
+1. **VITE_API_URL is not set in Vercel** - Go to Settings → Environment Variables and add it
+2. **You didn't redeploy after adding the env var** - Trigger a new deployment
+3. **Check the deployment logs** - Look for the build to confirm the env var was available during build
 
 ### Routing Issues
 
