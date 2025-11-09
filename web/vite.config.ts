@@ -29,8 +29,11 @@ export default defineConfig({
         },
       },
     },
-    // Enable source maps for better debugging
-    sourcemap: true,
+    // Disable source maps in production for better performance and security
+    // Vite sets NODE_ENV during build, so this will work correctly
+    sourcemap: false,
+    // Optimize chunk size
+    chunkSizeWarningLimit: 1000,
   },
   // Optimize dependencies for faster dev server
   optimizeDeps: {

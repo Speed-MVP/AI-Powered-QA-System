@@ -36,6 +36,9 @@ class Settings(BaseSettings):
     environment: str = "development"
     log_level: str = "INFO"
     
+    # CORS
+    cors_origins: str = "http://localhost:3000,http://localhost:5173"
+    
     class Config:
         env_file = ".env"
         case_sensitive = False
