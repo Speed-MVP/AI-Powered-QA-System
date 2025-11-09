@@ -59,7 +59,22 @@ Fill in all the values in `.env.production`.
 
 ## Step 4: Deploy
 
-### Option A: Using the deploy script (Easiest)
+### Option A: Using Web UI (No CLI Required) ⭐
+
+See `DEPLOY_WITHOUT_CLI.md` for complete UI-based deployment guide.
+
+**Quick steps:**
+1. Go to [Cloud Run Console](https://console.cloud.google.com/run)
+2. Click **"Create Service"**
+3. Select **"Deploy one revision from a source repository"**
+4. Connect your GitHub repository
+5. Set Dockerfile location: `backend/Dockerfile`
+6. Configure environment variables
+7. Click **"Create"**
+
+Cloud Run will automatically build and deploy!
+
+### Option B: Using the deploy script (CLI)
 
 ```bash
 # Make script executable
@@ -69,13 +84,13 @@ chmod +x deploy.sh
 ./deploy.sh
 ```
 
-### Option B: Manual deployment
+### Option B: Direct deployment (Simplest)
 
 ```bash
-# Load environment variables
-source .env.production
+# Navigate to backend directory
+cd backend
 
-# Deploy
+# Deploy directly (Cloud Build handles everything)
 gcloud run deploy ai-qa-backend \
     --source . \
     --platform managed \
@@ -92,6 +107,26 @@ gcloud run deploy ai-qa-backend \
     --memory 2Gi \
     --cpu 2
 ```
+
+**Note**: When using `--source .` from the `backend/` directory, Cloud Run automatically:
+- Finds the Dockerfile in the current directory
+- Sets the build context correctly
+- Builds and deploys in one step
+
+### Option C: Using Cloud Build UI
+
+If you're using the Cloud Build UI:
+
+1. **Branch**: `^main$` ✅ (correct)
+2. **Build Type**: Dockerfile ✅
+3. **Source location**: Change to `backend/Dockerfile` (not `/Dockerfile`)
+4. **Working Directory**: Set to `backend/` if available in advanced settings
+
+**Better option**: Use `cloudbuild.yaml`:
+1. **Build Type**: Select "Cloud Build configuration file (yaml or json)"
+2. **Location**: `backend/cloudbuild.yaml`
+
+See `CLOUD_BUILD_SETUP.md` for detailed Cloud Build configuration.
 
 ## Step 5: Get Your API URL
 
