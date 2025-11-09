@@ -177,20 +177,6 @@ class ApiClient {
     }>(`/api/recordings/${recordingId}`)
   }
 
-  async listRecordings(status?: string) {
-    const query = status ? `?status=${status}` : ''
-    return this.request<
-      Array<{
-        id: string
-        file_name: string
-        status: string
-        duration_seconds: number | null
-        uploaded_at: string
-        processed_at: string | null
-      }>
-    >(`/api/recordings/list${query}`)
-  }
-
   // Evaluation endpoints
   async getEvaluation(recordingId: string) {
     return this.request<{
