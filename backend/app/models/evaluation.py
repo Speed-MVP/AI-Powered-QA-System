@@ -23,6 +23,8 @@ class Evaluation(Base):
     overall_score = Column(Integer, nullable=False)
     resolution_detected = Column(Boolean, nullable=False)
     resolution_confidence = Column(Float, nullable=False)
+    confidence_score = Column(Float, nullable=True)  # Phase 1: Overall AI confidence for human fallback routing
+    requires_human_review = Column(Boolean, default=False)  # Phase 1: Flag for human review routing
     customer_tone = Column(JSONB, nullable=True)  # Stores customer emotion/tone analysis
     llm_analysis = Column(JSONB, nullable=False)
     status = Column(Enum(EvaluationStatus), default=EvaluationStatus.pending)
@@ -34,4 +36,6 @@ class Evaluation(Base):
     evaluated_by_user = relationship("User", back_populates="evaluations")
     category_scores = relationship("CategoryScore", back_populates="evaluation", cascade="all, delete-orphan")
     policy_violations = relationship("PolicyViolation", back_populates="evaluation", cascade="all, delete-orphan")
+    human_review = relationship("HumanReview", uselist=False, back_populates="evaluation", cascade="all, delete-orphan")  # Phase 3
+    versions = relationship("EvaluationVersion", back_populates="evaluation", cascade="all, delete-orphan", order_by="EvaluationVersion.version_number")  # Phase 4
 

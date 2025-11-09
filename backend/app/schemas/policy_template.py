@@ -2,6 +2,7 @@ from pydantic import BaseModel
 from typing import List, Optional
 from datetime import datetime
 from decimal import Decimal
+from app.schemas.rubric_level import RubricLevelResponse
 
 
 class EvaluationCriteriaCreate(BaseModel):
@@ -18,7 +19,7 @@ class EvaluationCriteriaResponse(BaseModel):
     passing_score: int
     evaluation_prompt: str
     created_at: datetime
-    rubric_levels: list = []  # Will be populated with RubricLevelResponse
+    rubric_levels: List[RubricLevelResponse] = []
     
     class Config:
         from_attributes = True

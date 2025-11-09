@@ -1,8 +1,8 @@
 import { Link } from 'react-router-dom'
-import { 
-  FaCloudUploadAlt, 
-  FaBrain, 
-  FaChartLine, 
+import {
+  FaCloudUploadAlt,
+  FaBrain,
+  FaChartLine,
   FaShieldAlt,
   FaClock,
   FaDollarSign,
@@ -13,10 +13,11 @@ import {
   FaChartBar,
   FaBell
 } from 'react-icons/fa'
+import { LazySection } from '@/components/LazySection'
 
 export function Home() {
   return (
-    <div className="min-h-screen bg-white dark:bg-[#0A0F1A] relative overflow-hidden">
+    <main className="min-h-screen bg-white dark:bg-[#0A0F1A] relative overflow-hidden" role="main">
       {/* Enhanced background lighting effects */}
       <div className="fixed inset-0 -z-10 overflow-hidden pointer-events-none">
         {/* Large ambient lights */}
@@ -37,7 +38,7 @@ export function Home() {
       </div>
       
       {/* Hero Section */}
-      <div className="relative bg-gradient-to-br from-brand-50/50 via-white to-blue-50/30 dark:from-[#0A0F1A] dark:via-[#0A0F1A] dark:to-brand-900/30 overflow-hidden">
+      <header className="relative bg-gradient-to-br from-brand-50/50 via-white to-blue-50/30 dark:from-[#0A0F1A] dark:via-[#0A0F1A] dark:to-brand-900/30 overflow-hidden">
         {/* Additional hero section lighting */}
         <div className="absolute inset-0 bg-gradient-to-r from-transparent via-brand-100/20 to-transparent dark:via-brand-900/10"></div>
         <div className="absolute top-0 left-1/2 transform -translate-x-1/2 w-full h-full bg-[radial-gradient(ellipse_at_top,rgba(59,130,246,0.1),transparent_70%)] dark:bg-[radial-gradient(ellipse_at_top,rgba(59,130,246,0.05),transparent_70%)]"></div>
@@ -79,11 +80,13 @@ export function Home() {
               <div className="relative rounded-2xl overflow-hidden shadow-2xl transform hover:scale-[1.02] transition-transform duration-300">
                 {/* Image overlay for better text contrast */}
                 <div className="absolute inset-0 bg-gradient-to-t from-black/20 to-transparent z-10"></div>
-                <img 
+                <img
                   src="https://images.unsplash.com/photo-1552664730-d307ca884978?ixlib=rb-4.0.3&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D&auto=format&fit=crop&w=2070&q=80"
-                  alt="Professional call center team working with AI-powered quality assurance system"
+                  alt="Professional call center team collaborating with AI-powered quality assurance technology for efficient customer service evaluation"
                   className="w-full h-[400px] md:h-[500px] lg:h-[600px] object-cover"
                   loading="eager"
+                  decoding="async"
+                  fetchPriority="high"
                 />
                 {/* Decorative elements */}
                 <div className="absolute top-4 right-4 w-20 h-20 bg-brand-500/20 backdrop-blur-sm rounded-lg border border-brand-400/30 z-20"></div>
@@ -104,10 +107,11 @@ export function Home() {
             </div>
           </div>
         </div>
-      </div>
+      </header>
 
       {/* Value Proposition */}
-      <div className="py-16 bg-white/80 dark:bg-[#0A0F1A]/80 backdrop-blur-sm">
+      <LazySection>
+        <div className="py-16 bg-white/80 dark:bg-[#0A0F1A]/80 backdrop-blur-sm">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="grid md:grid-cols-4 gap-6">
             <div className="text-center p-6 rounded-xl bg-gradient-to-br from-green-50 to-green-100 dark:from-green-900/20 dark:to-green-800/20 border border-green-200 dark:border-green-800">
@@ -136,10 +140,12 @@ export function Home() {
             </div>
           </div>
         </div>
-      </div>
+        </div>
+      </LazySection>
 
       {/* How It Works */}
-      <div className="py-16 bg-gray-50 dark:bg-gray-900">
+      <LazySection>
+        <div className="py-16 bg-gray-50 dark:bg-gray-900">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="text-center mb-12">
             <h2 className="text-3xl font-bold text-gray-900 dark:text-white mb-4">
@@ -192,10 +198,12 @@ export function Home() {
             </div>
           </div>
         </div>
-      </div>
+        </div>
+      </LazySection>
 
       {/* Key Features */}
-      <div className="py-16 bg-white/80 dark:bg-[#0A0F1A]/80 backdrop-blur-sm">
+      <LazySection>
+        <div className="py-16 bg-white/80 dark:bg-[#0A0F1A]/80 backdrop-blur-sm">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="text-center mb-12">
             <h2 className="text-3xl font-bold text-gray-900 dark:text-white mb-4">
@@ -268,10 +276,12 @@ export function Home() {
             </div>
           </div>
         </div>
-      </div>
+        </div>
+      </LazySection>
 
       {/* Tech Stack */}
-      <div className="py-16 bg-gray-50 dark:bg-gray-900">
+      <LazySection>
+        <div className="py-16 bg-gray-50 dark:bg-gray-900">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="text-center mb-12">
             <h2 className="text-3xl font-bold text-gray-900 dark:text-white mb-4">
@@ -301,10 +311,12 @@ export function Home() {
             </div>
           </div>
         </div>
-      </div>
+        </div>
+      </LazySection>
 
       {/* CTA Section */}
-      <div className="py-16 bg-gradient-to-r from-brand-500 to-brand-600">
+      <LazySection>
+        <footer className="py-16 bg-gradient-to-r from-brand-500 to-brand-600">
         <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 text-center">
           <h2 className="text-3xl font-bold text-white mb-4">
             Ready to Transform Your QA Process?
@@ -328,7 +340,8 @@ export function Home() {
             </Link>
           </div>
         </div>
-      </div>
-    </div>
+        </footer>
+      </LazySection>
+    </main>
   )
 }

@@ -35,9 +35,18 @@ class Settings(BaseSettings):
     # Server
     environment: str = "development"
     log_level: str = "INFO"
-    
+
     # CORS
     cors_origins: str = "http://localhost:3000,http://localhost:5173"
+
+    # Alignment Service (Phase 2)
+    enable_alignment: bool = True
+    alignment_timeout_seconds: int = 120
+    alignment_max_duration_seconds: int = 180  # Skip alignment for files longer than this
+
+    # Gemini Service (Phase 3-4)
+    gemini_use_hybrid: bool = False  # Default to Pro only for reliability
+    gemini_force_pro: bool = True    # Always use Pro model (more reliable)
     
     class Config:
         env_file = ".env"

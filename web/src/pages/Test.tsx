@@ -482,567 +482,702 @@ export function Test() {
   }
 
   return (
-    <div className="min-h-screen relative overflow-hidden">
-      {/* Enhanced background lighting effects */}
-      <div className="fixed inset-0 -z-10 overflow-hidden pointer-events-none">
-        {/* Large ambient lights */}
-        <div className="absolute top-0 -right-40 w-[750px] h-[750px] bg-brand-400/11 dark:bg-brand-500/5.5 rounded-full blur-[110px]"></div>
-        <div className="absolute top-1/2 -left-40 w-[650px] h-[650px] bg-blue-400/9 dark:bg-blue-500/4.5 rounded-full blur-[95px]"></div>
-        <div className="absolute bottom-0 right-1/3 w-[600px] h-[600px] bg-purple-400/8 dark:bg-purple-500/4 rounded-full blur-[90px]"></div>
-        
-        {/* Medium accent lights */}
-        <div className="absolute top-1/4 left-1/4 w-[500px] h-[500px] bg-cyan-400/6 dark:bg-cyan-500/3 rounded-full blur-[80px]"></div>
-        <div className="absolute bottom-1/3 left-0 w-96 h-96 bg-emerald-400/5 dark:bg-emerald-500/2.5 rounded-full blur-3xl"></div>
-        
-        {/* Small highlight lights */}
-        <div className="absolute top-1/3 right-1/4 w-64 h-64 bg-indigo-400/4 dark:bg-indigo-500/2 rounded-full blur-2xl"></div>
-        
-        {/* Gradient overlays for depth */}
-        <div className="absolute inset-0 bg-gradient-to-br from-blue-50/10 via-transparent to-purple-50/5 dark:from-blue-900/5 dark:via-transparent dark:to-purple-900/3"></div>
-        <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_top_right,rgba(59,130,246,0.08),transparent_60%)] dark:bg-[radial-gradient(ellipse_at_top_right,rgba(59,130,246,0.04),transparent_60%)]"></div>
-      </div>
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12 relative">
-      <div className="mb-8 flex items-center justify-between">
-        <div>
-          <h1 className="text-3xl font-bold text-gray-900 dark:text-white mb-2">
-            Test QA System
-          </h1>
-          <p className="text-gray-600 dark:text-gray-400">
-            Upload recordings to test the AI-powered quality assurance flow
-          </p>
-        </div>
-        <div className="flex items-center space-x-2">
-          <button
-            onClick={() => {
-              setShowHistory(!showHistory)
-              if (!showHistory) {
-                loadHistory()
-              }
-            }}
-            className="px-4 py-2 bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded-lg hover:bg-gray-300 dark:hover:bg-gray-600 flex items-center space-x-2"
-          >
-            <FaHistory className="w-4 h-4" />
-            <span>{showHistory ? 'Hide History' : 'Show History'}</span>
-          </button>
-          <Link
-            to="/policy-templates"
-            className="px-4 py-2 bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded-lg hover:bg-gray-300 dark:hover:bg-gray-600 flex items-center space-x-2"
-          >
-            <FaCog className="w-4 h-4" />
-            <span>Configure Policies</span>
-          </Link>
-        </div>
-      </div>
-
-
-      {/* Active Template Info */}
-      <TemplateInfo />
-
-      {/* Audio Player */}
-      {audioUrl && (
-        <div className="mb-6 bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 p-4">
+    <div className="min-h-screen bg-slate-50 dark:bg-slate-900">
+      {/* Professional Header */}
+      <div className="bg-white dark:bg-slate-800 border-b border-slate-200 dark:border-slate-700">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
           <div className="flex items-center justify-between">
-            <div className="flex items-center space-x-4 flex-1">
-              <button
-                onClick={toggleAudio}
-                className="p-3 bg-brand-500 text-white rounded-full hover:bg-brand-600 flex items-center justify-center"
-              >
-                {isPlaying ? <FaPause className="w-4 h-4" /> : <FaPlay className="w-4 h-4" />}
-              </button>
-              <div className="flex-1">
-                <p className="text-sm font-medium text-gray-900 dark:text-white">
-                  {history.find(r => r.id === selectedRecordingId)?.file_name || 'Audio File'}
+            <div className="flex items-center space-x-4">
+              <div className="flex-shrink-0">
+                <div className="w-10 h-10 bg-gradient-to-br from-blue-600 to-indigo-600 rounded-lg flex items-center justify-center">
+                  <FaChartBar className="w-5 h-5 text-white" />
+                </div>
+              </div>
+              <div>
+                <h1 className="text-2xl font-bold text-slate-900 dark:text-white">
+                  Quality Assurance Testing
+                </h1>
+                <p className="text-sm text-slate-600 dark:text-slate-400">
+                  Test and validate your QA evaluation system
                 </p>
-                <audio ref={audioRef} controls className="w-full mt-2" style={{ height: '32px' }}>
-                  Your browser does not support the audio element.
-                </audio>
               </div>
             </div>
-            <button
-              onClick={() => {
-                setAudioUrl(null)
-                setSelectedRecordingId(null)
-                if (audioRef.current) {
-                  audioRef.current.pause()
-                  audioRef.current.src = ''
-                }
-                setIsPlaying(false)
-              }}
-              className="ml-4 text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200"
-            >
-              <FaTimes className="w-4 h-4" />
-            </button>
+            <div className="flex items-center space-x-3">
+              <button
+                onClick={() => {
+                  setShowHistory(!showHistory)
+                  if (!showHistory) {
+                    loadHistory()
+                  }
+                }}
+                className="inline-flex items-center px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-md shadow-sm text-sm font-medium text-slate-700 dark:text-slate-200 bg-white dark:bg-slate-700 hover:bg-slate-50 dark:hover:bg-slate-600 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+              >
+                <FaHistory className="w-4 h-4 mr-2" />
+                {showHistory ? 'Hide Records' : 'View Records'}
+              </button>
+              <Link
+                to="/policy-templates"
+                className="inline-flex items-center px-3 py-2 border border-transparent text-sm font-medium rounded-md text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+              >
+                <FaCog className="w-4 h-4 mr-2" />
+                Policy Settings
+              </Link>
+            </div>
           </div>
         </div>
-      )}
+      </div>
 
-      {/* Recording History */}
-      {showHistory && (
-        <div className="mb-6 bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 p-6">
-          <div className="flex items-center justify-between mb-4">
-            <h2 className="text-lg font-semibold text-gray-900 dark:text-white flex items-center space-x-2">
-              <FaHistory className="w-5 h-5" />
-              <span>Recording History</span>
-            </h2>
-            <button
-              onClick={loadHistory}
-              disabled={loadingHistory}
-              className="px-3 py-1.5 bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded-lg hover:bg-gray-300 dark:hover:bg-gray-600 flex items-center space-x-2 text-sm disabled:opacity-50"
-            >
-              <FaSpinner className={`w-4 h-4 ${loadingHistory ? 'animate-spin' : ''}`} />
-              <span>Refresh</span>
-            </button>
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        {/* Status Dashboard */}
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
+          <div className="bg-white dark:bg-slate-800 rounded-lg border border-slate-200 dark:border-slate-700 p-6">
+            <div className="flex items-center">
+              <div className="flex-shrink-0">
+                <FaFileAudio className="w-6 h-6 text-blue-600" />
+              </div>
+              <div className="ml-4">
+                <dt className="text-sm font-medium text-slate-600 dark:text-slate-400 truncate">
+                  Files Uploaded
+                </dt>
+                <dd className="text-2xl font-semibold text-slate-900 dark:text-white">
+                  {files.length}
+                </dd>
+              </div>
+            </div>
           </div>
-          {loadingHistory ? (
-            <div className="text-center py-8">
-              <FaSpinner className="w-8 h-8 text-brand-500 animate-spin mx-auto mb-2" />
-              <p className="text-gray-600 dark:text-gray-400">Loading history...</p>
+          <div className="bg-white dark:bg-slate-800 rounded-lg border border-slate-200 dark:border-slate-700 p-6">
+            <div className="flex items-center">
+              <div className="flex-shrink-0">
+                <FaSpinner className={`w-6 h-6 ${isProcessing ? 'text-orange-600 animate-spin' : 'text-green-600'}`} />
+              </div>
+              <div className="ml-4">
+                <dt className="text-sm font-medium text-slate-600 dark:text-slate-400 truncate">
+                  Processing Status
+                </dt>
+                <dd className="text-lg font-semibold text-slate-900 dark:text-white">
+                  {isProcessing ? 'Active' : 'Ready'}
+                </dd>
+              </div>
             </div>
-          ) : history.length === 0 ? (
-            <div className="text-center py-8 text-gray-500 dark:text-gray-400">
-              <p>No recordings found. Upload a file to get started.</p>
+          </div>
+          <div className="bg-white dark:bg-slate-800 rounded-lg border border-slate-200 dark:border-slate-700 p-6">
+            <div className="flex items-center">
+              <div className="flex-shrink-0">
+                <FaChartBar className="w-6 h-6 text-green-600" />
+              </div>
+              <div className="ml-4">
+                <dt className="text-sm font-medium text-slate-600 dark:text-slate-400 truncate">
+                  Evaluations Done
+                </dt>
+                <dd className="text-2xl font-semibold text-slate-900 dark:text-white">
+                  {history.filter(h => h.status === 'completed').length}
+                </dd>
+              </div>
             </div>
-          ) : (
-            <div className="space-y-3 max-h-96 overflow-y-auto">
-              {history.map((recording) => (
-                <div
-                  key={recording.id}
-                  className="p-4 bg-gray-50 dark:bg-gray-700/50 rounded-lg border border-gray-200 dark:border-gray-600"
+          </div>
+          <div className="bg-white dark:bg-slate-800 rounded-lg border border-slate-200 dark:border-slate-700 p-6">
+            <div className="flex items-center">
+              <div className="flex-shrink-0">
+                <FaCog className="w-6 h-6 text-slate-600" />
+              </div>
+              <div className="ml-4">
+                <dt className="text-sm font-medium text-slate-600 dark:text-slate-400 truncate">
+                  Active Template
+                </dt>
+                <dd className="text-lg font-semibold text-slate-900 dark:text-white">
+                  <TemplateInfo />
+                </dd>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* Recording History */}
+        {showHistory && (
+          <div className="mb-8 bg-white dark:bg-slate-800 rounded-lg border border-slate-200 dark:border-slate-700">
+            <div className="px-6 py-4 border-b border-slate-200 dark:border-slate-700">
+              <div className="flex items-center justify-between">
+                <h2 className="text-lg font-semibold text-slate-900 dark:text-white">
+                  Test Records
+                </h2>
+                <button
+                  onClick={loadHistory}
+                  disabled={loadingHistory}
+                  className="inline-flex items-center px-3 py-1.5 border border-slate-300 dark:border-slate-600 rounded-md text-sm font-medium text-slate-700 dark:text-slate-200 bg-white dark:bg-slate-700 hover:bg-slate-50 dark:hover:bg-slate-600 disabled:opacity-50"
                 >
-                  <div className="flex items-center justify-between">
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center space-x-3">
-                        <FaFileAudio className="w-5 h-5 text-gray-400 dark:text-gray-500 flex-shrink-0" />
-                        <div className="flex-1 min-w-0">
-                          <p className="text-sm font-medium text-gray-900 dark:text-white truncate">
+                  <FaSpinner className={`w-4 h-4 mr-2 ${loadingHistory ? 'animate-spin' : ''}`} />
+                  Refresh
+                </button>
+              </div>
+            </div>
+            <div className="p-6">
+              {loadingHistory ? (
+                <div className="text-center py-12">
+                  <FaSpinner className="w-8 h-8 text-blue-600 animate-spin mx-auto mb-4" />
+                  <p className="text-slate-600 dark:text-slate-400">Loading records...</p>
+                </div>
+              ) : history.length === 0 ? (
+                <div className="text-center py-12">
+                  <FaFileAudio className="w-12 h-12 text-slate-400 mx-auto mb-4" />
+                  <h3 className="text-lg font-medium text-slate-900 dark:text-white mb-2">
+                    No test records
+                  </h3>
+                  <p className="text-slate-600 dark:text-slate-400">
+                    Upload and process recordings to see your test history
+                  </p>
+                </div>
+              ) : (
+                <div className="space-y-4">
+                  {history.map((recording) => (
+                    <div
+                      key={recording.id}
+                      className="flex items-center justify-between p-4 border border-slate-200 dark:border-slate-700 rounded-lg hover:bg-slate-50 dark:hover:bg-slate-800/50"
+                    >
+                      <div className="flex items-center space-x-4">
+                        <div className={`w-3 h-3 rounded-full ${
+                          recording.status === 'completed'
+                            ? 'bg-green-500'
+                            : recording.status === 'processing' || recording.status === 'queued'
+                            ? 'bg-orange-500'
+                            : recording.status === 'failed'
+                            ? 'bg-red-500'
+                            : 'bg-slate-400'
+                        }`}></div>
+                        <div>
+                          <p className="font-medium text-slate-900 dark:text-white">
                             {recording.file_name}
                           </p>
-                          <div className="flex items-center space-x-4 mt-1">
-                            <span className={`text-xs px-2 py-1 rounded ${
-                              recording.status === 'completed' 
-                                ? 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300'
-                                : recording.status === 'processing' || recording.status === 'queued'
-                                ? 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-300'
-                                : recording.status === 'failed'
-                                ? 'bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-300'
-                                : 'bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-300'
-                            }`}>
-                              {recording.status}
-                            </span>
-                            <span className="text-xs text-gray-500 dark:text-gray-400">
-                              {formatDate(recording.uploaded_at)}
-                            </span>
-                          </div>
+                          <p className="text-sm text-slate-600 dark:text-slate-400">
+                            {formatDate(recording.uploaded_at)}
+                            {recording.duration_seconds && ` • ${formatTime(recording.duration_seconds)}`}
+                          </p>
                         </div>
                       </div>
-                    </div>
-                    <div className="flex items-center space-x-2 ml-4">
-                      <button
-                        onClick={() => loadAudioUrl(recording.id)}
-                        className="p-2 text-blue-600 dark:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-900/20 rounded"
-                        title="Listen to audio"
-                      >
-                        <FaVolumeUp className="w-4 h-4" />
-                      </button>
-                      {recording.status === 'completed' && (
-                        <>
-                          <button
-                            onClick={() => loadRecordingResults(recording.id)}
-                            className="p-2 text-green-600 dark:text-green-400 hover:bg-green-50 dark:hover:bg-green-900/20 rounded"
-                            title="View results"
-                          >
-                            <FaChartBar className="w-4 h-4" />
-                          </button>
-                          <button
-                            onClick={() => handleReevaluate(recording.id)}
-                            className="p-2 text-purple-600 dark:text-purple-400 hover:bg-purple-50 dark:hover:bg-purple-900/20 rounded"
-                            title="Re-evaluate"
-                          >
-                            <FaRedo className="w-4 h-4" />
-                          </button>
-                        </>
-                      )}
-                      <button
-                        onClick={() => handleDeleteRecording(recording.id)}
-                        className="p-2 text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 rounded"
-                        title="Delete recording"
-                      >
-                        <FaTrash className="w-4 h-4" />
-                      </button>
-                    </div>
-                  </div>
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
-      )}
-
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-        {/* Left Column - Upload */}
-        <div className="space-y-6">
-          <div
-            {...getRootProps()}
-            className={`
-              border-2 border-dashed rounded-lg p-12 text-center cursor-pointer
-              ${
-                isDragActive
-                  ? 'border-brand-500 bg-brand-50 dark:bg-brand-900/20'
-                  : 'border-gray-300 dark:border-gray-700 hover:border-gray-400 dark:hover:border-gray-600'
-              }
-            `}
-          >
-            <input {...getInputProps()} />
-            <FaCloudUploadAlt
-              className={`mx-auto h-12 w-12 mb-4 ${
-                isDragActive
-                  ? 'text-brand-500'
-                  : 'text-gray-400 dark:text-gray-500'
-              }`}
-            />
-            <p className="text-lg font-medium text-gray-900 dark:text-white mb-2">
-              {isDragActive ? 'Drop files here' : 'Drag & drop files here, or click to select'}
-            </p>
-            <p className="text-sm text-gray-500 dark:text-gray-400">
-              Supported: MP3, WAV, M4A, MP4 (Max 2GB)
-            </p>
-          </div>
-
-          {/* Uploaded Files List */}
-          {files.length > 0 && (
-            <div className="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 p-4">
-              <h2 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">
-                Uploaded Files ({files.length})
-              </h2>
-              <div className="space-y-3">
-                {files.map((file) => (
-                  <div
-                    key={file.id}
-                    className="flex items-center justify-between p-3 bg-gray-50 dark:bg-gray-700/50 rounded-lg"
-                  >
-                    <div className="flex items-center space-x-3 flex-1 min-w-0">
-                      <FaFileAudio className="w-5 h-5 text-gray-400 dark:text-gray-500 flex-shrink-0" />
-                      <div className="flex-1 min-w-0">
-                        <p className="text-sm font-medium text-gray-900 dark:text-white truncate">
-                          {file.name}
-                        </p>
-                        <p className="text-xs text-gray-500 dark:text-gray-400">
-                          {formatFileSize(file.size)}
-                        </p>
-                      </div>
-                    </div>
-                    <div className="flex items-center space-x-2">
-                      {file.status === 'uploading' && (
-                        <div className="flex items-center space-x-2">
-                          <FaSpinner className="w-4 h-4 animate-spin text-brand-500" />
-                          <span className="text-sm text-gray-600 dark:text-gray-400">
-                            Uploading... {file.progress}%
-                          </span>
-                        </div>
-                      )}
-                      {file.status === 'uploaded' && (
+                      <div className="flex items-center space-x-2">
+                        {recording.status === 'completed' && (
+                          <>
+                            <button
+                              onClick={() => loadAudioUrl(recording.id)}
+                              className="inline-flex items-center px-3 py-1.5 border border-slate-300 dark:border-slate-600 rounded-md text-sm font-medium text-slate-700 dark:text-slate-200 bg-white dark:bg-slate-700 hover:bg-slate-50 dark:hover:bg-slate-600"
+                            >
+                              <FaVolumeUp className="w-4 h-4 mr-1" />
+                              Listen
+                            </button>
+                            <button
+                              onClick={() => loadRecordingResults(recording.id)}
+                              className="inline-flex items-center px-3 py-1.5 border border-transparent text-sm font-medium rounded-md text-white bg-blue-600 hover:bg-blue-700"
+                            >
+                              <FaChartBar className="w-4 h-4 mr-1" />
+                              Results
+                            </button>
+                            <button
+                              onClick={() => handleReevaluate(recording.id)}
+                              className="inline-flex items-center px-3 py-1.5 border border-slate-300 dark:border-slate-600 rounded-md text-sm font-medium text-slate-700 dark:text-slate-200 bg-white dark:bg-slate-700 hover:bg-slate-50 dark:hover:bg-slate-600"
+                            >
+                              <FaRedo className="w-4 h-4 mr-1" />
+                              Retest
+                            </button>
+                          </>
+                        )}
                         <button
-                          onClick={() => handleProcess(file)}
-                          className="px-3 py-1.5 bg-brand-500 text-white text-sm rounded-lg hover:bg-brand-600 flex items-center space-x-1"
+                          onClick={() => handleDeleteRecording(recording.id)}
+                          className="inline-flex items-center px-3 py-1.5 border border-red-300 dark:border-red-600 rounded-md text-sm font-medium text-red-700 dark:text-red-200 bg-white dark:bg-slate-700 hover:bg-red-50 dark:hover:bg-red-900/50"
                         >
-                          <FaPlay className="w-4 h-4" />
-                          <span>Process</span>
+                          <FaTrash className="w-4 h-4" />
                         </button>
-                      )}
-                      {file.status === 'processing' && (
-                        <div className="flex items-center space-x-2 text-brand-600 dark:text-brand-400">
-                          <FaSpinner className="w-4 h-4 animate-spin" />
-                          <span className="text-sm">Processing...</span>
-                        </div>
-                      )}
-                      {file.status === 'completed' && (
-                        <div className="flex items-center space-x-2 text-green-600 dark:text-green-400">
-                          <FaCheckCircle className="w-4 h-4" />
-                          <span className="text-sm">Completed</span>
-                        </div>
-                      )}
-                      {file.status === 'error' && (
-                        <div className="flex items-center space-x-2 text-red-600 dark:text-red-400">
-                          <FaExclamationCircle className="w-4 h-4" />
-                          <span className="text-xs">{file.error}</span>
-                        </div>
-                      )}
-                      <button
-                        onClick={() => removeFile(file.id)}
-                        className="px-3 py-1.5 text-sm text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200"
-                      >
-                        Remove
-                      </button>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
-        </div>
-
-        {/* Right Column - Results */}
-        <div>
-          {isProcessing && (
-            <div className="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 p-8 text-center">
-              <FaSpinner className="w-12 h-12 text-brand-500 animate-spin mx-auto mb-4" />
-              <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-2">
-                Processing Recording...
-              </h3>
-              <p className="text-gray-600 dark:text-gray-400">
-                Analyzing audio, transcribing, and evaluating quality
-              </p>
-            </div>
-          )}
-
-          {result && selectedFile && (
-            <div className="space-y-6">
-              {/* Overall Score */}
-              <div className="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 p-6">
-                <div className="flex items-center justify-between mb-4">
-                  <h2 className="text-xl font-bold text-gray-900 dark:text-white">
-                    Results: {selectedFile.name}
-                  </h2>
-                  <FaChartBar className="w-6 h-6 text-brand-500" />
-                </div>
-                <div className="text-center py-4">
-                  <div className="text-5xl font-bold text-brand-600 dark:text-brand-400 mb-2">
-                    {result.overallScore}
-                  </div>
-                  <div className="text-sm text-gray-600 dark:text-gray-400 mb-4">
-                    Overall Quality Score
-                  </div>
-                  <div className="flex items-center justify-center space-x-4 text-sm">
-                    <div>
-                      <span className="text-gray-600 dark:text-gray-400">Resolution: </span>
-                      <span className={result.resolutionDetected ? 'text-green-600 dark:text-green-400 font-medium' : 'text-red-600 dark:text-red-400 font-medium'}>
-                        {result.resolutionDetected ? 'Yes' : 'No'}
-                      </span>
-                    </div>
-                    <div>
-                      <span className="text-gray-600 dark:text-gray-400">Confidence: </span>
-                      <span className="text-gray-900 dark:text-white font-medium">
-                        {(result.resolutionConfidence * 100).toFixed(0)}%
-                      </span>
-                    </div>
-                  </div>
-                </div>
-              </div>
-
-              {/* Customer Tone */}
-              {result.customerTone && (
-                <div className="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 p-6">
-                  <div className="flex items-center justify-between mb-4">
-                    <h3 className="text-lg font-semibold text-gray-900 dark:text-white flex items-center space-x-2">
-                      <FaUser className="w-5 h-5 text-purple-500" />
-                      <span>Customer Tone Analysis</span>
-                    </h3>
-                  </div>
-                  <div className="space-y-4">
-                    <div className="flex items-center space-x-4">
-                      <div className="flex-1">
-                        <div className="flex items-center space-x-2 mb-2">
-                          <span className="text-sm font-medium text-gray-700 dark:text-gray-300">Primary Emotion:</span>
-                          <span className={`px-3 py-1 rounded-full text-sm font-semibold ${
-                            result.customerTone.primary_emotion === 'angry' || result.customerTone.primary_emotion === 'frustrated'
-                              ? 'bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-300'
-                              : result.customerTone.primary_emotion === 'satisfied' || result.customerTone.primary_emotion === 'happy'
-                              ? 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300'
-                              : result.customerTone.primary_emotion === 'neutral' || result.customerTone.primary_emotion === 'calm'
-                              ? 'bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-300'
-                              : result.customerTone.primary_emotion === 'disappointed' || result.customerTone.primary_emotion === 'confused'
-                              ? 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-300'
-                              : 'bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-300'
-                          }`}>
-                            {result.customerTone.primary_emotion.charAt(0).toUpperCase() + result.customerTone.primary_emotion.slice(1)}
-                          </span>
-                          <span className="text-xs text-gray-500 dark:text-gray-400">
-                            ({(result.customerTone.confidence * 100).toFixed(0)}% confidence)
-                          </span>
-                        </div>
-                        <p className="text-sm text-gray-600 dark:text-gray-400">
-                          {result.customerTone.description}
-                        </p>
                       </div>
-                    </div>
-                    
-                    {result.customerTone.emotional_journey && result.customerTone.emotional_journey.length > 0 && (
-                      <div className="mt-4 pt-4 border-t border-gray-200 dark:border-gray-700">
-                        <h4 className="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-3">Emotional Journey</h4>
-                        <div className="space-y-3">
-                          {result.customerTone.emotional_journey.map((journey, idx) => (
-                            <div key={idx} className="p-3 bg-gray-50 dark:bg-gray-900/50 rounded-lg border border-gray-200 dark:border-gray-700">
-                              <div className="flex items-center space-x-2 mb-2">
-                                <span className="text-xs font-medium text-gray-600 dark:text-gray-400 uppercase">
-                                  {journey.segment}
-                                </span>
-                                <span className={`text-xs px-2 py-0.5 rounded ${
-                                  journey.emotion === 'angry' || journey.emotion === 'frustrated'
-                                    ? 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-300'
-                                    : journey.emotion === 'satisfied' || journey.emotion === 'happy'
-                                    ? 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-300'
-                                    : journey.emotion === 'neutral' || journey.emotion === 'calm'
-                                    ? 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300'
-                                    : 'bg-gray-100 text-gray-700 dark:bg-gray-700 dark:text-gray-300'
-                                }`}>
-                                  {journey.emotion}
-                                </span>
-                                <span className="text-xs text-gray-500 dark:text-gray-400">
-                                  ({journey.intensity} intensity)
-                                </span>
-                              </div>
-                              <p className="text-xs text-gray-600 dark:text-gray-400 italic">
-                                "{journey.evidence}"
-                              </p>
-                            </div>
-                          ))}
-                        </div>
-                      </div>
-                    )}
-                  </div>
-                </div>
-              )}
-
-              {/* Category Scores */}
-              <div className="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 p-6">
-                <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">
-                  Category Scores
-                </h3>
-                <div className="space-y-4">
-                  {result.categoryScores.map((category, idx) => (
-                    <div key={idx}>
-                      <div className="flex items-center justify-between mb-2">
-                        <span className="text-sm font-medium text-gray-900 dark:text-white">
-                          {category.category}
-                        </span>
-                        <span className="text-sm font-semibold text-gray-900 dark:text-white">
-                          {category.score}/100
-                        </span>
-                      </div>
-                      <div className="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-2 mb-2">
-                        <div
-                          className="bg-brand-500 h-2 rounded-full"
-                          style={{ width: `${category.score}%` }}
-                        />
-                      </div>
-                      <p className="text-xs text-gray-600 dark:text-gray-400">
-                        {category.feedback}
-                      </p>
                     </div>
                   ))}
                 </div>
-              </div>
+              )}
+            </div>
+          </div>
+        )}
 
-              {/* Violations */}
-              {result.violations.length > 0 && (
-                <div className="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 p-6">
-                  <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">
-                    Policy Violations
-                  </h3>
-                  <div className="space-y-3">
-                    {result.violations.map((violation, idx) => (
-                      <div
-                        key={idx}
-                        className="p-3 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg"
-                      >
-                        <div className="flex items-center justify-between mb-1">
-                          <span className="text-sm font-medium text-red-900 dark:text-red-200">
-                            {violation.type}
-                          </span>
-                          <span
-                            className={`text-xs px-2 py-1 rounded ${
-                              violation.severity === 'critical'
-                                ? 'bg-red-600 text-white'
-                                : violation.severity === 'major'
-                                ? 'bg-orange-600 text-white'
-                                : 'bg-yellow-600 text-white'
-                            }`}
-                          >
-                            {violation.severity}
-                          </span>
+        {/* Audio Player */}
+        {audioUrl && (
+          <div className="mb-8 bg-white dark:bg-slate-800 rounded-lg border border-slate-200 dark:border-slate-700">
+            <div className="px-6 py-4 border-b border-slate-200 dark:border-slate-700">
+              <h3 className="text-lg font-semibold text-slate-900 dark:text-white">
+                Audio Playback
+              </h3>
+            </div>
+            <div className="p-6">
+              <div className="flex items-center space-x-4">
+                <button
+                  onClick={toggleAudio}
+                  className="flex-shrink-0 w-12 h-12 bg-blue-600 text-white rounded-full hover:bg-blue-700 flex items-center justify-center transition-colors"
+                >
+                  {isPlaying ? <FaPause className="w-5 h-5" /> : <FaPlay className="w-5 h-5" />}
+                </button>
+                <div className="flex-1 min-w-0">
+                  <p className="font-medium text-slate-900 dark:text-white mb-2">
+                    {history.find(r => r.id === selectedRecordingId)?.file_name || 'Audio File'}
+                  </p>
+                  <audio ref={audioRef} controls className="w-full">
+                    Your browser does not support the audio element.
+                  </audio>
+                </div>
+                <button
+                  onClick={() => {
+                    setAudioUrl(null)
+                    setSelectedRecordingId(null)
+                    if (audioRef.current) {
+                      audioRef.current.pause()
+                      audioRef.current.src = ''
+                    }
+                    setIsPlaying(false)
+                  }}
+                  className="flex-shrink-0 p-2 text-slate-400 hover:text-slate-600 dark:text-slate-500 dark:hover:text-slate-300"
+                >
+                  <FaTimes className="w-5 h-5" />
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Main Content Grid */}
+        <div className="grid grid-cols-1 xl:grid-cols-3 gap-8">
+          {/* Left Column - Upload */}
+          <div className="xl:col-span-1">
+            <div className="bg-white dark:bg-slate-800 rounded-lg border border-slate-200 dark:border-slate-700">
+              <div className="px-6 py-4 border-b border-slate-200 dark:border-slate-700">
+                <h2 className="text-lg font-semibold text-slate-900 dark:text-white">
+                  Upload Test Files
+                </h2>
+                <p className="text-sm text-slate-600 dark:text-slate-400 mt-1">
+                  Upload audio/video files for quality analysis
+                </p>
+              </div>
+              <div className="p-6">
+                <div
+                  {...getRootProps()}
+                  className={`
+                    border-2 border-dashed rounded-lg p-8 text-center cursor-pointer transition-colors
+                    ${
+                      isDragActive
+                        ? 'border-blue-500 bg-blue-50 dark:bg-blue-900/20'
+                        : 'border-slate-300 dark:border-slate-600 hover:border-slate-400 dark:hover:border-slate-500'
+                    }
+                  `}
+                >
+                  <input {...getInputProps()} />
+                  <FaCloudUploadAlt
+                    className={`mx-auto h-10 w-10 mb-3 ${
+                      isDragActive
+                        ? 'text-blue-500'
+                        : 'text-slate-400 dark:text-slate-500'
+                    }`}
+                  />
+                  <p className="text-base font-medium text-slate-900 dark:text-white mb-1">
+                    {isDragActive ? 'Drop files here' : 'Upload Files'}
+                  </p>
+                  <p className="text-sm text-slate-500 dark:text-slate-400">
+                    MP3, WAV, M4A, MP4 up to 2GB each
+                  </p>
+                </div>
+
+                {/* File Queue */}
+                {files.length > 0 && (
+                  <div className="mt-6">
+                    <h3 className="text-sm font-medium text-slate-900 dark:text-white mb-3">
+                      File Queue ({files.length})
+                    </h3>
+                    <div className="space-y-3">
+                      {files.map((file) => (
+                        <div
+                          key={file.id}
+                          className="flex items-center justify-between p-3 bg-slate-50 dark:bg-slate-700/50 rounded-lg border border-slate-200 dark:border-slate-600"
+                        >
+                          <div className="flex items-center space-x-3 flex-1 min-w-0">
+                            <FaFileAudio className="w-4 h-4 text-slate-400 dark:text-slate-500 flex-shrink-0" />
+                            <div className="flex-1 min-w-0">
+                              <p className="text-sm font-medium text-slate-900 dark:text-white truncate">
+                                {file.name}
+                              </p>
+                              <p className="text-xs text-slate-500 dark:text-slate-400">
+                                {formatFileSize(file.size)}
+                              </p>
+                            </div>
+                          </div>
+                          <div className="flex items-center space-x-2">
+                            {file.status === 'uploading' && (
+                              <div className="flex items-center space-x-2">
+                                <FaSpinner className="w-4 h-4 animate-spin text-blue-600" />
+                                <span className="text-sm text-slate-600 dark:text-slate-400">
+                                  {file.progress}%
+                                </span>
+                              </div>
+                            )}
+                            {file.status === 'uploaded' && (
+                              <button
+                                onClick={() => handleProcess(file)}
+                                className="px-3 py-1.5 bg-blue-600 text-white text-sm rounded-md hover:bg-blue-700 flex items-center space-x-1"
+                              >
+                                <FaPlay className="w-3 h-3" />
+                                <span>Process</span>
+                              </button>
+                            )}
+                            {file.status === 'processing' && (
+                              <div className="flex items-center space-x-2 text-orange-600 dark:text-orange-400">
+                                <FaSpinner className="w-4 h-4 animate-spin" />
+                                <span className="text-sm">Processing</span>
+                              </div>
+                            )}
+                            {file.status === 'completed' && (
+                              <div className="flex items-center space-x-2 text-green-600 dark:text-green-400">
+                                <FaCheckCircle className="w-4 h-4" />
+                                <span className="text-sm">Done</span>
+                              </div>
+                            )}
+                            {file.status === 'error' && (
+                              <div className="flex items-center space-x-2 text-red-600 dark:text-red-400">
+                                <FaExclamationCircle className="w-4 h-4" />
+                                <span className="text-xs">{file.error}</span>
+                              </div>
+                            )}
+                            <button
+                              onClick={() => removeFile(file.id)}
+                              className="p-1.5 text-slate-400 hover:text-slate-600 dark:text-slate-500 dark:hover:text-slate-300"
+                            >
+                              <FaTimes className="w-4 h-4" />
+                            </button>
+                          </div>
                         </div>
-                        <p className="text-sm text-red-700 dark:text-red-300">
-                          {violation.description}
-                        </p>
-                        <p className="text-xs text-red-600 dark:text-red-400 mt-1">
-                          Timestamp: {violation.timestamp}s
-                        </p>
-                      </div>
-                    ))}
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+
+          {/* Right Column - Results */}
+          <div className="xl:col-span-2">
+            {isProcessing && (
+              <div className="bg-white dark:bg-slate-800 rounded-lg border border-slate-200 dark:border-slate-700 p-8">
+                <div className="text-center">
+                  <div className="mx-auto flex items-center justify-center w-16 h-16 bg-blue-100 dark:bg-blue-900/50 rounded-full mb-4">
+                    <FaSpinner className="w-8 h-8 text-blue-600 animate-spin" />
+                  </div>
+                  <h3 className="text-xl font-semibold text-slate-900 dark:text-white mb-2">
+                    Analyzing Recording
+                  </h3>
+                  <p className="text-slate-600 dark:text-slate-400 mb-4">
+                    Processing audio, transcribing content, and evaluating quality metrics
+                  </p>
+                  <div className="flex justify-center space-x-8 text-sm text-slate-500 dark:text-slate-400">
+                    <div className="flex items-center space-x-2">
+                      <div className="w-2 h-2 bg-blue-500 rounded-full"></div>
+                      <span>Audio Processing</span>
+                    </div>
+                    <div className="flex items-center space-x-2">
+                      <div className="w-2 h-2 bg-slate-300 rounded-full"></div>
+                      <span>Transcription</span>
+                    </div>
+                    <div className="flex items-center space-x-2">
+                      <div className="w-2 h-2 bg-slate-300 rounded-full"></div>
+                      <span>Quality Analysis</span>
+                    </div>
                   </div>
                 </div>
-              )}
+              </div>
+            )}
 
-              {/* Transcript */}
-              <div className="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 p-6">
-                <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">
-                  Transcript
-                </h3>
-                <div className="bg-gray-50 dark:bg-gray-900 rounded-lg p-4 max-h-96 overflow-y-auto">
-                  {result.diarizedSegments && result.diarizedSegments.length > 0 ? (
-                    <div className="space-y-3">
-                      {result.diarizedSegments.map((segment, index) => {
-                        const isCaller = segment.speaker === 'caller'
-                        const isAgent = segment.speaker === 'agent' || segment.speaker.startsWith('agent')
-                        const speakerLabel = isCaller ? 'Caller' : isAgent ? 'Agent' : segment.speaker
-                        
-                        return (
+            {result && selectedFile && (
+              <div className="space-y-6">
+                {/* Overall Score Card */}
+                <div className="bg-white dark:bg-slate-800 rounded-lg border border-slate-200 dark:border-slate-700">
+                  <div className="px-6 py-4 border-b border-slate-200 dark:border-slate-700">
+                    <div className="flex items-center justify-between">
+                      <h2 className="text-xl font-bold text-slate-900 dark:text-white">
+                        Analysis Results
+                      </h2>
+                      <div className="flex items-center space-x-2">
+                        <span className="text-sm text-slate-600 dark:text-slate-400">
+                          {selectedFile.name}
+                        </span>
+                        <FaChartBar className="w-5 h-5 text-blue-600" />
+                      </div>
+                    </div>
+                  </div>
+                  <div className="p-6">
+                    <div className="text-center">
+                      <div className="inline-flex items-center justify-center w-24 h-24 bg-gradient-to-br from-blue-500 to-indigo-600 rounded-full mb-4">
+                        <span className="text-2xl font-bold text-white">
+                          {result.overallScore}
+                        </span>
+                      </div>
+                      <h3 className="text-lg font-semibold text-slate-900 dark:text-white mb-1">
+                        Quality Score
+                      </h3>
+                      <p className="text-slate-600 dark:text-slate-400 mb-4">
+                        Overall performance assessment
+                      </p>
+                      <div className="grid grid-cols-2 gap-4 max-w-md mx-auto">
+                        <div className="text-center">
+                          <div className={`inline-flex items-center px-3 py-1 rounded-full text-sm font-medium ${
+                            result.resolutionDetected
+                              ? 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300'
+                              : 'bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-300'
+                          }`}>
+                            {result.resolutionDetected ? 'Resolved' : 'Unresolved'}
+                          </div>
+                          <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">Issue Status</p>
+                        </div>
+                        <div className="text-center">
+                          <div className="inline-flex items-center px-3 py-1 rounded-full text-sm font-medium bg-slate-100 text-slate-800 dark:bg-slate-700 dark:text-slate-200">
+                            {(result.resolutionConfidence * 100).toFixed(0)}% Confidence
+                          </div>
+                          <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">Resolution Confidence</p>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Customer Analysis */}
+                {result.customerTone && (
+                  <div className="bg-white dark:bg-slate-800 rounded-lg border border-slate-200 dark:border-slate-700">
+                    <div className="px-6 py-4 border-b border-slate-200 dark:border-slate-700">
+                      <h3 className="text-lg font-semibold text-slate-900 dark:text-white flex items-center space-x-2">
+                        <FaUser className="w-5 h-5 text-purple-600" />
+                        <span>Customer Analysis</span>
+                      </h3>
+                    </div>
+                    <div className="p-6">
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                        <div>
+                          <div className="flex items-center space-x-3 mb-3">
+                            <span className="text-sm font-medium text-slate-700 dark:text-slate-300">
+                              Primary Emotion
+                            </span>
+                            <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
+                              result.customerTone.primary_emotion === 'angry' || result.customerTone.primary_emotion === 'frustrated'
+                                ? 'bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-300'
+                                : result.customerTone.primary_emotion === 'satisfied' || result.customerTone.primary_emotion === 'happy'
+                                ? 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300'
+                                : result.customerTone.primary_emotion === 'neutral' || result.customerTone.primary_emotion === 'calm'
+                                ? 'bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-300'
+                                : result.customerTone.primary_emotion === 'disappointed' || result.customerTone.primary_emotion === 'confused'
+                                ? 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-300'
+                                : 'bg-slate-100 text-slate-800 dark:bg-slate-700 dark:text-slate-300'
+                            }`}>
+                              {result.customerTone.primary_emotion.charAt(0).toUpperCase() + result.customerTone.primary_emotion.slice(1)}
+                            </span>
+                          </div>
+                          <p className="text-sm text-slate-600 dark:text-slate-400 mb-4">
+                            {result.customerTone.description}
+                          </p>
+                          <div className="text-xs text-slate-500 dark:text-slate-400">
+                            Analysis Confidence: {(result.customerTone.confidence * 100).toFixed(0)}%
+                          </div>
+                        </div>
+
+                        {result.customerTone.emotional_journey && result.customerTone.emotional_journey.length > 0 && (
+                          <div>
+                            <h4 className="text-sm font-semibold text-slate-700 dark:text-slate-300 mb-3">
+                              Call Journey
+                            </h4>
+                            <div className="space-y-2">
+                              {result.customerTone.emotional_journey.map((journey, idx) => (
+                                <div key={idx} className="flex items-center justify-between p-2 bg-slate-50 dark:bg-slate-700/50 rounded border border-slate-200 dark:border-slate-600">
+                                  <div className="flex items-center space-x-2">
+                                    <span className="text-xs font-medium text-slate-600 dark:text-slate-400 uppercase">
+                                      {journey.segment}
+                                    </span>
+                                    <span className={`text-xs px-2 py-0.5 rounded ${
+                                      journey.emotion === 'angry' || journey.emotion === 'frustrated'
+                                        ? 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-300'
+                                        : journey.emotion === 'satisfied' || journey.emotion === 'happy'
+                                        ? 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-300'
+                                        : journey.emotion === 'neutral' || journey.emotion === 'calm'
+                                        ? 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300'
+                                        : 'bg-slate-100 text-slate-700 dark:bg-slate-700 dark:text-slate-300'
+                                    }`}>
+                                      {journey.emotion}
+                                    </span>
+                                  </div>
+                                  <span className="text-xs text-slate-500 dark:text-slate-400">
+                                    {journey.intensity}
+                                  </span>
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {/* Category Performance */}
+                <div className="bg-white dark:bg-slate-800 rounded-lg border border-slate-200 dark:border-slate-700">
+                  <div className="px-6 py-4 border-b border-slate-200 dark:border-slate-700">
+                    <h3 className="text-lg font-semibold text-slate-900 dark:text-white">
+                      Category Performance
+                    </h3>
+                  </div>
+                  <div className="p-6">
+                    <div className="space-y-4">
+                      {result.categoryScores.map((category, idx) => (
+                        <div key={idx} className="p-4 bg-slate-50 dark:bg-slate-700/50 rounded-lg border border-slate-200 dark:border-slate-600">
+                          <div className="flex items-center justify-between mb-3">
+                            <span className="font-medium text-slate-900 dark:text-white">
+                              {category.category}
+                            </span>
+                            <div className="flex items-center space-x-2">
+                              <span className="text-lg font-bold text-slate-900 dark:text-white">
+                                {category.score}
+                              </span>
+                              <span className="text-sm text-slate-600 dark:text-slate-400">/100</span>
+                            </div>
+                          </div>
+                          <div className="w-full bg-slate-200 dark:bg-slate-600 rounded-full h-2 mb-3">
+                            <div
+                              className={`h-2 rounded-full transition-all ${
+                                category.score >= 90 ? 'bg-green-500' :
+                                category.score >= 70 ? 'bg-blue-500' :
+                                category.score >= 50 ? 'bg-yellow-500' : 'bg-red-500'
+                              }`}
+                              style={{ width: `${category.score}%` }}
+                            />
+                          </div>
+                          <p className="text-sm text-slate-600 dark:text-slate-400">
+                            {category.feedback}
+                          </p>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+
+                {/* Issues Found */}
+                {result.violations.length > 0 && (
+                  <div className="bg-white dark:bg-slate-800 rounded-lg border border-slate-200 dark:border-slate-700">
+                    <div className="px-6 py-4 border-b border-slate-200 dark:border-slate-700">
+                      <h3 className="text-lg font-semibold text-slate-900 dark:text-white flex items-center space-x-2">
+                        <FaExclamationCircle className="w-5 h-5 text-red-600" />
+                        <span>Issues Identified</span>
+                      </h3>
+                    </div>
+                    <div className="p-6">
+                      <div className="space-y-3">
+                        {result.violations.map((violation, idx) => (
                           <div
-                            key={index}
-                            className={`p-3 rounded-lg ${
-                              isCaller
-                                ? 'bg-blue-50 dark:bg-blue-900/20 border-l-4 border-blue-500'
-                                : isAgent
-                                ? 'bg-green-50 dark:bg-green-900/20 border-l-4 border-green-500'
-                                : 'bg-gray-100 dark:bg-gray-800 border-l-4 border-gray-400'
-                            }`}
+                            key={idx}
+                            className="p-4 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg"
                           >
-                            <div className="flex items-start justify-between mb-1">
-                              <span
-                                className={`text-xs font-semibold uppercase ${
+                            <div className="flex items-start justify-between mb-2">
+                              <div className="flex items-center space-x-2">
+                                <span className="text-sm font-medium text-red-900 dark:text-red-200">
+                                  {violation.type}
+                                </span>
+                                <span
+                                  className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${
+                                    violation.severity === 'critical'
+                                      ? 'bg-red-100 text-red-800 dark:bg-red-900/50 dark:text-red-200'
+                                      : violation.severity === 'major'
+                                      ? 'bg-orange-100 text-orange-800 dark:bg-orange-900/50 dark:text-orange-200'
+                                      : 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900/50 dark:text-yellow-200'
+                                  }`}
+                                >
+                                  {violation.severity}
+                                </span>
+                              </div>
+                            </div>
+                            <p className="text-sm text-red-700 dark:text-red-300 mb-2">
+                              {violation.description}
+                            </p>
+                            {violation.timestamp && (
+                              <p className="text-xs text-red-600 dark:text-red-400">
+                                Time: {formatTime(violation.timestamp)}
+                              </p>
+                            )}
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {/* Conversation Transcript */}
+                <div className="bg-white dark:bg-slate-800 rounded-lg border border-slate-200 dark:border-slate-700">
+                  <div className="px-6 py-4 border-b border-slate-200 dark:border-slate-700">
+                    <h3 className="text-lg font-semibold text-slate-900 dark:text-white">
+                      Conversation Transcript
+                    </h3>
+                  </div>
+                  <div className="p-6">
+                    <div className="bg-slate-50 dark:bg-slate-900 rounded-lg p-4 max-h-96 overflow-y-auto">
+                      {result.diarizedSegments && result.diarizedSegments.length > 0 ? (
+                        <div className="space-y-4">
+                          {result.diarizedSegments.map((segment, index) => {
+                            const isCaller = segment.speaker === 'caller'
+                            const isAgent = segment.speaker === 'agent' || segment.speaker.startsWith('agent')
+                            const speakerLabel = isCaller ? 'Customer' : isAgent ? 'Agent' : segment.speaker
+
+                            return (
+                              <div
+                                key={index}
+                                className={`p-3 rounded-lg border-l-4 ${
                                   isCaller
-                                    ? 'text-blue-700 dark:text-blue-300'
+                                    ? 'bg-blue-50 dark:bg-blue-900/20 border-blue-500'
                                     : isAgent
-                                    ? 'text-green-700 dark:text-green-300'
-                                    : 'text-gray-600 dark:text-gray-400'
+                                    ? 'bg-slate-100 dark:bg-slate-700/50 border-slate-500'
+                                    : 'bg-slate-100 dark:bg-slate-700/50 border-slate-400'
                                 }`}
                               >
-                                {speakerLabel}
-                              </span>
-                              <span className="text-xs text-gray-500 dark:text-gray-400">
-                                {formatTime(segment.start)} - {formatTime(segment.end)}
-                              </span>
-                            </div>
-                            <p className="text-sm text-gray-700 dark:text-gray-300 whitespace-pre-wrap">
-                              {segment.text}
-                            </p>
-                          </div>
-                        )
-                      })}
+                                <div className="flex items-center justify-between mb-2">
+                                  <span
+                                    className={`text-xs font-semibold uppercase tracking-wider ${
+                                      isCaller
+                                        ? 'text-blue-700 dark:text-blue-300'
+                                        : isAgent
+                                        ? 'text-slate-700 dark:text-slate-300'
+                                        : 'text-slate-600 dark:text-slate-400'
+                                    }`}
+                                  >
+                                    {speakerLabel}
+                                  </span>
+                                  <span className="text-xs text-slate-500 dark:text-slate-400 font-mono">
+                                    {formatTime(segment.start)} - {formatTime(segment.end)}
+                                  </span>
+                                </div>
+                                <p className="text-sm text-slate-700 dark:text-slate-300 leading-relaxed">
+                                  {segment.text}
+                                </p>
+                              </div>
+                            )
+                          })}
+                        </div>
+                      ) : (
+                        <pre className="text-sm text-slate-700 dark:text-slate-300 whitespace-pre-wrap font-mono leading-relaxed">
+                          {result.transcript}
+                        </pre>
+                      )}
                     </div>
-                  ) : (
-                    <pre className="text-sm text-gray-700 dark:text-gray-300 whitespace-pre-wrap font-mono">
-                      {result.transcript}
-                    </pre>
-                  )}
+                  </div>
                 </div>
-              </div>
             </div>
           )}
 
-          {!isProcessing && !result && files.length === 0 && (
-            <div className="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 p-8 text-center">
-              <FaChartBar className="w-12 h-12 text-gray-400 dark:text-gray-500 mx-auto mb-4" />
-              <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-2">
-                No Results Yet
-              </h3>
-              <p className="text-gray-600 dark:text-gray-400">
-                Upload a file and click "Process" to see QA results here
-              </p>
-            </div>
-          )}
+            {!isProcessing && !result && files.length === 0 && (
+              <div className="bg-white dark:bg-slate-800 rounded-lg border border-slate-200 dark:border-slate-700 p-12 text-center">
+                <div className="mx-auto flex items-center justify-center w-16 h-16 bg-slate-100 dark:bg-slate-700 rounded-full mb-4">
+                  <FaChartBar className="w-8 h-8 text-slate-400 dark:text-slate-500" />
+                </div>
+                <h3 className="text-xl font-semibold text-slate-900 dark:text-white mb-2">
+                  Ready for Testing
+                </h3>
+                <p className="text-slate-600 dark:text-slate-400 max-w-md mx-auto">
+                  Upload audio or video files to begin quality assurance testing and evaluation
+                </p>
+              </div>
+            )}
+          </div>
         </div>
-      </div>
       </div>
     </div>
   )
@@ -1069,27 +1204,13 @@ function TemplateInfo() {
     loadTemplate()
   }, [])
 
-  if (loading || !activeTemplate) return null
+  if (loading) return <span className="text-sm text-slate-600 dark:text-slate-400">Loading...</span>
+  if (!activeTemplate) return <span className="text-sm text-slate-600 dark:text-slate-400">None active</span>
 
   return (
-    <div className="mb-6 p-4 bg-brand-50 dark:bg-brand-900/20 border border-brand-200 dark:border-brand-800 rounded-lg">
-      <div className="flex items-center justify-between">
-        <div>
-          <p className="text-sm font-medium text-brand-900 dark:text-brand-200">
-            Active Policy Template: {activeTemplate.template_name}
-          </p>
-          <p className="text-xs text-brand-700 dark:text-brand-300 mt-1">
-            {activeTemplate.criteria.length} evaluation criteria configured
-          </p>
-        </div>
-        <Link
-          to="/policy-templates"
-          className="text-sm text-brand-600 dark:text-brand-400 hover:text-brand-700 dark:hover:text-brand-300"
-        >
-          Edit Template →
-        </Link>
-      </div>
-    </div>
+    <span className="text-sm font-medium text-slate-900 dark:text-white">
+      {activeTemplate.template_name}
+    </span>
   )
 }
 

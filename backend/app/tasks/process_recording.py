@@ -9,6 +9,9 @@ from app.services.deepgram import DeepgramService
 from app.services.gemini import GeminiService
 from app.services.scoring import ScoringService
 from app.services.email import EmailService
+from app.services.confidence import ConfidenceService  # Phase 1: Confidence-based routing
+from app.services.rule_engine import RuleEngineService  # Phase 2: Rule engine
+from app.services.audit import AuditService  # Phase 4: Compliance & audit
 from datetime import datetime
 import logging
 
@@ -32,7 +35,8 @@ async def process_recording_task(recording_id: str):
         # Step 1: Transcribe
         logger.info(f"Transcribing {recording_id}...")
         deepgram = DeepgramService()
-        transcript_data = await deepgram.transcribe(recording.file_url)
+        # Explicitly disable alignment for faster processing
+        transcript_data = await deepgram.transcribe(recording.file_url, use_forced_alignment=False)
         
         # Save transcript
         transcript = Transcript(
@@ -57,16 +61,59 @@ async def process_recording_task(recording_id: str):
         if not policy_template:
             raise Exception(f"No active policy template found for company {recording.company_id}")
         
-        # Step 3: Evaluate with LLM
+        # Step 3: Phase 2 - Run rule engine for explicit policy compliance checking
+        sentiment_data = transcript.sentiment_analysis
+        if isinstance(sentiment_data, str):
+            # If it's stored as a string, try to parse it as JSON
+            import json
+            try:
+                sentiment_data = json.loads(sentiment_data)
+                logger.warning(f"Parsed sentiment_analysis from string: {type(sentiment_data)}")
+            except json.JSONDecodeError:
+                logger.error(f"Failed to parse sentiment_analysis string: {sentiment_data[:100]}...")
+                sentiment_data = []
+        elif sentiment_data is None:
+            sentiment_data = []
+
+        logger.info(f"Passing sentiment_analysis to rule engine: type={type(sentiment_data)}, len={len(sentiment_data) if isinstance(sentiment_data, list) else 'N/A'}")
+
+        rule_engine = RuleEngineService()
+        rule_results = rule_engine.evaluate_rules(
+            transcript_segments=transcript.diarized_segments or [],
+            sentiment_analysis=sentiment_data
+        )
+
+        # Step 4: Evaluate with LLM (with rule engine context)
         logger.info(f"Evaluating {recording_id}...")
         gemini = GeminiService()
-        # Pass voice-based sentiment analysis to LLM for tone detection
-        sentiment_analysis = transcript.sentiment_analysis if transcript.sentiment_analysis else None
+        # Pass voice-based sentiment analysis (BOTH caller and agent) to LLM for tone detection
+        # This enables detection of tone mismatches and disingenuous behavior
+        sentiment_analysis_for_gemini = transcript.sentiment_analysis
+        if isinstance(sentiment_analysis_for_gemini, str):
+            # If it's stored as a string, try to parse it as JSON
+            import json
+            try:
+                sentiment_analysis_for_gemini = json.loads(sentiment_analysis_for_gemini)
+                logger.info(f"Parsed sentiment_analysis for Gemini: {type(sentiment_analysis_for_gemini)} len: {len(sentiment_analysis_for_gemini)}")
+            except json.JSONDecodeError:
+                logger.error(f"Failed to parse sentiment_analysis for Gemini: {sentiment_analysis_for_gemini[:100]}...")
+                sentiment_analysis_for_gemini = None
+        elif sentiment_analysis_for_gemini is None:
+            sentiment_analysis_for_gemini = None
+
         evaluation_data = await gemini.evaluate(
             transcript_text=transcript.transcript_text,
             policy_template_id=policy_template.id,
-            sentiment_analysis=sentiment_analysis
+            sentiment_analysis=sentiment_analysis_for_gemini,
+            rule_results=rule_results  # Phase 2: Include rule engine results
         )
+
+        # Validate evaluation data
+        if not evaluation_data or not isinstance(evaluation_data, dict):
+            raise Exception("Invalid evaluation data returned from LLM")
+        
+        if "category_scores" not in evaluation_data:
+            raise Exception("Evaluation data missing required 'category_scores' field")
         
         # Step 4: Get criteria for scoring (with rubric levels)
         from sqlalchemy.orm import joinedload
@@ -76,10 +123,43 @@ async def process_recording_task(recording_id: str):
             EvaluationCriteria.policy_template_id == policy_template.id
         ).all()
         
-        # Step 5: Calculate scores
+        # Step 5: Calculate individual scores first
         scoring = ScoringService()
-        final_scores = scoring.calculate_scores(evaluation_data, criteria)
+        llm_scores = scoring.calculate_scores(evaluation_data, criteria)
+
+        # Step 5.5: Phase 2 - Ensemble evaluation combining LLM + Rules (+ Emotion when available)
+        # For now, we combine LLM scores with rule engine scores
+        # Emotion classifier will be added later
+        final_scores = scoring.calculate_ensemble_scores(
+            llm_scores=llm_scores,
+            rule_scores=rule_results.get("rule_scores"),
+            emotion_deviation_scores=None,  # TODO: Add emotion classifier in Phase 2
+            criteria=criteria
+        )
+
+        # Validate final scores
+        if not final_scores or not isinstance(final_scores, dict):
+            raise Exception("Invalid final scores returned from scoring service")
         
+        required_score_fields = ["overall_score", "resolution_detected", "resolution_confidence", "category_scores"]
+        missing_fields = [field for field in required_score_fields if field not in final_scores]
+        if missing_fields:
+            raise Exception(f"Final scores missing required fields: {missing_fields}")
+
+        # Step 5.5: Phase 1 - Calculate confidence for human fallback routing
+        confidence_service = ConfidenceService()
+        confidence_result = confidence_service.calculate_overall_confidence(
+            llm_evaluation=evaluation_data,
+            sentiment_analysis=transcript.sentiment_analysis
+        )
+
+        # Validate confidence result
+        if not confidence_result or not isinstance(confidence_result, dict):
+            raise Exception("Invalid confidence result returned from confidence service")
+        
+        if "confidence_score" not in confidence_result or "requires_human_review" not in confidence_result:
+            raise Exception("Confidence result missing required fields: confidence_score or requires_human_review")
+
         # Step 6: Save evaluation
         # Extract customer tone from evaluation data
         customer_tone = evaluation_data.get("customer_tone")
@@ -91,6 +171,8 @@ async def process_recording_task(recording_id: str):
             overall_score=final_scores["overall_score"],
             resolution_detected=final_scores["resolution_detected"],
             resolution_confidence=final_scores["resolution_confidence"],
+            confidence_score=confidence_result["confidence_score"],  # Phase 1: AI confidence score
+            requires_human_review=confidence_result["requires_human_review"],  # Phase 1: Human routing flag
             customer_tone=customer_tone,
             llm_analysis=evaluation_data,
             status=EvaluationStatus.completed
@@ -186,7 +268,13 @@ async def process_recording_task(recording_id: str):
                 continue
         
         logger.info(f"Saved {violations_saved} violations out of {len(final_scores.get('violations', []))} total")
-        
+
+        # Step 9: Phase 1 - Human Review Routing
+        if confidence_result["requires_human_review"]:
+            logger.info(f"Routing call {recording_id} to human review: {confidence_result['reason']}")
+            # Note: In production, this would trigger a notification or queue for human review
+            # For now, we just log it and set the flag in the database
+
         try:
             db.commit()
         except Exception as commit_error:
@@ -194,7 +282,39 @@ async def process_recording_task(recording_id: str):
             db.rollback()
             raise
         
-        # Step 9: Update recording status
+        # Step 10: Phase 4 - Create audit trail and evaluation version
+        audit_service = AuditService()
+        try:
+            # Create audit log for evaluation completion
+            audit_service.log_evaluation_event(
+                event_type=AuditEventType.evaluation_created,
+                evaluation_id=evaluation.id,
+                user_id=recording.uploaded_by_user_id,
+                new_values={
+                    "overall_score": final_scores["overall_score"],
+                    "confidence_score": confidence_result["confidence_score"],
+                    "requires_human_review": confidence_result["requires_human_review"],
+                    "llm_analysis": evaluation.llm_analysis,
+                    "model_used": evaluation.llm_analysis.get("model_used", "unknown") if evaluation.llm_analysis else "unknown",
+                    "complexity_score": evaluation.llm_analysis.get("complexity_score", 0) if evaluation.llm_analysis else 0
+                },
+                description=f"AI evaluation completed for recording {recording.file_name}",
+                reason="Automated QA evaluation pipeline",
+                model_version=evaluation.llm_analysis.get("model_used", "unknown") if evaluation.llm_analysis else "unknown",
+                confidence_score=confidence_result["confidence_score"]
+            )
+
+            # Create evaluation version snapshot for audit trail
+            audit_service.create_evaluation_version(
+                evaluation_id=evaluation.id,
+                created_by="system",  # Automated processing
+                change_reason="Initial AI evaluation"
+            )
+
+        except Exception as audit_error:
+            logger.warning(f"Audit logging failed: {audit_error}")
+
+        # Step 11: Update recording status
         recording.status = RecordingStatus.completed
         recording.processed_at = datetime.utcnow()
         try:
@@ -205,8 +325,8 @@ async def process_recording_task(recording_id: str):
             raise
         
         logger.info(f"Recording {recording_id} processed successfully")
-        
-        # Step 10: Send notification (optional)
+
+        # Step 12: Send notification (optional)
         try:
             from app.models.user import User
             user = db.query(User).filter(User.id == recording.uploaded_by_user_id).first()

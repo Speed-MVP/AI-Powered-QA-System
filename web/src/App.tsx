@@ -1,4 +1,4 @@
-import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
+import { BrowserRouter, Routes, Route, Navigate, useLocation } from 'react-router-dom'
 import { Layout } from '@/components/Layout'
 import { Test } from '@/pages/Test'
 import { Home } from '@/pages/Home'
@@ -10,6 +10,13 @@ import { Features } from '@/pages/Features'
 import { FAQ } from '@/pages/FAQ'
 import { SignIn } from '@/pages/SignIn'
 import { AuthProvider, useAuth } from '@/contexts/AuthContext'
+import { useSEO, pageSEO } from '@/hooks/useSEO'
+
+// SEO Wrapper Component
+function SEOWrapper({ children, seoConfig }: { children: React.ReactNode, seoConfig: any }) {
+  useSEO(seoConfig)
+  return <>{children}</>
+}
 
 // Protected Route Component
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
@@ -37,52 +44,104 @@ function AppRoutes() {
   return (
     <Routes>
       <Route path="/" element={<Layout />}>
-        <Route path="sign-in" element={<SignIn />} />
-        <Route path="login" element={<SignIn />} />
+        <Route
+          path="sign-in"
+          element={
+            <SEOWrapper seoConfig={pageSEO.signIn}>
+              <SignIn />
+            </SEOWrapper>
+          }
+        />
+        <Route
+          path="login"
+          element={
+            <SEOWrapper seoConfig={pageSEO.signIn}>
+              <SignIn />
+            </SEOWrapper>
+          }
+        />
         <Route
           index
           element={
-            <ProtectedRoute>
-              <Test />
-            </ProtectedRoute>
+            <SEOWrapper seoConfig={pageSEO.test}>
+              <ProtectedRoute>
+                <Test />
+              </ProtectedRoute>
+            </SEOWrapper>
           }
         />
         <Route
           path="test"
           element={
-            <ProtectedRoute>
-              <Test />
-            </ProtectedRoute>
+            <SEOWrapper seoConfig={pageSEO.test}>
+              <ProtectedRoute>
+                <Test />
+              </ProtectedRoute>
+            </SEOWrapper>
           }
         />
-        <Route path="home" element={<Home />} />
+        <Route
+          path="home"
+          element={
+            <SEOWrapper seoConfig={pageSEO.home}>
+              <Home />
+            </SEOWrapper>
+          }
+        />
         <Route
           path="dashboard"
           element={
-            <ProtectedRoute>
-              <Dashboard />
-            </ProtectedRoute>
+            <SEOWrapper seoConfig={pageSEO.dashboard}>
+              <ProtectedRoute>
+                <Dashboard />
+              </ProtectedRoute>
+            </SEOWrapper>
           }
         />
         <Route
           path="results"
           element={
-            <ProtectedRoute>
-              <Results />
-            </ProtectedRoute>
+            <SEOWrapper seoConfig={pageSEO.dashboard}>
+              <ProtectedRoute>
+                <Results />
+              </ProtectedRoute>
+            </SEOWrapper>
           }
         />
         <Route
           path="policy-templates"
           element={
-            <ProtectedRoute>
-              <PolicyTemplates />
-            </ProtectedRoute>
+            <SEOWrapper seoConfig={pageSEO.dashboard}>
+              <ProtectedRoute>
+                <PolicyTemplates />
+              </ProtectedRoute>
+            </SEOWrapper>
           }
         />
-        <Route path="pricing" element={<Pricing />} />
-        <Route path="features" element={<Features />} />
-        <Route path="faq" element={<FAQ />} />
+        <Route
+          path="pricing"
+          element={
+            <SEOWrapper seoConfig={pageSEO.pricing}>
+              <Pricing />
+            </SEOWrapper>
+          }
+        />
+        <Route
+          path="features"
+          element={
+            <SEOWrapper seoConfig={pageSEO.features}>
+              <Features />
+            </SEOWrapper>
+          }
+        />
+        <Route
+          path="faq"
+          element={
+            <SEOWrapper seoConfig={pageSEO.faq}>
+              <FAQ />
+            </SEOWrapper>
+          }
+        />
       </Route>
     </Routes>
   )

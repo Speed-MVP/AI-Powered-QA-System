@@ -24,15 +24,28 @@ export default defineConfig({
     rollupOptions: {
       output: {
         manualChunks: {
-          'react-vendor': ['react', 'react-dom', 'react-router-dom'],
+          'react-vendor': ['react', 'react-dom'],
+          'router-vendor': ['react-router-dom'],
+          'ui-vendor': ['lucide-react', 'react-icons'],
         },
       },
     },
     // Disable source maps in production for better performance and security
-    // Vite sets NODE_ENV during build, so this will work correctly
     sourcemap: false,
     // Optimize chunk size
     chunkSizeWarningLimit: 1000,
+    // Enable minification
+    minify: 'terser',
+    terserOptions: {
+      compress: {
+        drop_console: true,
+        drop_debugger: true,
+      },
+    },
+    // Preload modules for better performance
+    modulePreload: {
+      polyfill: false,
+    },
   },
   // Optimize dependencies for faster dev server
   optimizeDeps: {

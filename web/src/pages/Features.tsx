@@ -76,20 +76,20 @@ export function Features() {
             <div className="w-12 h-12 rounded-lg bg-green-600 dark:bg-green-500 flex items-center justify-center">
               <FaChartBar className="text-white text-xl" />
             </div>
-            <div className="text-4xl font-bold text-green-600 dark:text-green-400">100%</div>
+            <div className="text-4xl font-bold text-green-600 dark:text-green-400">95%</div>
           </div>
-          <div className="text-gray-800 dark:text-gray-200 font-semibold text-lg mb-2">Call Coverage</div>
-          <div className="text-sm text-gray-600 dark:text-gray-400">Instead of 1-3% sampling</div>
+          <div className="text-gray-800 dark:text-gray-200 font-semibold text-lg mb-2">Automation Rate</div>
+          <div className="text-sm text-gray-600 dark:text-gray-400">100% call coverage, 5% human review</div>
         </div>
         <div className="bg-gradient-to-br from-purple-50 to-purple-100 dark:from-purple-900/30 dark:to-purple-800/20 rounded-xl p-8 border border-purple-200 dark:border-purple-800/50 shadow-sm hover:shadow-md transition-shadow duration-300">
           <div className="flex items-center gap-4 mb-4">
             <div className="w-12 h-12 rounded-lg bg-purple-600 dark:bg-purple-500 flex items-center justify-center">
               <FaTachometerAlt className="text-white text-xl" />
             </div>
-            <div className="text-4xl font-bold text-purple-600 dark:text-purple-400">85-92%</div>
+            <div className="text-4xl font-bold text-purple-600 dark:text-purple-400">Self-Learning</div>
           </div>
-          <div className="text-gray-800 dark:text-gray-200 font-semibold text-lg mb-2">Accuracy</div>
-          <div className="text-sm text-gray-600 dark:text-gray-400">Problem resolution detection</div>
+          <div className="text-gray-800 dark:text-gray-200 font-semibold text-lg mb-2">Continuous Improvement</div>
+          <div className="text-sm text-gray-600 dark:text-gray-400">Fine-tuned models, weekly retraining</div>
         </div>
       </div>
 
@@ -185,19 +185,19 @@ export function Features() {
           </div>
         </section>
 
-        {/* Processing Pipeline */}
+        {/* Advanced AI Processing Pipeline */}
         <section>
           <div className="flex items-center gap-4 mb-8">
             <div className="w-12 h-12 rounded-xl bg-purple-100 dark:bg-purple-900/30 flex items-center justify-center">
               <FaCogs className="text-purple-600 dark:text-purple-400 text-2xl" />
             </div>
             <h2 className="text-3xl font-bold text-gray-900 dark:text-white">
-              AI Processing Pipeline
+              Enterprise AI Processing Pipeline
             </h2>
           </div>
           <div className="bg-white dark:bg-gray-800 rounded-xl p-8 border border-gray-200 dark:border-gray-700 shadow-sm">
             <p className="text-gray-600 dark:text-gray-400 mb-8 text-lg leading-relaxed">
-              When a file is uploaded, an automated pipeline processes it through multiple AI services:
+              Advanced multi-stage AI pipeline with hybrid models, forced alignment, and continuous learning:
             </p>
             <div className="space-y-6">
               <div className="flex items-start gap-6 p-5 rounded-lg bg-blue-50 dark:bg-blue-900/10 border border-blue-100 dark:border-blue-800/30">
@@ -205,9 +205,9 @@ export function Features() {
                   <span className="text-white font-bold text-lg">1</span>
                 </div>
                 <div className="flex-1">
-                  <h3 className="font-semibold text-gray-900 dark:text-white mb-2 text-lg">Transcription</h3>
+                  <h3 className="font-semibold text-gray-900 dark:text-white mb-2 text-lg">Nova-2 ASR + Forced Alignment</h3>
                   <p className="text-sm text-gray-600 dark:text-gray-400 leading-relaxed">
-                    Call Deepgram batch API to convert audio to text with transcription confidence scores. Handles various audio qualities and accents.
+                    Deepgram Nova-2 transcription with diarization, followed by WhisperX forced alignment for precise word-level timestamps. Eliminates tone mismatch errors.
                   </p>
                 </div>
               </div>
@@ -216,9 +216,9 @@ export function Features() {
                   <span className="text-white font-bold text-lg">2</span>
                 </div>
                 <div className="flex-1">
-                  <h3 className="font-semibold text-gray-900 dark:text-white mb-2 text-lg">Speaker Diarization</h3>
+                  <h3 className="font-semibold text-gray-900 dark:text-white mb-2 text-lg">8-Class Emotion Analysis</h3>
                   <p className="text-sm text-gray-600 dark:text-gray-400 leading-relaxed">
-                    Call AssemblyAI API to separate agent speech from customer speech. Speaker-attributed transcript stored as JSONB.
+                    Local emotion classifier (anger, frustration, calm, etc.) with adaptive baselines per session. Prevents mislabeling intense agents as angry.
                   </p>
                 </div>
               </div>
@@ -227,9 +227,9 @@ export function Features() {
                   <span className="text-white font-bold text-lg">3</span>
                 </div>
                 <div className="flex-1">
-                  <h3 className="font-semibold text-gray-900 dark:text-white mb-2 text-lg">LLM Evaluation</h3>
+                  <h3 className="font-semibold text-gray-900 dark:text-white mb-2 text-lg">Hybrid Gemini Flash/Pro + RAG</h3>
                   <p className="text-sm text-gray-600 dark:text-gray-400 leading-relaxed">
-                    Send diarized transcript to Gemini/Claude with company-specific evaluation criteria, policy template rules, and custom LLM prompts.
+                    Intelligent routing: Flash for routine calls (~70%), Pro for complex cases (~30%). Vector RAG retrieves relevant policy snippets for context-aware evaluation.
                   </p>
                 </div>
               </div>
@@ -238,9 +238,20 @@ export function Features() {
                   <span className="text-white font-bold text-lg">4</span>
                 </div>
                 <div className="flex-1">
-                  <h3 className="font-semibold text-gray-900 dark:text-white mb-2 text-lg">Scoring & Analysis</h3>
+                  <h3 className="font-semibold text-gray-900 dark:text-white mb-2 text-lg">Ensemble Scoring + Confidence Routing</h3>
                   <p className="text-sm text-gray-600 dark:text-gray-400 leading-relaxed">
-                    Apply company's rules engine to calculate weighted category scores, detect policy violations with severity flags, and determine resolution status with confidence levels.
+                    Weighted fusion of LLM, rules engine, and emotion scores. Confidence-based routing: {'>'}75% auto-approve, {'<'}75% human review, critical violations always reviewed.
+                  </p>
+                </div>
+              </div>
+              <div className="flex items-start gap-6 p-5 rounded-lg bg-indigo-50 dark:bg-indigo-900/10 border border-indigo-100 dark:border-indigo-800/30">
+                <div className="flex-shrink-0 w-12 h-12 rounded-xl bg-indigo-600 dark:bg-indigo-500 flex items-center justify-center shadow-md">
+                  <span className="text-white font-bold text-lg">5</span>
+                </div>
+                <div className="flex-1">
+                  <h3 className="font-semibold text-gray-900 dark:text-white mb-2 text-lg">Continuous Learning Loop</h3>
+                  <p className="text-sm text-gray-600 dark:text-gray-400 leading-relaxed">
+                    Weekly retraining with human-reviewed calls. Fine-tuned Gemini models with performance tracking and automatic confidence threshold calibration.
                   </p>
                 </div>
               </div>
@@ -248,14 +259,14 @@ export function Features() {
           </div>
         </section>
 
-        {/* Dashboard & Results */}
+        {/* Supervisor Dashboard & Analytics */}
         <section>
           <div className="flex items-center gap-4 mb-8">
             <div className="w-12 h-12 rounded-xl bg-teal-100 dark:bg-teal-900/30 flex items-center justify-center">
               <FaChartBar className="text-teal-600 dark:text-teal-400 text-2xl" />
             </div>
             <h2 className="text-3xl font-bold text-gray-900 dark:text-white">
-              Dashboard & Results Viewer
+              Supervisor Dashboard & Analytics
             </h2>
           </div>
           <div className="grid md:grid-cols-2 gap-6">
@@ -263,23 +274,27 @@ export function Features() {
               <div className="w-10 h-10 rounded-lg bg-teal-100 dark:bg-teal-900/30 flex items-center justify-center mb-4">
                 <FaChartBar className="text-teal-600 dark:text-teal-400 text-lg" />
               </div>
-              <h3 className="font-semibold text-gray-900 dark:text-white mb-3 text-lg">Real-Time Dashboard</h3>
+              <h3 className="font-semibold text-gray-900 dark:text-white mb-3 text-lg">Advanced Analytics Dashboard</h3>
               <ul className="text-sm text-gray-600 dark:text-gray-400 space-y-2">
                 <li className="flex items-start gap-2">
                   <span className="text-teal-600 dark:text-teal-400 mt-1">•</span>
-                  <span>Real-time list of uploaded files with status badges</span>
+                  <span>Real-time QA performance metrics and trends</span>
                 </li>
                 <li className="flex items-start gap-2">
                   <span className="text-teal-600 dark:text-teal-400 mt-1">•</span>
-                  <span>Filter by status, date range, company, policy template</span>
+                  <span>Model usage statistics (Flash vs Pro routing)</span>
                 </li>
                 <li className="flex items-start gap-2">
                   <span className="text-teal-600 dark:text-teal-400 mt-1">•</span>
-                  <span>Sort by upload date, duration, company, status</span>
+                  <span>Top policy violations and common issues</span>
                 </li>
                 <li className="flex items-start gap-2">
                   <span className="text-teal-600 dark:text-teal-400 mt-1">•</span>
-                  <span>Display file name, upload time, duration, status, processed time</span>
+                  <span>Agent performance analytics and coaching insights</span>
+                </li>
+                <li className="flex items-start gap-2">
+                  <span className="text-teal-600 dark:text-teal-400 mt-1">•</span>
+                  <span>Cost analysis and efficiency metrics</span>
                 </li>
               </ul>
             </div>
@@ -287,31 +302,27 @@ export function Features() {
               <div className="w-10 h-10 rounded-lg bg-teal-100 dark:bg-teal-900/30 flex items-center justify-center mb-4">
                 <HiOutlineDocumentText className="text-teal-600 dark:text-teal-400 text-lg" />
               </div>
-              <h3 className="font-semibold text-gray-900 dark:text-white mb-3 text-lg">Comprehensive Results</h3>
+              <h3 className="font-semibold text-gray-900 dark:text-white mb-3 text-lg">Supervisor Control Panel</h3>
               <ul className="text-sm text-gray-600 dark:text-gray-400 space-y-2">
                 <li className="flex items-start gap-2">
                   <span className="text-teal-600 dark:text-teal-400 mt-1">•</span>
-                  <span>Full transcript with speaker attribution (Agent/Customer)</span>
+                  <span>Override AI evaluations with human expertise</span>
                 </li>
                 <li className="flex items-start gap-2">
                   <span className="text-teal-600 dark:text-teal-400 mt-1">•</span>
-                  <span>Overall QA score (0-100) with category breakdown</span>
+                  <span>Re-score calls for testing model improvements</span>
                 </li>
                 <li className="flex items-start gap-2">
                   <span className="text-teal-600 dark:text-teal-400 mt-1">•</span>
-                  <span>Policy violations with type, description, severity, and timestamp</span>
+                  <span>Batch processing management and priority queuing</span>
                 </li>
                 <li className="flex items-start gap-2">
                   <span className="text-teal-600 dark:text-teal-400 mt-1">•</span>
-                  <span>Resolution detection with confidence scores</span>
+                  <span>Compliance reports and audit trail access</span>
                 </li>
                 <li className="flex items-start gap-2">
                   <span className="text-teal-600 dark:text-teal-400 mt-1">•</span>
-                  <span>LLM analysis details and coaching recommendations</span>
-                </li>
-                <li className="flex items-start gap-2">
-                  <span className="text-teal-600 dark:text-teal-400 mt-1">•</span>
-                  <span>Export transcript as PDF or results as CSV</span>
+                  <span>API endpoint management and usage analytics</span>
                 </li>
               </ul>
             </div>
@@ -503,15 +514,15 @@ export function Features() {
                 </li>
                 <li className="flex items-start gap-2">
                   <span className="text-emerald-600 dark:text-emerald-400 mt-1">•</span>
-                  <span>Total batch processing time &lt;10 minutes for 100 files</span>
+                  <span>Total batch processing time {'<'}10 minutes for 100 files</span>
                 </li>
                 <li className="flex items-start gap-2">
                   <span className="text-emerald-600 dark:text-emerald-400 mt-1">•</span>
-                  <span>Dashboard load time &lt;2 seconds</span>
+                  <span>Dashboard load time {'<'}2 seconds</span>
                 </li>
                 <li className="flex items-start gap-2">
                   <span className="text-emerald-600 dark:text-emerald-400 mt-1">•</span>
-                  <span>Real-time notifications &lt;500ms latency</span>
+                  <span>Real-time notifications {'<'}500ms latency</span>
                 </li>
               </ul>
             </div>
@@ -542,14 +553,14 @@ export function Features() {
           </div>
         </section>
 
-        {/* Technical Stack */}
+        {/* Enterprise Technical Stack */}
         <section>
           <div className="flex items-center gap-4 mb-8">
             <div className="w-12 h-12 rounded-xl bg-slate-100 dark:bg-slate-900/30 flex items-center justify-center">
               <FaServer className="text-slate-600 dark:text-slate-400 text-2xl" />
             </div>
             <h2 className="text-3xl font-bold text-gray-900 dark:text-white">
-              Technology Stack
+              Enterprise Technical Stack
             </h2>
           </div>
           <div className="grid md:grid-cols-3 gap-6">
@@ -557,27 +568,27 @@ export function Features() {
               <div className="w-10 h-10 rounded-lg bg-slate-100 dark:bg-slate-900/30 flex items-center justify-center mb-4">
                 <FaDatabase className="text-slate-600 dark:text-slate-400 text-lg" />
               </div>
-              <h3 className="font-semibold text-gray-900 dark:text-white mb-3 text-lg">Backend</h3>
+              <h3 className="font-semibold text-gray-900 dark:text-white mb-3 text-lg">Backend & Data</h3>
               <ul className="text-sm text-gray-600 dark:text-gray-400 space-y-2">
                 <li className="flex items-start gap-2">
                   <span className="text-slate-600 dark:text-slate-400 mt-1">•</span>
-                  <span>Supabase PostgreSQL</span>
+                  <span>PostgreSQL with SQLAlchemy ORM</span>
                 </li>
                 <li className="flex items-start gap-2">
                   <span className="text-slate-600 dark:text-slate-400 mt-1">•</span>
-                  <span>Supabase Auth (JWT)</span>
+                  <span>FastAPI with async processing</span>
                 </li>
                 <li className="flex items-start gap-2">
                   <span className="text-slate-600 dark:text-slate-400 mt-1">•</span>
-                  <span>Supabase Storage</span>
+                  <span>Alembic database migrations</span>
                 </li>
                 <li className="flex items-start gap-2">
                   <span className="text-slate-600 dark:text-slate-400 mt-1">•</span>
-                  <span>Supabase Edge Functions</span>
+                  <span>Redis for session & caching</span>
                 </li>
                 <li className="flex items-start gap-2">
                   <span className="text-slate-600 dark:text-slate-400 mt-1">•</span>
-                  <span>Row Level Security</span>
+                  <span>Comprehensive audit trails</span>
                 </li>
               </ul>
             </div>
@@ -585,7 +596,7 @@ export function Features() {
               <div className="w-10 h-10 rounded-lg bg-slate-100 dark:bg-slate-900/30 flex items-center justify-center mb-4">
                 <FaReact className="text-slate-600 dark:text-slate-400 text-lg" />
               </div>
-              <h3 className="font-semibold text-gray-900 dark:text-white mb-3 text-lg">Frontend</h3>
+              <h3 className="font-semibold text-gray-900 dark:text-white mb-3 text-lg">Frontend & Analytics</h3>
               <ul className="text-sm text-gray-600 dark:text-gray-400 space-y-2">
                 <li className="flex items-start gap-2">
                   <span className="text-slate-600 dark:text-slate-400 mt-1">•</span>
@@ -593,19 +604,19 @@ export function Features() {
                 </li>
                 <li className="flex items-start gap-2">
                   <span className="text-slate-600 dark:text-slate-400 mt-1">•</span>
-                  <span>Vite</span>
+                  <span>Supervisor dashboard with analytics</span>
                 </li>
                 <li className="flex items-start gap-2">
                   <span className="text-slate-600 dark:text-slate-400 mt-1">•</span>
-                  <span>shadcn/ui + Tailwind CSS</span>
+                  <span>Real-time batch processing monitoring</span>
                 </li>
                 <li className="flex items-start gap-2">
                   <span className="text-slate-600 dark:text-slate-400 mt-1">•</span>
-                  <span>Zustand</span>
+                  <span>Advanced filtering and search</span>
                 </li>
                 <li className="flex items-start gap-2">
                   <span className="text-slate-600 dark:text-slate-400 mt-1">•</span>
-                  <span>Supabase WebSocket</span>
+                  <span>API integration and management</span>
                 </li>
               </ul>
             </div>
@@ -613,23 +624,27 @@ export function Features() {
               <div className="w-10 h-10 rounded-lg bg-slate-100 dark:bg-slate-900/30 flex items-center justify-center mb-4">
                 <FaBrain className="text-slate-600 dark:text-slate-400 text-lg" />
               </div>
-              <h3 className="font-semibold text-gray-900 dark:text-white mb-3 text-lg">AI Services</h3>
+              <h3 className="font-semibold text-gray-900 dark:text-white mb-3 text-lg">AI & ML Pipeline</h3>
               <ul className="text-sm text-gray-600 dark:text-gray-400 space-y-2">
                 <li className="flex items-start gap-2">
                   <span className="text-slate-600 dark:text-slate-400 mt-1">•</span>
-                  <span>Deepgram (Speech-to-Text)</span>
+                  <span>Deepgram Nova-2 ASR</span>
                 </li>
                 <li className="flex items-start gap-2">
                   <span className="text-slate-600 dark:text-slate-400 mt-1">•</span>
-                  <span>AssemblyAI (Diarization)</span>
+                  <span>Gemini 1.5 Flash/Pro hybrid</span>
                 </li>
                 <li className="flex items-start gap-2">
                   <span className="text-slate-600 dark:text-slate-400 mt-1">•</span>
-                  <span>Google Gemini 2.0</span>
+                  <span>WhisperX forced alignment</span>
                 </li>
                 <li className="flex items-start gap-2">
                   <span className="text-slate-600 dark:text-slate-400 mt-1">•</span>
-                  <span>Anthropic Claude 3.5</span>
+                  <span>8-class emotion classifier</span>
+                </li>
+                <li className="flex items-start gap-2">
+                  <span className="text-slate-600 dark:text-slate-400 mt-1">•</span>
+                  <span>Continuous learning & fine-tuning</span>
                 </li>
               </ul>
             </div>

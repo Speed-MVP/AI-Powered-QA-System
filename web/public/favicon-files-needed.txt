@@ -1,0 +1,19 @@
+FAVICON FILES NEEDED:
+
+The following favicon files need to be created and placed in the public directory:
+
+1. apple-touch-icon.png (180x180px) - For iOS devices
+2. favicon-16x16.png (16x16px) - Standard favicon
+3. favicon-32x32.png (32x32px) - Standard favicon
+
+You can generate these files from your logo or brand mark using:
+- Online favicon generators like favicon.io or realfavicongenerator.net
+- Design tools like Figma, Adobe XD, or Canva
+- Command line tools like ImageMagick
+
+Recommended approach:
+1. Use your brand's primary color (#2563eb) as the base
+2. Create a simple icon representing AI/call center QA (could be a speech bubble, AI brain, or quality checkmark)
+3. Generate multiple sizes from a single SVG source
+
+Color scheme: #2563eb (brand blue) on white background

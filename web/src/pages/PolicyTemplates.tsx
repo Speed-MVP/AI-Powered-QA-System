@@ -950,15 +950,88 @@ export function PolicyTemplates() {
                                                     const maxOrder = existingLevels.length > 0 
                                                       ? Math.max(...existingLevels.map(l => l.level_order))
                                                       : 0
-                                                    const maxMaxScore = existingLevels.length > 0
-                                                      ? Math.max(...existingLevels.map(l => l.max_score))
-                                                      : 100
+                                                    
+                                                    // Find a non-overlapping score range
+                                                    // Sort existing levels by min_score to find gaps
+                                                    const sortedLevels = [...existingLevels].sort((a, b) => a.min_score - b.min_score)
+                                                    
+                                                    let newMinScore = 0
+                                                    let newMaxScore = 20
+                                                    
+                                                    // Helper function to check if a range overlaps with any existing level
+                                                    const overlapsWithExisting = (min: number, max: number) => {
+                                                      return existingLevels.some(level => 
+                                                        !(max < level.min_score || min > level.max_score)
+                                                      )
+                                                    }
+                                                    
+                                                    if (sortedLevels.length === 0) {
+                                                      // No existing levels, use default range
+                                                      newMinScore = 0
+                                                      newMaxScore = 20
+                                                    } else {
+                                                      // Try to find a non-overlapping range
+                                                      // First, try below the lowest level
+                                                      const lowestMin = sortedLevels[0].min_score
+                                                      if (lowestMin >= 20) {
+                                                        newMinScore = Math.max(0, lowestMin - 20)
+                                                        newMaxScore = lowestMin - 1
+                                                      } else {
+                                                        // Check for gaps between levels
+                                                        let foundGap = false
+                                                        for (let i = 0; i < sortedLevels.length - 1; i++) {
+                                                          const currentMax = sortedLevels[i].max_score
+                                                          const nextMin = sortedLevels[i + 1].min_score
+                                                          const gapSize = nextMin - currentMax - 1
+                                                          
+                                                          if (gapSize >= 10) {
+                                                            // Found a gap of at least 10 points
+                                                            newMinScore = currentMax + 1
+                                                            newMaxScore = Math.min(100, currentMax + Math.min(20, gapSize))
+                                                            foundGap = true
+                                                            break
+                                                          }
+                                                        }
+                                                        
+                                                        if (!foundGap) {
+                                                          // No gap found, try above the highest level
+                                                          const highestMax = Math.max(...sortedLevels.map(l => l.max_score))
+                                                          if (highestMax < 80) {
+                                                            newMinScore = highestMax + 1
+                                                            newMaxScore = Math.min(100, highestMax + 20)
+                                                          } else {
+                                                            // Try below the lowest level (even if small)
+                                                            if (lowestMin > 0) {
+                                                              newMinScore = Math.max(0, lowestMin - 10)
+                                                              newMaxScore = Math.max(0, lowestMin - 1)
+                                                            } else {
+                                                              // Fallback: use a small range that might need manual adjustment
+                                                              newMinScore = 0
+                                                              newMaxScore = 10
+                                                            }
+                                                          }
+                                                        }
+                                                      }
+                                                      
+                                                      // Final check: if the calculated range overlaps, try a different approach
+                                                      if (overlapsWithExisting(newMinScore, newMaxScore)) {
+                                                        // Find the first available non-overlapping range
+                                                        for (let testMin = 0; testMin <= 90; testMin += 10) {
+                                                          const testMax = Math.min(100, testMin + 10)
+                                                          if (!overlapsWithExisting(testMin, testMax)) {
+                                                            newMinScore = testMin
+                                                            newMaxScore = testMax
+                                                            break
+                                                          }
+                                                        }
+                                                      }
+                                                    }
                                                     
                                                     handleAddRubricLevel(template.id, criteria.id, {
                                                       level_name: 'New Level',
                                                       level_order: maxOrder + 1,
-                                                      min_score: Math.max(0, maxMaxScore - 20),
-                                                      max_score: maxMaxScore,
+                                                      min_score: newMinScore,
+                                                      max_score: newMaxScore,
                                                       description: 'Describe what constitutes this level of performance...',
                                                       examples: null
                                                     })

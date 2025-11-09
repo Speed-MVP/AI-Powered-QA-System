@@ -1,0 +1,29 @@
+User-agent: *
+Allow: /
+Allow: /home
+Allow: /features
+Allow: /pricing
+Allow: /faq
+
+# Disallow admin and private areas
+Disallow: /dashboard
+Disallow: /results
+Disallow: /policy-templates
+Disallow: /test
+Disallow: /sign-in
+Disallow: /login
+
+# Allow crawling of CSS, JS, and image files
+Allow: *.css
+Allow: *.js
+Allow: *.png
+Allow: *.jpg
+Allow: *.jpeg
+Allow: *.svg
+Allow: *.webp
+
+# Crawl delay (optional)
+Crawl-delay: 1
+
+# Sitemap
+Sitemap: /sitemap.xml

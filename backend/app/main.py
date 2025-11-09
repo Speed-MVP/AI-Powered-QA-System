@@ -3,7 +3,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.middleware.trustedhost import TrustedHostMiddleware
 from app.config import settings
 from app.database import init_db
-from app.routes import auth, recordings, evaluations, templates, health
+from app.routes import auth, recordings, evaluations, templates, health, fine_tuning, batch_processing, supervisor
 import logging
 
 # Setup logging
@@ -51,6 +51,9 @@ app.include_router(auth.router, prefix="/api/auth", tags=["auth"])
 app.include_router(recordings.router, prefix="/api/recordings", tags=["recordings"])
 app.include_router(evaluations.router, prefix="/api/evaluations", tags=["evaluations"])
 app.include_router(templates.router, prefix="/api/templates", tags=["templates"])
+app.include_router(fine_tuning.router, prefix="/api", tags=["fine-tuning"])
+app.include_router(batch_processing.router, prefix="/api/batch", tags=["batch-processing"])
+app.include_router(supervisor.router, prefix="/api", tags=["supervisor"])
 
 @app.get("/")
 async def root():

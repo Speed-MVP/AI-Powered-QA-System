@@ -323,7 +323,71 @@ async def add_criteria(
     db.commit()
     db.refresh(criterion)
     
-    return criterion
+    # Automatically create 5 default rubric levels covering the full 0-100 range
+    default_levels = [
+        {
+            "level_name": "Excellent",
+            "level_order": 1,
+            "min_score": 90,
+            "max_score": 100,
+            "description": "Exceeds all expectations. Perfect execution with exceptional quality.",
+            "examples": None
+        },
+        {
+            "level_name": "Good",
+            "level_order": 2,
+            "min_score": 70,
+            "max_score": 89,
+            "description": "Meets expectations consistently. Solid performance with minor areas for improvement.",
+            "examples": None
+        },
+        {
+            "level_name": "Average",
+            "level_order": 3,
+            "min_score": 50,
+            "max_score": 69,
+            "description": "Meets basic expectations. Adequate performance with noticeable areas for improvement.",
+            "examples": None
+        },
+        {
+            "level_name": "Poor",
+            "level_order": 4,
+            "min_score": 30,
+            "max_score": 49,
+            "description": "Below expectations. Significant gaps in performance requiring immediate attention.",
+            "examples": None
+        },
+        {
+            "level_name": "Unacceptable",
+            "level_order": 5,
+            "min_score": 0,
+            "max_score": 29,
+            "description": "Fails to meet minimum standards. Critical performance issues requiring intervention.",
+            "examples": None
+        }
+    ]
+    
+    for level_data in default_levels:
+        rubric_level = EvaluationRubricLevel(
+            criteria_id=criterion.id,
+            level_name=level_data["level_name"],
+            level_order=level_data["level_order"],
+            min_score=level_data["min_score"],
+            max_score=level_data["max_score"],
+            description=level_data["description"],
+            examples=level_data["examples"]
+        )
+        db.add(rubric_level)
+    
+    db.commit()
+    
+    # Load rubric_levels relationship for proper serialization
+    from sqlalchemy.orm import joinedload
+    criterion_with_levels = db.query(EvaluationCriteria).options(
+        joinedload(EvaluationCriteria.rubric_levels)
+    ).filter(EvaluationCriteria.id == criterion.id).first()
+    
+    return criterion_with_levels
 
 
 @router.put("/{template_id}/criteria/{criteria_id}", response_model=EvaluationCriteriaResponse)
@@ -381,7 +445,13 @@ async def update_criteria(
     db.commit()
     db.refresh(criterion)
     
-    return criterion
+    # Load rubric_levels relationship for proper serialization
+    from sqlalchemy.orm import joinedload
+    criterion_with_levels = db.query(EvaluationCriteria).options(
+        joinedload(EvaluationCriteria.rubric_levels)
+    ).filter(EvaluationCriteria.id == criteria_id).first()
+    
+    return criterion_with_levels
 
 
 @router.delete("/{template_id}/criteria/{criteria_id}")

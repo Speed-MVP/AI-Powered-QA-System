@@ -28,4 +28,5 @@ class User(Base):
     company = relationship("Company", back_populates="users")
     recordings = relationship("Recording", back_populates="uploaded_by_user")
     evaluations = relationship("Evaluation", back_populates="evaluated_by_user")
+    human_reviews = relationship("HumanReview", back_populates="reviewer", cascade="all, delete-orphan")  # Phase 3
 
