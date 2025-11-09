@@ -25,7 +25,6 @@ export default defineConfig({
       output: {
         manualChunks: {
           'react-vendor': ['react', 'react-dom', 'react-router-dom'],
-          'supabase-vendor': ['@supabase/supabase-js'],
         },
       },
     },
@@ -37,6 +36,6 @@ export default defineConfig({
   },
   // Optimize dependencies for faster dev server
   optimizeDeps: {
-    include: ['react', 'react-dom', 'react-router-dom', '@supabase/supabase-js'],
+    include: ['react', 'react-dom', 'react-router-dom'],
   },
 })

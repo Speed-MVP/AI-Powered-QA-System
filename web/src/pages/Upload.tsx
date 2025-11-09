@@ -1,6 +1,6 @@
 import { useCallback, useState } from 'react'
 import { useDropzone } from 'react-dropzone'
-import { supabase } from '@/lib/supabase'
+import { api } from '@/lib/api'
 import { FaCloudUploadAlt, FaCheckCircle, FaExclamationCircle, FaSpinner, FaFileAudio } from 'react-icons/fa'
 
 interface UploadedFile {
@@ -38,59 +38,9 @@ export function Upload() {
     setFiles((prev) => [...prev, fileObj])
 
     try {
-      // Create a unique path for the file
-      const timestamp = Date.now()
-      const filePath = `${timestamp}_${file.name}`
-
-      // Upload to Supabase Storage
-      // Note: Make sure the 'recordings' storage bucket exists in your Supabase project
-      const { error: uploadError } = await supabase.storage
-        .from('recordings')
-        .upload(filePath, file, {
-          cacheControl: '3600',
-          upsert: false,
-        })
-
-      if (uploadError) {
-        // Provide helpful error messages
-        if (uploadError.message?.includes('Bucket not found') || uploadError.message?.includes('not found')) {
-          throw new Error(
-            'Storage bucket "recordings" not found. Please create it in your Supabase Storage settings.'
-          )
-        }
-        throw uploadError
-      }
-
-      // Get public URL
-      const { data: { publicUrl } } = supabase.storage
-        .from('recordings')
-        .getPublicUrl(filePath)
-
-      // Create recording record in database
-      // For now, we'll use a temporary company_id - this will be replaced with actual auth later
-      // Note: Make sure the 'recordings' table exists in your Supabase database
-      const { data: recordingData, error: dbError } = await supabase
-        .from('recordings')
-        .insert({
-          file_name: file.name,
-          file_url: publicUrl,
-          status: 'queued',
-          // These will be replaced with actual values when auth is implemented
-          company_id: '00000000-0000-0000-0000-000000000000', // Temporary
-          uploaded_by_user_id: '00000000-0000-0000-0000-000000000000', // Temporary
-        })
-        .select()
-        .single()
-
-      if (dbError) {
-        // If table doesn't exist, provide helpful error message
-        if (dbError.code === '42P01' || dbError.message?.includes('does not exist')) {
-          throw new Error(
-            'Recordings table not found. Please run database migrations first. See DEVELOPMENT.md for setup instructions.'
-          )
-        }
-        throw dbError
-      }
+      // Upload file directly using the API client
+      // The API handles GCP Storage upload and database record creation
+      const recordingData = await api.uploadFileDirect(file)
 
       // Update file status to success
       setFiles((prev) =>
@@ -105,11 +55,6 @@ export function Upload() {
             : f
         )
       )
-
-      // Trigger processing (if Edge Function is set up)
-      // await supabase.functions.invoke('process-recording', {
-      //   body: { recording_id: recordingData.id },
-      // })
     } catch (error: any) {
       console.error('Upload error:', error)
       setFiles((prev) =>

@@ -36,8 +36,6 @@ In the Vercel project settings, add the following environment variables:
 
 ```
 VITE_API_URL=https://your-backend-api-url.com
-VITE_SUPABASE_URL=your-supabase-url
-VITE_SUPABASE_ANON_KEY=your-supabase-anon-key
 ```
 
 #### Optional Environment Variables
@@ -78,8 +76,6 @@ Or if using the backend config, add your Vercel URLs to the `cors_origins` envir
 | Variable | Description | Required |
 |----------|-------------|----------|
 | `VITE_API_URL` | Backend API URL | Yes |
-| `VITE_SUPABASE_URL` | Supabase project URL | Yes |
-| `VITE_SUPABASE_ANON_KEY` | Supabase anonymous key | Yes |
 
 ### Backend (Separate Deployment)
 

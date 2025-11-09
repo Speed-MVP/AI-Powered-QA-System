@@ -10,13 +10,6 @@ VITE_API_URL=https://your-backend-api-url.com
 ```
 The URL of your deployed FastAPI backend (e.g., Railway, Render, or Google Cloud Run).
 
-### Supabase
-```
-VITE_SUPABASE_URL=https://your-project.supabase.co
-VITE_SUPABASE_ANON_KEY=your-supabase-anon-key
-```
-Your Supabase project URL and anonymous key.
-
 ## Important Notes
 
 1. **All frontend environment variables must be prefixed with `VITE_`** to be accessible in the Vite build process.
