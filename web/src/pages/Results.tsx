@@ -8,10 +8,17 @@ type TranscriptResponse = Awaited<ReturnType<typeof api.getTranscript>>
 type RecordingResponse = Awaited<ReturnType<typeof api.getRecording>>
 type TemplatesResponse = Awaited<ReturnType<typeof api.getTemplates>>
 
+// Cache templates (they don't change often)
+let templatesCache: TemplatesResponse | null = null
+let templatesCacheTime: number = 0
+const TEMPLATES_CACHE_TTL = 5 * 60 * 1000 // 5 minutes
+
 export function Results() {
   const { recordingId } = useParams<{ recordingId: string }>()
   const navigate = useNavigate()
   const audioRef = useRef<HTMLAudioElement | null>(null)
+  const abortControllerRef = useRef<AbortController | null>(null)
+  const isLoadingRef = useRef(false)
 
   const [loading, setLoading] = useState(true)
   const [refreshing, setRefreshing] = useState(false)
@@ -32,45 +39,95 @@ export function Results() {
       return
     }
 
+    // Prevent concurrent fetches
+    if (isLoadingRef.current) {
+      return
+    }
+
+    // Cancel any previous request
+    if (abortControllerRef.current) {
+      abortControllerRef.current.abort()
+    }
+
+    // Create new AbortController for this request
+    const abortController = new AbortController()
+    abortControllerRef.current = abortController
+    isLoadingRef.current = true
+
     const loadAll = async () => {
       try {
         setLoading(true)
         setError(null)
 
         const rec = await api.getRecording(recordingId)
+        
+        // Check if request was aborted
+        if (abortController.signal.aborted) return
+        
         setRecording(rec)
 
         if (rec.status !== 'completed') {
           setLoading(false)
+          isLoadingRef.current = false
           return
         }
 
+        // Fetch all data in parallel
         const [evalRes, transcriptRes, dl] = await Promise.all([
           api.getEvaluation(recordingId),
           api.getTranscript(recordingId).catch(() => null),
           api.getDownloadUrl(recordingId).catch(() => null),
         ])
 
+        // Check if request was aborted
+        if (abortController.signal.aborted) return
+
         setEvaluation(evalRes)
         if (transcriptRes) setTranscript(transcriptRes)
         if (dl?.download_url) setAudioUrl(dl.download_url)
 
-        // Load policy template metadata via templates API
+        // Load policy template metadata via templates API (with caching)
         try {
-          const templates = await api.getTemplates()
+          const now = Date.now()
+          let templates: TemplatesResponse
+          
+          // Use cache if available and fresh
+          if (templatesCache && (now - templatesCacheTime) < TEMPLATES_CACHE_TTL) {
+            templates = templatesCache
+          } else {
+            templates = await api.getTemplates()
+            templatesCache = templates
+            templatesCacheTime = now
+          }
+          
+          // Check if request was aborted
+          if (abortController.signal.aborted) return
+          
           const tpl = templates.find(t => t.id === evalRes.policy_template_id) || null
           setPolicyTemplate(tpl)
         } catch {
           // non-fatal
         }
       } catch (e: any) {
-        setError(e.message || 'Failed to load results')
+        // Don't set error if request was aborted
+        if (!abortController.signal.aborted) {
+          setError(e.message || 'Failed to load results')
+        }
       } finally {
-        setLoading(false)
+        if (!abortController.signal.aborted) {
+          setLoading(false)
+          isLoadingRef.current = false
+        }
       }
     }
 
     loadAll()
+
+    // Cleanup: abort request if component unmounts or recordingId changes
+    return () => {
+      abortController.abort()
+      isLoadingRef.current = false
+    }
   }, [recordingId])
 
   useEffect(() => {
@@ -96,7 +153,12 @@ export function Results() {
   }
 
   const handleRefresh = async () => {
-    if (!recordingId) return
+    if (!recordingId || refreshing) return
+    
+    // Invalidate templates cache on refresh
+    templatesCache = null
+    templatesCacheTime = 0
+    
     try {
       setRefreshing(true)
       const rec = await api.getRecording(recordingId)
@@ -111,7 +173,10 @@ export function Results() {
         if (transcriptRes) setTranscript(transcriptRes)
         if (dl?.download_url) setAudioUrl(dl.download_url)
         try {
+          // Use fresh templates on refresh
           const templates = await api.getTemplates()
+          templatesCache = templates
+          templatesCacheTime = Date.now()
           const tpl = templates.find(t => t.id === evalRes.policy_template_id) || null
           setPolicyTemplate(tpl)
         } catch {
