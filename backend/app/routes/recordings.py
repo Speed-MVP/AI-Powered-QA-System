@@ -283,15 +283,27 @@ async def get_download_url(
         # Extract blob name from file_url or construct it
         blob_name = f"{current_user.company_id}/{recording.file_name}"
         
+        logger.info(f"Generating download URL for recording {recording_id}: blob_name={blob_name}")
+        
+        # Check if blob exists
+        blob = storage_service.bucket.blob(blob_name)
+        if not blob.exists():
+            logger.error(f"Blob not found: {blob_name}")
+            raise HTTPException(status_code=404, detail=f"Audio file not found in storage: {recording.file_name}")
+        
         # Generate signed URL for download (valid for 1 hour)
         signed_url = storage_service.get_signed_download_url(blob_name, expiration_minutes=60)
+        
+        logger.info(f"Successfully generated download URL for recording {recording_id}")
         
         return {
             "download_url": signed_url,
             "file_name": recording.file_name,
             "expires_in_minutes": 60
         }
+    except HTTPException:
+        raise
     except Exception as e:
-        logger.error(f"Error generating download URL: {e}", exc_info=True)
+        logger.error(f"Error generating download URL for recording {recording_id}: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail=f"Failed to generate download URL: {str(e)}")
 

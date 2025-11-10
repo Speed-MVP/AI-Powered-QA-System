@@ -73,6 +73,8 @@ export function Test() {
   const [selectedRecordingId, setSelectedRecordingId] = useState<string | null>(null)
   const audioRef = useRef<HTMLAudioElement | null>(null)
   const [showHistory, setShowHistory] = useState(false)
+  const [audioError, setAudioError] = useState<string | null>(null)
+  const [loadingAudio, setLoadingAudio] = useState(false)
 
   const formatFileSize = (bytes: number) => {
     if (bytes === 0) return '0 Bytes'
@@ -111,48 +113,265 @@ export function Test() {
     loadHistory()
   }, [])
 
-  // Load audio URL for playback
+  // Load audio URL for playback and auto-play
   const loadAudioUrl = async (recordingId: string) => {
     try {
+      setLoadingAudio(true)
+      setAudioError(null)
       const { download_url } = await api.getDownloadUrl(recordingId)
+      console.log('Download URL received:', download_url)
       setAudioUrl(download_url)
       setSelectedRecordingId(recordingId)
-      if (audioRef.current) {
-        audioRef.current.src = download_url
-        audioRef.current.load()
-      }
+      // Auto-play will be handled by the canplay event
     } catch (error: any) {
       console.error('Failed to load audio URL:', error)
-      alert('Failed to load audio file')
+      setAudioError(error.message || 'Failed to load audio file')
+      alert('Failed to load audio file: ' + (error.message || 'Unknown error'))
+      setLoadingAudio(false)
     }
   }
 
-  // Handle audio play/pause
-  const toggleAudio = () => {
-    if (audioRef.current) {
-      if (isPlaying) {
-        audioRef.current.pause()
-      } else {
-        audioRef.current.play()
-      }
-      setIsPlaying(!isPlaying)
-    }
-  }
-
-  // Handle audio ended
+  // Sync audio element properties when URL changes
   useEffect(() => {
     const audio = audioRef.current
-    if (audio) {
-      audio.addEventListener('ended', () => setIsPlaying(false))
-      audio.addEventListener('play', () => setIsPlaying(true))
-      audio.addEventListener('pause', () => setIsPlaying(false))
-      return () => {
-        audio.removeEventListener('ended', () => setIsPlaying(false))
-        audio.removeEventListener('play', () => setIsPlaying(true))
-        audio.removeEventListener('pause', () => setIsPlaying(false))
-      }
+    if (audio && audioUrl) {
+      console.log('Audio URL changed, updating audio element:', audioUrl)
+      setLoadingAudio(true)
+      setAudioError(null)
+      // Ensure audio is not muted and volume is set
+      audio.volume = 1.0
+      audio.muted = false
+      // Note: src will be set via JSX attribute, but we ensure volume here
+      // Loading state will be updated by audio event handlers
+    } else if (audio && !audioUrl) {
+      // Clear audio when URL is removed
+      audio.src = ''
+      audio.load()
+      setLoadingAudio(false)
     }
   }, [audioUrl])
+
+  // Handle audio play/pause
+  const toggleAudio = async () => {
+    const audio = audioRef.current
+    if (!audio || !audioUrl) {
+      console.warn('Cannot toggle audio: audio element or URL not available')
+      return
+    }
+
+    try {
+      console.log('Toggle audio called, current state:', {
+        isPlaying,
+        paused: audio.paused,
+        readyState: audio.readyState,
+        volume: audio.volume,
+        muted: audio.muted,
+        src: audio.src
+      })
+
+      if (isPlaying || !audio.paused) {
+        console.log('Pausing audio')
+        audio.pause()
+        // State will be updated by pause event listener
+      } else {
+        console.log('Attempting to play audio')
+        // Ensure volume is set and not muted
+        audio.volume = 1.0
+        audio.muted = false
+        
+        const playPromise = audio.play()
+        
+        if (playPromise !== undefined) {
+          await playPromise
+          console.log('Audio play promise resolved')
+        } else {
+          console.log('Audio play started (no promise)')
+        }
+        // State will be updated by play event listener
+      }
+    } catch (error: any) {
+      console.error('Error playing audio:', error)
+      let errorMessage = 'Failed to play audio: ' + (error.message || 'Unknown error')
+      
+      // Handle autoplay policy errors
+      if (error.name === 'NotAllowedError' || error.name === 'NotSupportedError') {
+        errorMessage = 'Autoplay blocked. Please click the play button to start playback.'
+      }
+      
+      setAudioError(errorMessage)
+      setIsPlaying(false)
+    }
+  }
+
+  // Handle audio events - set up when audio element is available
+  useEffect(() => {
+    const audio = audioRef.current
+    if (!audio) {
+      // Audio element not yet in DOM, skip setting up listeners
+      // This useEffect will run again when audioUrl changes and element is rendered
+      return
+    }
+
+    const handlePlay = () => {
+      console.log('Audio started playing - play event fired', {
+        currentTime: audio.currentTime,
+        duration: audio.duration,
+        volume: audio.volume,
+        muted: audio.muted
+      })
+      setIsPlaying(true)
+      setAudioError(null)
+    }
+    
+    const handlePlaying = () => {
+      console.log('Audio is now playing (playing event)')
+    }
+    
+    const handleWaiting = () => {
+      console.log('Audio is waiting for data')
+    }
+
+    const handlePause = () => {
+      console.log('Audio paused')
+      setIsPlaying(false)
+    }
+
+    const handleEnded = () => {
+      console.log('Audio ended')
+      setIsPlaying(false)
+    }
+
+    const handleError = (e: Event) => {
+      console.error('Audio error:', e, audio.error)
+      const error = audio.error
+      let errorMessage = 'Failed to load audio'
+      
+      if (error) {
+        switch (error.code) {
+          case error.MEDIA_ERR_ABORTED:
+            errorMessage = 'Audio loading aborted'
+            break
+          case error.MEDIA_ERR_NETWORK:
+            errorMessage = 'Network error while loading audio. Please check your connection or try again.'
+            break
+          case error.MEDIA_ERR_DECODE:
+            errorMessage = 'Audio decoding error. The file may be corrupted.'
+            break
+          case error.MEDIA_ERR_SRC_NOT_SUPPORTED:
+            errorMessage = 'Audio format not supported by your browser'
+            break
+          default:
+            errorMessage = `Unknown audio error (code: ${error.code})`
+        }
+      }
+      
+      setAudioError(errorMessage)
+      setIsPlaying(false)
+      setLoadingAudio(false)
+    }
+
+    const handleLoadedData = async () => {
+      console.log('Audio data loaded successfully')
+      setLoadingAudio(false)
+      setAudioError(null)
+      
+      // Try to auto-play if audio is ready and paused
+      if (audio.paused && audioUrl && audio.readyState >= 2) {
+        try {
+          console.log('Attempting to auto-play after data loaded')
+          audio.volume = 1.0
+          audio.muted = false
+          await audio.play()
+          console.log('Audio auto-play successful after data loaded')
+        } catch (error: any) {
+          console.warn('Auto-play failed after data loaded:', error)
+          // Don't show error for autoplay blocks
+          if (error.name !== 'NotAllowedError') {
+            setAudioError('Could not auto-play. Please click the play button.')
+          }
+        }
+      }
+    }
+
+    const handleLoadStart = () => {
+      console.log('Audio loading started')
+      setLoadingAudio(true)
+      setAudioError(null)
+    }
+
+    const handleCanPlay = async () => {
+      console.log('Audio can start playing', {
+        readyState: audio.readyState,
+        paused: audio.paused,
+        duration: audio.duration,
+        volume: audio.volume,
+        muted: audio.muted
+      })
+      setLoadingAudio(false)
+      // Ensure volume is set
+      audio.volume = 1.0
+      audio.muted = false
+      
+      // Auto-play when audio is ready
+      if (audio.paused && audioUrl) {
+        try {
+          console.log('Attempting to auto-play audio')
+          await audio.play()
+          console.log('Audio auto-play successful')
+        } catch (error: any) {
+          console.warn('Auto-play failed (this is normal if browser blocks autoplay):', error)
+          // Don't show error for autoplay blocks - user can click play button
+          if (error.name !== 'NotAllowedError') {
+            setAudioError('Could not auto-play. Please click the play button.')
+          }
+        }
+      }
+    }
+    
+    const handleLoadedMetadata = () => {
+      console.log('Audio metadata loaded', {
+        duration: audio.duration,
+        readyState: audio.readyState
+      })
+    }
+
+    audio.addEventListener('play', handlePlay)
+    audio.addEventListener('playing', handlePlaying)
+    audio.addEventListener('pause', handlePause)
+    audio.addEventListener('ended', handleEnded)
+    audio.addEventListener('error', handleError)
+    audio.addEventListener('loadeddata', handleLoadedData)
+    audio.addEventListener('loadstart', handleLoadStart)
+    audio.addEventListener('canplay', handleCanPlay)
+    audio.addEventListener('loadedmetadata', handleLoadedMetadata)
+    audio.addEventListener('waiting', handleWaiting)
+
+    // Set initial volume and unmute
+    audio.volume = 1.0
+    audio.muted = false
+    
+    // Log current state
+    console.log('Audio element setup complete', {
+      src: audio.src,
+      volume: audio.volume,
+      muted: audio.muted,
+      paused: audio.paused,
+      readyState: audio.readyState
+    })
+
+    return () => {
+      audio.removeEventListener('play', handlePlay)
+      audio.removeEventListener('playing', handlePlaying)
+      audio.removeEventListener('pause', handlePause)
+      audio.removeEventListener('ended', handleEnded)
+      audio.removeEventListener('error', handleError)
+      audio.removeEventListener('loadeddata', handleLoadedData)
+      audio.removeEventListener('loadstart', handleLoadStart)
+      audio.removeEventListener('canplay', handleCanPlay)
+      audio.removeEventListener('loadedmetadata', handleLoadedMetadata)
+      audio.removeEventListener('waiting', handleWaiting)
+    }
+  }, [audioUrl]) // Re-setup when audioUrl changes to ensure we have the latest audio element
 
   // Delete recording
   const handleDeleteRecording = async (recordingId: string) => {
@@ -705,23 +924,94 @@ export function Test() {
             <div className="p-6">
               <div className="flex items-center space-x-4">
                 <button
-                  onClick={toggleAudio}
-                  className="flex-shrink-0 w-12 h-12 bg-blue-600 text-white rounded-full hover:bg-blue-700 flex items-center justify-center transition-colors"
+                  onClick={(e) => {
+                    e.preventDefault()
+                    e.stopPropagation()
+                    console.log('Play button clicked')
+                    toggleAudio()
+                  }}
+                  disabled={loadingAudio || !!audioError}
+                  className="flex-shrink-0 w-12 h-12 bg-blue-600 text-white rounded-full hover:bg-blue-700 flex items-center justify-center transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                  type="button"
                 >
-                  {isPlaying ? <FaPause className="w-5 h-5" /> : <FaPlay className="w-5 h-5" />}
+                  {loadingAudio ? (
+                    <FaSpinner className="w-5 h-5 animate-spin" />
+                  ) : isPlaying ? (
+                    <FaPause className="w-5 h-5" />
+                  ) : (
+                    <FaPlay className="w-5 h-5" />
+                  )}
                 </button>
                 <div className="flex-1 min-w-0">
                   <p className="font-medium text-slate-900 dark:text-white mb-2">
                     {history.find(r => r.id === selectedRecordingId)?.file_name || 'Audio File'}
                   </p>
-                  <audio ref={audioRef} controls className="w-full">
-                    Your browser does not support the audio element.
-                  </audio>
+                  {audioError && (
+                    <div className="mb-2 p-2 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded text-sm text-red-700 dark:text-red-300">
+                      {audioError}
+                    </div>
+                  )}
+                  {loadingAudio && !audioError && (
+                    <div className="mb-2 text-sm text-slate-600 dark:text-slate-400">
+                      Loading audio...
+                    </div>
+                  )}
+                  <div className="mb-2">
+                    <audio 
+                      ref={audioRef} 
+                      controls 
+                      className="w-full"
+                      preload="auto"
+                      src={audioUrl || undefined}
+                      onPlay={(e) => {
+                        console.log('Native controls play clicked')
+                        const audio = e.currentTarget
+                        console.log('Audio state on native play:', {
+                          paused: audio.paused,
+                          volume: audio.volume,
+                          muted: audio.muted,
+                          currentTime: audio.currentTime,
+                          src: audio.src
+                        })
+                      }}
+                      onPause={() => {
+                        console.log('Native controls pause clicked')
+                      }}
+                    >
+                      Your browser does not support the audio element.
+                    </audio>
+                  </div>
+                  <div className="mt-2 text-xs text-slate-500 dark:text-slate-400 space-x-2 flex flex-wrap gap-2">
+                    {audioRef.current ? (
+                      <>
+                        <span>Volume: {Math.round((audioRef.current.volume || 0) * 100)}%</span>
+                        <span>•</span>
+                        <span>Muted: {audioRef.current.muted ? 'Yes' : 'No'}</span>
+                        <span>•</span>
+                        <span>State: {audioRef.current.paused ? 'Paused' : 'Playing'}</span>
+                        <span>•</span>
+                        <span>Ready: {audioRef.current.readyState >= 2 ? 'Yes' : 'No'}</span>
+                        {audioRef.current.duration && (
+                          <>
+                            <span>•</span>
+                            <span>Duration: {formatTime(audioRef.current.duration)}</span>
+                          </>
+                        )}
+                      </>
+                    ) : (
+                      <span>Audio element not available</span>
+                    )}
+                  </div>
+                  <div className="mt-2 text-xs text-slate-500 dark:text-slate-400">
+                    💡 Tip: You can also use the native audio controls above, or click the blue play button
+                  </div>
                 </div>
                 <button
                   onClick={() => {
                     setAudioUrl(null)
                     setSelectedRecordingId(null)
+                    setAudioError(null)
+                    setLoadingAudio(false)
                     if (audioRef.current) {
                       audioRef.current.pause()
                       audioRef.current.src = ''
