@@ -488,6 +488,97 @@ class ApiClient {
       throw new Error(`Failed to upload file: ${response.statusText}`)
     }
   }
+
+  // Human Review endpoints
+  async getPendingReviews(params?: { skip?: number; limit?: number }) {
+    const queryParams = new URLSearchParams()
+    if (params?.skip) queryParams.append('skip', params.skip.toString())
+    if (params?.limit) queryParams.append('limit', params.limit.toString())
+
+    const query = queryParams.toString()
+    return this.request<Array<{
+      review_id: string
+      evaluation_id: string
+      transcript_text: string
+      diarized_segments: Array<{
+        speaker: string
+        text: string
+        start: number
+        end: number
+      }>
+      audio_url: string | null
+      ai_overall_score: number
+      ai_category_scores: Record<string, any>
+      ai_violations: Array<any>
+      created_at: string
+    }>>(`/api/fine-tuning/human-reviews/pending${query ? `?${query}` : ''}`)
+  }
+
+  async submitHumanReview(reviewId: string, data: {
+    human_overall_score: number
+    human_category_scores: Record<string, number>
+    ai_score_accuracy: number
+  }) {
+    return this.request<{ message: string }>(`/api/fine-tuning/human-reviews/${reviewId}/submit`, {
+      method: 'POST',
+      body: JSON.stringify(data),
+    })
+  }
+
+  async createTestHumanReview(evaluationId: string) {
+    return this.request<{ message: string; review_id: string }>(`/api/fine-tuning/human-reviews/test-create`, {
+      method: 'POST',
+      body: JSON.stringify({ evaluation_id: evaluationId }),
+    })
+  }
+
+  async getEvaluationWithTemplate(evaluationId: string) {
+    return this.request<{
+      id: string
+      recording_id: string
+      policy_template_id: string
+      overall_score: number
+      resolution_detected: boolean
+      resolution_confidence: number
+      llm_analysis: any
+      status: string
+      created_at: string
+      category_scores: Array<{
+        id: string
+        category_name: string
+        score: number
+        feedback: string | null
+      }>
+      policy_violations: Array<{
+        id: string
+        violation_type: string
+        description: string
+        severity: string
+        criteria_id: string
+      }>
+      template: {
+        id: string
+        template_name: string
+        description: string | null
+        criteria: Array<{
+          id: string
+          category_name: string
+          weight: number
+          passing_score: number
+          evaluation_prompt: string
+          rubric_levels: Array<{
+            id: string
+            level_name: string
+            level_order: number
+            min_score: number
+            max_score: number
+            description: string
+            examples: string | null
+          }>
+        }>
+      }
+    }>(`/api/evaluations/${evaluationId}/with-template`)
+  }
 }
 
 export const api = new ApiClient(API_URL)

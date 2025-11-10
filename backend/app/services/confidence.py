@@ -35,16 +35,16 @@ class ConfidenceService:
         # Calculate overall confidence
         if llm_confidence is not None and sentiment_confidence is not None:
             overall_confidence = (llm_confidence + sentiment_confidence) / 2
-            # Reduce confidence to be more realistic - AI evaluation has limitations
-            overall_confidence = overall_confidence * 0.85  # Reduce by 15% to be more conservative
+            # Be more honest about AI limitations - reduce confidence significantly
+            overall_confidence = overall_confidence * 0.75  # Reduce by 25% to be more conservative
         elif llm_confidence is not None:
-            overall_confidence = llm_confidence * 0.85  # Reduce by 15% to be more conservative
+            overall_confidence = llm_confidence * 0.75  # Reduce by 25% to be more conservative
         else:
-            overall_confidence = 0.4  # Lower default confidence (was 0.5)
+            overall_confidence = 0.3  # Even lower default confidence to be more honest
 
         # Determine if human review is required
-        # Lower threshold to be more realistic - route more cases to human review
-        requires_human_review = overall_confidence < 0.70  # Lowered from 0.75 to 0.70
+        # Be more conservative - route more cases to human review to ensure quality
+        requires_human_review = overall_confidence < 0.80  # More conservative threshold
 
         # Additional checks for critical violations
         has_critical_violations = self._check_critical_violations(llm_evaluation)

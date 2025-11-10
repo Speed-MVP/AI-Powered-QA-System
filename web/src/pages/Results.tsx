@@ -31,6 +31,7 @@ export function Results() {
   const [isPlaying, setIsPlaying] = useState(false)
   const [policyTemplate, setPolicyTemplate] = useState<TemplatesResponse[number] | null>(null)
   const [showAnalysis, setShowAnalysis] = useState(false)
+  const [creatingReview, setCreatingReview] = useState(false)
 
   useEffect(() => {
     if (!recordingId) {
@@ -199,6 +200,21 @@ export function Results() {
       navigate('/test')
     } catch (e: any) {
       alert('Failed to start re-evaluation: ' + (e.message || 'Unknown error'))
+    }
+  }
+
+  const createTestHumanReview = async () => {
+    if (!evaluation) return
+
+    try {
+      setCreatingReview(true)
+      await api.createTestHumanReview(evaluation.id)
+      alert('Test human review created! Check the Human Review page to see it in the queue.')
+    } catch (error) {
+      console.error('Failed to create test human review:', error)
+      alert('Failed to create test human review. Make sure this evaluation doesn\'t already have a pending review.')
+    } finally {
+      setCreatingReview(false)
     }
   }
 
@@ -447,6 +463,25 @@ export function Results() {
                     <FaChartBar className="w-4 h-4 mr-2 text-blue-600" />
                     Quality Score
                   </p>
+                  {evaluation && (
+                    <button
+                      onClick={createTestHumanReview}
+                      disabled={creatingReview}
+                      className="mt-4 px-4 py-2 bg-orange-500 hover:bg-orange-600 disabled:bg-orange-400 text-white text-sm rounded-lg transition-colors flex items-center justify-center"
+                    >
+                      {creatingReview ? (
+                        <>
+                          <FaSpinner className="animate-spin w-4 h-4 mr-2" />
+                          Creating...
+                        </>
+                      ) : (
+                        <>
+                          <FaExclamationCircle className="w-4 h-4 mr-2" />
+                          Test Human Review
+                        </>
+                      )}
+                    </button>
+                  )}
                   <div className="grid grid-cols-2 gap-4 max-w-md mx-auto mt-4">
                     <div className="text-center">
                       <div className={`inline-flex items-center px-3 py-1 rounded-full text-sm font-medium ${

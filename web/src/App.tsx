@@ -5,6 +5,7 @@ import { Home } from '@/pages/Home'
 import { Dashboard } from '@/pages/Dashboard'
 import { Results } from '@/pages/Results'
 import { PolicyTemplates } from '@/pages/PolicyTemplates'
+import { HumanReview } from '@/pages/HumanReview'
 import { Pricing } from '@/pages/Pricing'
 import { Features } from '@/pages/Features'
 import { FAQ } from '@/pages/FAQ'
@@ -114,6 +115,16 @@ function AppRoutes() {
             <SEOWrapper seoConfig={pageSEO.dashboard}>
               <ProtectedRoute>
                 <PolicyTemplates />
+              </ProtectedRoute>
+            </SEOWrapper>
+          }
+        />
+        <Route
+          path="human-review"
+          element={
+            <SEOWrapper seoConfig={pageSEO.dashboard}>
+              <ProtectedRoute>
+                <HumanReview />
               </ProtectedRoute>
             </SEOWrapper>
           }

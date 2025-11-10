@@ -33,36 +33,67 @@ export function Layout() {
             </div>
 
             <div className="hidden md:flex items-center justify-center flex-1 space-x-8">
-              <Link
-                to="/home"
-                className="text-gray-600 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white text-sm font-medium"
-              >
-                Home
-              </Link>
-              <Link
-                to="/test"
-                className="text-gray-600 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white text-sm font-medium"
-              >
-                Test
-              </Link>
-              <Link
-                to="/pricing"
-                className="text-gray-600 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white text-sm font-medium"
-              >
-                Pricing
-              </Link>
-              <Link
-                to="/features"
-                className="text-gray-600 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white text-sm font-medium"
-              >
-                Features
-              </Link>
-              <Link
-                to="/faq"
-                className="text-gray-600 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white text-sm font-medium"
-              >
-                FAQ
-              </Link>
+              {isAuthenticated ? (
+                <>
+                  <Link
+                    to="/dashboard"
+                    className="text-gray-600 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white text-sm font-medium"
+                  >
+                    Dashboard
+                  </Link>
+                  <Link
+                    to="/human-review"
+                    className="text-gray-600 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white text-sm font-medium"
+                  >
+                    Human Review
+                  </Link>
+                  <Link
+                    to="/policy-templates"
+                    className="text-gray-600 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white text-sm font-medium"
+                  >
+                    Templates
+                  </Link>
+                  <Link
+                    to="/test"
+                    className="text-gray-600 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white text-sm font-medium"
+                  >
+                    Test
+                  </Link>
+                </>
+              ) : (
+                <>
+                  <Link
+                    to="/home"
+                    className="text-gray-600 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white text-sm font-medium"
+                  >
+                    Home
+                  </Link>
+                  <Link
+                    to="/test"
+                    className="text-gray-600 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white text-sm font-medium"
+                  >
+                    Test
+                  </Link>
+                  <Link
+                    to="/pricing"
+                    className="text-gray-600 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white text-sm font-medium"
+                  >
+                    Pricing
+                  </Link>
+                  <Link
+                    to="/features"
+                    className="text-gray-600 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white text-sm font-medium"
+                  >
+                    Features
+                  </Link>
+                  <Link
+                    to="/faq"
+                    className="text-gray-600 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white text-sm font-medium"
+                  >
+                    FAQ
+                  </Link>
+                </>
+              )}
             </div>
 
             <div className="flex items-center space-x-3 flex-shrink-0">
@@ -107,36 +138,67 @@ export function Layout() {
           </div>
 
           <div className="md:hidden flex justify-center items-center space-x-6 pb-4">
-            <Link
-              to="/home"
-              className="text-gray-600 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white text-sm font-medium"
-            >
-              Home
-            </Link>
-            <Link
-              to="/test"
-              className="text-gray-600 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white text-sm font-medium"
-            >
-              Test
-            </Link>
-            <Link
-              to="/pricing"
-              className="text-gray-600 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white text-sm font-medium"
-            >
-              Pricing
-            </Link>
-            <Link
-              to="/features"
-              className="text-gray-600 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white text-sm font-medium"
-            >
-              Features
-            </Link>
-            <Link
-              to="/faq"
-              className="text-gray-600 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white text-sm font-medium"
-            >
-              FAQ
-            </Link>
+            {isAuthenticated ? (
+              <>
+                <Link
+                  to="/dashboard"
+                  className="text-gray-600 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white text-sm font-medium"
+                >
+                  Dashboard
+                </Link>
+                <Link
+                  to="/human-review"
+                  className="text-gray-600 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white text-sm font-medium"
+                >
+                  Review
+                </Link>
+                <Link
+                  to="/policy-templates"
+                  className="text-gray-600 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white text-sm font-medium"
+                >
+                  Templates
+                </Link>
+                <Link
+                  to="/test"
+                  className="text-gray-600 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white text-sm font-medium"
+                >
+                  Test
+                </Link>
+              </>
+            ) : (
+              <>
+                <Link
+                  to="/home"
+                  className="text-gray-600 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white text-sm font-medium"
+                >
+                  Home
+                </Link>
+                <Link
+                  to="/test"
+                  className="text-gray-600 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white text-sm font-medium"
+                >
+                  Test
+                </Link>
+                <Link
+                  to="/pricing"
+                  className="text-gray-600 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white text-sm font-medium"
+                >
+                  Pricing
+                </Link>
+                <Link
+                  to="/features"
+                  className="text-gray-600 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white text-sm font-medium"
+                >
+                  Features
+                </Link>
+                <Link
+                  to="/faq"
+                  className="text-gray-600 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white text-sm font-medium"
+                >
+                  FAQ
+                </Link>
+              </>
+            )}
           </div>
         </div>
       </nav>

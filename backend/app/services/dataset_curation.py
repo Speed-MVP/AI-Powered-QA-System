@@ -4,7 +4,7 @@ Phase 3: Fine-Tuning & Self-Learning
 """
 
 from app.database import SessionLocal
-from app.models.human_review import HumanReview, FineTuningDataset, FineTuningSample, ModelPerformance
+from app.models.human_review import HumanReview, FineTuningDataset, FineTuningSample, ModelPerformance, ReviewStatus
 from app.models.evaluation import Evaluation
 from app.models.transcript import Transcript
 from typing import List, Dict, Any, Optional, Tuple
@@ -311,3 +311,85 @@ class DatasetCurationService:
         quality_score = (avg_accuracy * 0.7 + difficulty_balance * 0.3)
 
         return round(float(quality_score), 2)
+
+    def add_review_to_active_dataset(self, review_id: str, db):
+        """Add a completed human review to the active fine-tuning dataset for real-time learning."""
+        try:
+            review = db.query(HumanReview).filter(HumanReview.id == review_id).first()
+            if not review or review.review_status != ReviewStatus.completed:
+                logger.warning(f"Review {review_id} not found or not completed")
+                return
+
+            # Get evaluation and transcript
+            evaluation = db.query(Evaluation).filter(Evaluation.id == review.evaluation_id).first()
+            transcript = db.query(Transcript).filter(Transcript.recording_id == evaluation.recording_id).first()
+            if not evaluation or not transcript:
+                logger.warning(f"Evaluation or transcript not found for review {review_id}")
+                return
+
+            # Get or create active dataset
+            active_dataset = db.query(FineTuningDataset).filter(FineTuningDataset.is_active == True).first()
+            if not active_dataset:
+                # Create active learning dataset
+                active_dataset = FineTuningDataset(
+                    name="Active_Learning_Dataset",
+                    description="Real-time learning from human reviews",
+                    model_version="gemini-1.5-pro",
+                    is_active=True
+                )
+                db.add(active_dataset)
+                db.flush()
+                logger.info(f"Created new active dataset {active_dataset.id}")
+
+            # Check if sample already exists
+            existing_sample = db.query(FineTuningSample).filter(
+                FineTuningSample.source_evaluation_id == evaluation.id
+            ).first()
+            if existing_sample:
+                logger.info(f"Sample already exists for evaluation {evaluation.id}")
+                return
+
+            # Extract violations from evaluation
+            violations = []
+            if evaluation.llm_analysis and "violations" in evaluation.llm_analysis:
+                violations = evaluation.llm_analysis["violations"]
+
+            # Create sample
+            sample = FineTuningSample(
+                dataset_id=active_dataset.id,
+                transcript_text=transcript.transcript_text,
+                diarized_segments=transcript.diarized_segments,
+                sentiment_analysis=transcript.sentiment_analysis,
+                voice_baselines=getattr(transcript, 'voice_baselines', None),
+                call_metadata={
+                    "source": "human_review",
+                    "evaluation_id": evaluation.id,
+                    "ai_confidence": evaluation.confidence_score,
+                    "duration_seconds": 300  # Placeholder
+                },
+                policy_template_id=evaluation.policy_template_id,
+                expected_category_scores=review.human_category_scores,
+                expected_violations=violations,
+                expected_overall_score=review.human_overall_score,
+                source_evaluation_id=evaluation.id,
+                quality_score=review.ai_score_accuracy,
+                difficulty_level="medium",  # Could be calculated
+                split="train",
+                used_in_training=False
+            )
+            db.add(sample)
+            db.flush()
+
+            # Update dataset statistics
+            active_dataset.total_samples += 1
+            active_dataset.training_samples += 1
+
+            db.commit()
+            logger.info(f"Added human review {review_id} to active dataset {active_dataset.id} as sample {sample.id}")
+
+        except Exception as e:
+            logger.error(f"Error adding review {review_id} to dataset: {e}")
+            db.rollback()
+            raise
+
+
