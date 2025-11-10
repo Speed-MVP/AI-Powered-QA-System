@@ -30,8 +30,8 @@ class User(Base):
     
     # Relationships
     company = relationship("Company", back_populates="users")
-    recordings = relationship("Recording", back_populates="uploaded_by_user")
-    evaluations = relationship("Evaluation", back_populates="evaluated_by_user")
+    recordings = relationship("Recording", foreign_keys="Recording.uploaded_by_user_id", back_populates="uploaded_by_user")
+    evaluations = relationship("Evaluation", foreign_keys="Evaluation.evaluated_by_user_id", back_populates="evaluated_by_user")
     human_reviews = relationship("HumanReview", back_populates="reviewer", cascade="all, delete-orphan")  # Phase 3
     # Phase 1: Agent/Team relationships
     team_memberships = relationship("AgentTeamMembership", foreign_keys="AgentTeamMembership.agent_id", back_populates="agent")
