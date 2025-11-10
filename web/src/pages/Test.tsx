@@ -403,58 +403,55 @@ export function Test() {
     try {
       await api.reevaluateRecording(recordingId)
       alert('Re-evaluation started. Please wait for processing to complete.')
-      // Reload history to update status
+      // Begin polling immediately (don't rely on stale history state)
+      setIsProcessing(true)
+      setResult(null)
+      setSelectedRecordingId(recordingId)
       await loadHistory()
-      // If this is the selected recording, start polling for results
-      const recording = history.find(r => r.id === recordingId)
-      if (recording) {
-        setIsProcessing(true)
-        setResult(null)
-        // Poll for results
-        const poll = async () => {
-          try {
-            const updated = await api.getRecording(recordingId)
-            if (updated.status === 'completed') {
-              // Load results
-              const evaluation = await api.getEvaluation(recordingId)
-              const transcriptData = await api.getTranscript(recordingId)
-              
-              const processingResult: ProcessingResult = {
-                transcript: transcriptData.transcript_text,
-                diarizedSegments: transcriptData.diarized_segments || null,
-                overallScore: evaluation.overall_score,
-                resolutionDetected: evaluation.resolution_detected,
-                resolutionConfidence: evaluation.resolution_confidence,
-                categoryScores: evaluation.category_scores.map(cs => ({
-                  category: cs.category_name,
-                  score: cs.score,
-                  feedback: cs.feedback || ''
-                })),
-                violations: evaluation.policy_violations.map(v => ({
-                  type: v.violation_type,
-                  severity: v.severity as 'critical' | 'major' | 'minor',
-                  description: v.description
-                }))
-              }
-              
-              setResult(processingResult)
-              setIsProcessing(false)
-              await loadHistory()
-            } else if (updated.status === 'failed') {
-              alert('Re-evaluation failed: ' + (updated.error_message || 'Unknown error'))
-              setIsProcessing(false)
-              await loadHistory()
-            } else {
-              // Continue polling
-              setTimeout(poll, 5000)
+      // Poll for results
+      const poll = async () => {
+        try {
+          const updated = await api.getRecording(recordingId)
+          if (updated.status === 'completed') {
+            // Load results
+            const evaluation = await api.getEvaluation(recordingId)
+            const transcriptData = await api.getTranscript(recordingId)
+            
+            const processingResult: ProcessingResult = {
+              transcript: transcriptData.transcript_text,
+              diarizedSegments: transcriptData.diarized_segments || null,
+              overallScore: evaluation.overall_score,
+              resolutionDetected: evaluation.resolution_detected,
+              resolutionConfidence: evaluation.resolution_confidence,
+              categoryScores: evaluation.category_scores.map(cs => ({
+                category: cs.category_name,
+                score: cs.score,
+                feedback: cs.feedback || ''
+              })),
+              violations: evaluation.policy_violations.map(v => ({
+                type: v.violation_type,
+                severity: v.severity as 'critical' | 'major' | 'minor',
+                description: v.description
+              }))
             }
-          } catch (error: any) {
-            console.error('Polling error:', error)
+            
+            setResult(processingResult)
             setIsProcessing(false)
+            await loadHistory()
+          } else if (updated.status === 'failed') {
+            alert('Re-evaluation failed: ' + (updated.error_message || 'Unknown error'))
+            setIsProcessing(false)
+            await loadHistory()
+          } else {
+            // Continue polling
+            setTimeout(poll, 5000)
           }
+        } catch (error: any) {
+          console.error('Polling error:', error)
+          setIsProcessing(false)
         }
-        poll()
       }
+      poll()
     } catch (error: any) {
       console.error('Failed to reevaluate:', error)
       
@@ -535,11 +532,11 @@ export function Test() {
         f.id === fileId ? { ...f, progress: 20 } : f
       ))
 
-      const recording = await api.uploadFileDirect(file, (progress) => {
-        setFiles(prev => prev.map(f => 
-          f.id === fileId ? { ...f, progress: 20 + (progress * 0.8) } : f
-        ))
-      })
+      const recording = await api.uploadFileDirect(file)
+      // Simulate progress to completion after upload succeeds
+      setFiles(prev => prev.map(f => 
+        f.id === fileId ? { ...f, progress: 100 } : f
+      ))
 
       // Update file status
       setFiles(prev => prev.map(f => 
@@ -1187,7 +1184,7 @@ export function Test() {
               </div>
             )}
 
-            {result && selectedFile && (
+            {result && (
               <div className="space-y-6">
                 {/* Overall Score Card */}
                 <div className="bg-white dark:bg-slate-800 rounded-lg border border-slate-200 dark:border-slate-700">
@@ -1198,7 +1195,7 @@ export function Test() {
                       </h2>
                       <div className="flex items-center space-x-2">
                         <span className="text-sm text-slate-600 dark:text-slate-400">
-                          {selectedFile.name}
+                          {history.find(r => r.id === selectedRecordingId)?.file_name || selectedFile?.name || 'Recording'}
                         </span>
                         <FaChartBar className="w-5 h-5 text-blue-600" />
                       </div>
