@@ -271,9 +271,21 @@ async def process_recording_task(recording_id: str):
 
         # Step 9: Phase 1 - Human Review Routing
         if confidence_result["requires_human_review"]:
-            logger.info(f"Routing call {recording_id} to human review: {confidence_result['reason']}")
-            # Note: In production, this would trigger a notification or queue for human review
-            # For now, we just log it and set the flag in the database
+            logger.info(f"Low confidence ({confidence_result['confidence_score']:.2f}) - creating human review request: {confidence_result['reason']}")
+
+            from app.models.human_review import HumanReview, ReviewStatus
+            human_review = HumanReview(
+                evaluation_id=evaluation.id,
+                reviewer_user_id=None,  # Will be assigned when picked up
+                review_status=ReviewStatus.pending,
+                ai_score_accuracy=None,  # To be filled by human
+                human_overall_score=None,
+                human_category_scores=None
+            )
+            db.add(human_review)
+            db.commit()
+
+            logger.info(f"Created human review {human_review.id} for evaluation {evaluation.id}")
 
         try:
             db.commit()
