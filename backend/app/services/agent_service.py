@@ -7,6 +7,7 @@ from app.database import SessionLocal
 from app.models.user import User, UserRole
 from app.models.agent_team import AgentTeamMembership
 from app.models.team import Team
+from sqlalchemy.orm import joinedload
 from typing import List, Optional
 from datetime import datetime
 import logging
@@ -104,7 +105,9 @@ class AgentService:
         """Get agents, optionally filtered by team."""
         db = SessionLocal()
         try:
-            query = db.query(User).filter(
+            query = db.query(User).options(
+                joinedload(User.team_memberships).joinedload(AgentTeamMembership.team)
+            ).filter(
                 User.company_id == company_id,
                 User.deleted_at.is_(None)
             )
@@ -131,7 +134,9 @@ class AgentService:
         """Get single agent by ID."""
         db = SessionLocal()
         try:
-            agent = db.query(User).filter(
+            agent = db.query(User).options(
+                joinedload(User.team_memberships).joinedload(AgentTeamMembership.team)
+            ).filter(
                 User.id == agent_id,
                 User.deleted_at.is_(None)
             ).first()

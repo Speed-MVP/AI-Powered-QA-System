@@ -16,6 +16,7 @@ import re
 import logging
 import uuid
 import os
+from openpyxl import load_workbook
 
 logger = logging.getLogger(__name__)
 
@@ -57,14 +58,15 @@ class CSVImportService:
         """
         db = SessionLocal()
         try:
-            # Count total rows in CSV (excluding header)
-            rows_total = self._count_csv_rows(file_path)
+            # Detect file format and count total rows (excluding header)
+            file_format = self._detect_file_format(file_name)
+            rows_total = self._count_rows(file_path, file_format)
             
             # Create import_jobs record with status='pending'
             import_job = ImportJob(
                 id=str(uuid.uuid4()),
                 company_id=company_id,
-                source_type='csv',
+                source_type='excel' if file_format == 'xlsx' else 'csv',
                 source_platform='n/a',
                 status='pending',
                 file_name=file_name,
@@ -106,13 +108,14 @@ class CSVImportService:
             import_job.status = 'processing'
             db.commit()
             
-            # Read CSV file
+            # Read uploaded file
             file_path = self._get_file_path(import_job.file_name)
             if not os.path.exists(file_path):
-                raise FileNotFoundError(f"CSV file not found: {file_path}")
+                raise FileNotFoundError(f"Import file not found: {file_path}")
             
+            file_format = self._detect_file_format(import_job.file_name)
             # Parse & validate rows
-            rows = self.parse_csv_file(file_path)
+            rows = self.parse_tabular_file(file_path, file_format)
             
             # Track results
             rows_processed = 0
@@ -194,49 +197,82 @@ class CSVImportService:
         finally:
             db.close()
     
-    def parse_csv_file(self, file_path: str) -> List[Dict[str, str]]:
+    def parse_tabular_file(self, file_path: str, file_format: str) -> List[Dict[str, str]]:
         """
-        Read CSV, return list of row dicts.
-        
-        Args:
-            file_path: Path to CSV file
-            
-        Returns:
-            List of dictionaries, each representing a row
-            
-        Raises:
-            ValueError: If required columns are missing
+        Read CSV/XLSX file and return list of row dicts.
         """
-        rows = []
-        
+        if file_format == 'csv':
+            return self._parse_csv_file(file_path)
+        if file_format == 'xlsx':
+            return self._parse_xlsx_file(file_path)
+        raise ValueError(f"Unsupported file format: {file_format}")
+
+    def _parse_csv_file(self, file_path: str) -> List[Dict[str, str]]:
+        rows: List[Dict[str, str]] = []
         try:
             with open(file_path, 'r', encoding='utf-8') as f:
                 reader = csv.DictReader(f)
-                
-                # Validate columns exist: 'agent_name', 'email', 'team_name' (minimum required)
                 required_columns = ['agent_name', 'email', 'team_name']
-                actual_columns = reader.fieldnames or []
-                
-                missing_columns = [col for col in required_columns if col not in actual_columns]
-                if missing_columns:
-                    raise ValueError(
-                        f"Missing required columns: {', '.join(missing_columns)}. "
-                        f"Found columns: {', '.join(actual_columns)}"
-                    )
-                
-                # Read all rows
+                actual_columns = [
+                    self._normalize_header(col or "") for col in (reader.fieldnames or [])
+                ]
+                self._validate_required_columns(required_columns, actual_columns)
+
                 for row in reader:
-                    # Skip empty rows
                     if not any(row.values()):
                         continue
-                    rows.append(row)
-                
-                logger.info(f"Parsed {len(rows)} rows from CSV file")
-                return rows
-                
+                    normalized_row: Dict[str, str] = {}
+                    for key, value in row.items():
+                        normalized_key = self._normalize_header(key or "")
+                        if normalized_key:
+                            normalized_row[normalized_key] = (value or "").strip()
+                    rows.append(normalized_row)
+
+            logger.info(f"Parsed {len(rows)} rows from CSV file")
+            return rows
         except Exception as e:
             logger.error(f"Error parsing CSV file {file_path}: {e}")
             raise
+
+    def _parse_xlsx_file(self, file_path: str) -> List[Dict[str, str]]:
+        rows: List[Dict[str, str]] = []
+        workbook = None
+        try:
+            workbook = load_workbook(filename=file_path, read_only=True, data_only=True)
+            sheet = workbook.active
+            header_row = next(sheet.iter_rows(values_only=True), None)
+            if not header_row:
+                raise ValueError("Excel file is empty")
+            headers = [self._normalize_header(str(cell)) if cell is not None else "" for cell in header_row]
+            required_columns = ['agent_name', 'email', 'team_name']
+            self._validate_required_columns(required_columns, headers)
+
+            for row in sheet.iter_rows(min_row=2, values_only=True):
+                # Skip rows with no data
+                if not row or not any(row):
+                    continue
+                row_dict: Dict[str, str] = {}
+                for header, value in zip(headers, row):
+                    if header:
+                        row_dict[header] = str(value).strip() if value is not None else ""
+                rows.append(row_dict)
+            logger.info(f"Parsed {len(rows)} rows from Excel file")
+            return rows
+        except Exception as e:
+            logger.error(f"Error parsing Excel file {file_path}: {e}")
+            raise
+        finally:
+            if workbook:
+                workbook.close()
+
+    def _validate_required_columns(self, required: List[str], actual: List[str]) -> None:
+        actual_set = {col.strip().lower() for col in actual if col}
+        missing = [col for col in required if col not in actual_set]
+        if missing:
+            raise ValueError(
+                f"Missing required columns: {', '.join(missing)}. "
+                f"Found columns: {', '.join(actual)}"
+            )
     
     def validate_and_map_row(
         self,
@@ -408,24 +444,50 @@ class CSVImportService:
         finally:
             db.close()
     
+    def _normalize_header(self, header: str) -> str:
+        """Normalize column headers to snake_case for consistent lookups."""
+        header = header.strip().lower()
+        header = re.sub(r'[^a-z0-9]+', '_', header)
+        return header.strip('_')
+
     def _is_valid_email(self, email: str) -> bool:
         """Validate email format using regex."""
         pattern = r'^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$'
         return bool(re.match(pattern, email))
     
-    def _count_csv_rows(self, file_path: str) -> int:
-        """Count total rows in CSV file (excluding header)."""
+    def _count_rows(self, file_path: str, file_format: str) -> int:
+        """Count total rows in CSV/XLSX file (excluding header)."""
         try:
-            with open(file_path, 'r', encoding='utf-8') as f:
-                reader = csv.reader(f)
-                # Skip header
-                next(reader, None)
-                # Count remaining rows
-                count = sum(1 for row in reader if any(row))  # Skip empty rows
-                return count
+            if file_format == 'csv':
+                with open(file_path, 'r', encoding='utf-8') as f:
+                    reader = csv.reader(f)
+                    next(reader, None)
+                    return sum(1 for row in reader if any(row))
+            if file_format == 'xlsx':
+                workbook = None
+                try:
+                    workbook = load_workbook(filename=file_path, read_only=True, data_only=True)
+                    sheet = workbook.active
+                    count = 0
+                    for row in sheet.iter_rows(min_row=2, values_only=True):
+                        if row and any(row):
+                            count += 1
+                    return count
+                finally:
+                    if workbook:
+                        workbook.close()
         except Exception as e:
-            logger.error(f"Error counting CSV rows: {e}")
-            return 0
+            logger.error(f"Error counting rows in file {file_path}: {e}")
+        return 0
+
+    def _detect_file_format(self, file_name: str) -> str:
+        """Detect file format from extension."""
+        _, ext = os.path.splitext(file_name.lower())
+        if ext == '.csv':
+            return 'csv'
+        if ext in ('.xlsx', '.xlsm'):
+            return 'xlsx'
+        raise ValueError(f"Unsupported file extension '{ext}'. Only CSV and XLSX are supported.")
     
     def _get_file_path(self, file_name: str) -> str:
         """

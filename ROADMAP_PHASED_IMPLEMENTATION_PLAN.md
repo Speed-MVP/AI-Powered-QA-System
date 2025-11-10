@@ -279,25 +279,26 @@ class AuditService:
 
 ## 1.3 Backend CSV Bulk Import Service (CRITICAL FOR MVP) ✅ COMPLETED
 
-**Status:** ✅ CSV Import Service implemented
+**Status:** ✅ CSV/Excel import service implemented (CSV + XLSX)
 
 **Location:** `backend/app/services/csv_import_service.py`
 
 **Services Created:**
-- ✅ `backend/app/services/csv_import_service.py` - CSVImportService with full CSV import pipeline
-  - ✅ start_import_job - Creates import job record and counts CSV rows
+- ✅ `backend/app/services/csv_import_service.py` - CSVImportService with full CSV/XLSX import pipeline
+  - ✅ start_import_job - Creates import job record and counts rows based on file type
   - ✅ process_import_job - Processes CSV import synchronously (can be called from background task)
-  - ✅ parse_csv_file - Reads CSV and validates required columns
+  - ✅ parse_tabular_file - Reads CSV/XLSX and validates required columns
   - ✅ validate_and_map_row - Validates individual CSV rows and maps to AgentData
   - ✅ upsert_agent_from_csv - Upserts agents and creates teams as needed
   - ✅ get_import_job_status - Retrieves import job status for polling
-  - ✅ Helper methods: _is_valid_email, _count_csv_rows, _get_file_path
+  - ✅ Helper methods: _is_valid_email, _count_rows, _get_file_path
 
 **Implementation Notes:**
 - Uses synchronous methods (not async) to match existing service patterns
 - Automatically creates teams if they don't exist during import
 - Validates email format using regex
 - Tracks validation errors per row in JSONB format
+- Accepts CSV or Excel (.xlsx/.xlsm) uploads and normalizes headers before validation
 - Integrates with TeamService and AgentService for CRUD operations
 
 **Modules:**
@@ -389,7 +390,16 @@ class AgentData:
 
 ## 1.4 Backend API Endpoints
 
-**Location:** `backend/routers/teams.py`, `backend/routers/agents.py`, `backend/routers/imports.py`
+**Status:** ✅ Completed — FastAPI routers now wrap the Phase 1 services directly (2025-11-10).
+
+**What shipped:**
+- `backend/app/routes/teams.py` exposes `/api/teams` CRUD + `/api/teams/{team_id}/agents`, enforcing supervisor RBAC and delegating to `TeamService`.
+- `backend/app/routes/agents.py` handles `/api/agents`, `/api/agents/audit-log`, and converts SQLAlchemy models into clean responses (no mock data).
+- `backend/app/routes/imports.py` adds `/api/agents/bulk-import` upload + status polling wired into `CSVImportService.process_import_job` via FastAPI `BackgroundTasks`.
+- Shared response models live in new schema modules (`backend/app/schemas/{team,agent,import_job,audit}.py`) with serialization helpers in `backend/app/routes/utils.py`.
+- Routers registered in `backend/app/main.py`; all calls hit the existing database-backed services and models.
+
+**Location:** `backend/app/routes/teams.py`, `backend/app/routes/agents.py`, `backend/app/routes/imports.py`
 
 **Endpoints:**
 

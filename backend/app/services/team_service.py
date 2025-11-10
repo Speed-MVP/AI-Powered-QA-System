@@ -5,8 +5,9 @@ Handles team CRUD operations and audit logging.
 
 from app.database import SessionLocal
 from app.models.team import Team
-from app.models.agent_team import AgentTeamChange
+from app.models.agent_team import AgentTeamChange, AgentTeamMembership
 from app.models.user import User
+from sqlalchemy.orm import joinedload
 from typing import List, Optional
 from datetime import datetime
 import logging
@@ -170,8 +171,6 @@ class TeamService:
         """Get all agents in a team (via agent_team_memberships)."""
         db = SessionLocal()
         try:
-            from app.models.agent_team import AgentTeamMembership
-            
             memberships = db.query(AgentTeamMembership).filter(
                 AgentTeamMembership.team_id == team_id,
                 AgentTeamMembership.deleted_at.is_(None)
@@ -181,7 +180,9 @@ class TeamService:
             if not agent_ids:
                 return []
             
-            agents = db.query(User).filter(
+            agents = db.query(User).options(
+                joinedload(User.team_memberships).joinedload(AgentTeamMembership.team)
+            ).filter(
                 User.id.in_(agent_ids),
                 User.deleted_at.is_(None)
             ).all()
