@@ -457,7 +457,19 @@ export function Test() {
       }
     } catch (error: any) {
       console.error('Failed to reevaluate:', error)
-      alert('Failed to start re-evaluation: ' + (error.message || 'Unknown error'))
+      
+      // Check for connection errors
+      let errorMessage = error.message || 'Unknown error'
+      
+      if (error.message?.includes('Failed to fetch') || error.message?.includes('network')) {
+        errorMessage = 'Cannot connect to backend server. Please make sure the backend is running on http://localhost:8000'
+      } else if (error.message?.includes('CORS')) {
+        errorMessage = 'CORS error: Backend server may not be running or CORS is not configured correctly.'
+      } else if (error.message?.includes('500')) {
+        errorMessage = 'Server error: ' + (error.message || 'Internal server error occurred')
+      }
+      
+      alert(`Failed to start re-evaluation: ${errorMessage}`)
     }
   }
 

@@ -37,11 +37,7 @@ class Settings(BaseSettings):
     log_level: str = "INFO"
 
     # CORS
-    cors_origins: str = (
-        "http://localhost:3000,"
-        "http://localhost:5173,"
-        "https://ai-powered-qa-system.vercel.app"
-    )
+    cors_origins: str = "http://localhost:3000,http://localhost:5173,https://ai-powered-qa-system.vercel.app"
 
     # Alignment Service (Phase 2)
     enable_alignment: bool = True

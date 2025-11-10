@@ -235,32 +235,91 @@ async def reevaluate_recording(
     db: Session = Depends(get_db)
 ):
     """Re-evaluate a recording"""
-    recording = db.query(Recording).filter(
-        Recording.id == recording_id,
-        Recording.company_id == current_user.company_id
-    ).first()
-    
-    if not recording:
-        raise HTTPException(status_code=404, detail="Recording not found")
-    
-    # Delete existing evaluation and transcript to start fresh
-    from app.models.evaluation import Evaluation
-    from app.models.transcript import Transcript
-    
-    db.query(Evaluation).filter(Evaluation.recording_id == recording_id).delete()
-    db.query(Transcript).filter(Transcript.recording_id == recording_id).delete()
-    
-    # Reset recording status
-    recording.status = RecordingStatus.queued
-    recording.processed_at = None
-    db.commit()
-    
-    # Trigger background processing
-    background_tasks.add_task(process_recording_task, recording.id)
-    
-    logger.info(f"Re-evaluation triggered for recording {recording_id}")
-    
-    return {"message": "Re-evaluation started", "recording_id": recording_id}
+    try:
+        logger.info(f"Re-evaluation requested for recording {recording_id} by user {current_user.id}")
+        
+        recording = db.query(Recording).filter(
+            Recording.id == recording_id,
+            Recording.company_id == current_user.company_id
+        ).first()
+        
+        if not recording:
+            logger.warning(f"Recording {recording_id} not found for user {current_user.id}")
+            raise HTTPException(status_code=404, detail="Recording not found")
+        
+        # Delete existing evaluation and transcript to start fresh
+        from app.models.evaluation import Evaluation
+        from app.models.transcript import Transcript
+        from app.models.policy_violation import PolicyViolation
+        from app.models.category_score import CategoryScore
+        from app.models.audit import EvaluationVersion
+        from app.models.human_review import HumanReview
+        
+        try:
+            # Delete related evaluation data in a safe order to avoid FK constraints
+            evaluation = db.query(Evaluation).filter(Evaluation.recording_id == recording_id).first()
+            if evaluation:
+                logger.info(f"Found existing evaluation {evaluation.id} for recording {recording_id}. Deleting related data.")
+                
+                # Delete related objects that might not cascade automatically
+                violations_deleted = db.query(PolicyViolation).filter(
+                    PolicyViolation.evaluation_id == evaluation.id
+                ).delete(synchronize_session=False)
+                logger.info(f"Deleted {violations_deleted} policy violation(s) for recording {recording_id}")
+                
+                category_scores_deleted = db.query(CategoryScore).filter(
+                    CategoryScore.evaluation_id == evaluation.id
+                ).delete(synchronize_session=False)
+                logger.info(f"Deleted {category_scores_deleted} category score(s) for recording {recording_id}")
+                
+                versions_deleted = db.query(EvaluationVersion).filter(
+                    EvaluationVersion.evaluation_id == evaluation.id
+                ).delete(synchronize_session=False)
+                logger.info(f"Deleted {versions_deleted} evaluation version(s) for recording {recording_id}")
+                
+                human_review_deleted = db.query(HumanReview).filter(
+                    HumanReview.evaluation_id == evaluation.id
+                ).delete(synchronize_session=False)
+                logger.info(f"Deleted {human_review_deleted} human review(s) for recording {recording_id}")
+                
+                # Now delete the evaluation itself
+                db.delete(evaluation)
+                db.flush()
+                logger.info(f"Deleted evaluation {evaluation.id} for recording {recording_id}")
+            
+            # Delete existing transcript
+            transcripts_deleted = db.query(Transcript).filter(Transcript.recording_id == recording_id).delete()
+            logger.info(f"Deleted {transcripts_deleted} transcript(s) for recording {recording_id}")
+            
+            # Reset recording status
+            recording.status = RecordingStatus.queued
+            recording.processed_at = None
+            recording.error_message = None
+            db.commit()
+            
+            # Trigger background processing
+            background_tasks.add_task(process_recording_task, recording.id)
+            
+            logger.info(f"Re-evaluation triggered for recording {recording_id}")
+            
+            return {"message": "Re-evaluation started", "recording_id": recording_id}
+            
+        except Exception as e:
+            logger.error(f"Error during re-evaluation setup for recording {recording_id}: {e}", exc_info=True)
+            db.rollback()
+            raise HTTPException(
+                status_code=500, 
+                detail=f"Failed to start re-evaluation: {str(e)}"
+            )
+            
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Unexpected error in reevaluate_recording for {recording_id}: {e}", exc_info=True)
+        raise HTTPException(
+            status_code=500,
+            detail=f"Internal server error: {str(e)}"
+        )
 
 
 @router.get("/{recording_id}/download-url")

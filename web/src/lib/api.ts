@@ -43,9 +43,18 @@ class ApiClient {
     }
 
     const url = `${this.baseUrl}${endpoint}`
-    const headers: HeadersInit = {
+    const headers: Record<string, string> = {
       'Content-Type': 'application/json',
-      ...options.headers,
+    }
+
+    // Add token if available
+    if (this.token) {
+      headers['Authorization'] = `Bearer ${this.token}`
+    }
+
+    // Merge with existing headers from options
+    if (options.headers) {
+      Object.assign(headers, options.headers)
     }
 
     // Remove Content-Type for FormData requests
@@ -53,14 +62,19 @@ class ApiClient {
       delete headers['Content-Type']
     }
 
-    if (this.token) {
-      headers['Authorization'] = `Bearer ${this.token}`
+    let response: Response
+    try {
+      response = await fetch(url, {
+        ...options,
+        headers,
+      })
+    } catch (fetchError: any) {
+      // Handle network errors (connection refused, CORS, etc.)
+      if (fetchError.message?.includes('Failed to fetch') || fetchError.name === 'TypeError') {
+        throw new Error(`Cannot connect to backend server at ${this.baseUrl}. Please make sure the backend is running.`)
+      }
+      throw fetchError
     }
-
-    const response = await fetch(url, {
-      ...options,
-      headers,
-    })
 
     if (!response.ok) {
       // Handle 401 unauthorized - clear token
@@ -131,7 +145,7 @@ class ApiClient {
     })
   }
 
-  async uploadFileDirect(file: File, onProgress?: (progress: number) => void) {
+  async uploadFileDirect(file: File) {
     const formData = new FormData()
     formData.append('file', file)
 
