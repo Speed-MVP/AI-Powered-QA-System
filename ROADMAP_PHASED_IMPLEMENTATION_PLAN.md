@@ -10,6 +10,10 @@
 
 **Status:** ✅ Models created and migration updated to use String(36) and company_id
 
+Verified in Neon (project `bold-hall-43067603`, branch `development` `br-cold-meadow-a12zp93y`) via MCP on 2025‑11‑10:
+- Tables present under `public` schema: `users`, `companies`, `recordings`, `transcripts`, `evaluations`, `evaluation_criteria`, `evaluation_rubric_levels`, `evaluation_versions`, `category_scores`, `policy_templates`, `policy_violations`, `audit_logs`, `teams`, `agent_team_memberships`, `agent_team_changes`, `import_jobs`, `human_reviews`, `fine_tuning_datasets`, `fine_tuning_samples`, `model_performance`, `data_retention_policies`, `compliance_reports`, `alembic_version`.
+- Indexes observed include: `ix_users_email`, `ix_recordings_company_id`, `ix_recordings_uploaded_at`, `ix_recordings_status`, `ix_recordings_agent_id`, `ix_evaluations_recording_id`, `ix_evaluations_created_at`, `ix_evaluations_agent_id`, `ix_evaluation_versions_created_at`, `ix_evaluation_versions_evaluation_id`, `ix_import_jobs_company_id`, `ix_import_jobs_created_at`, `ix_import_jobs_status`, `ix_human_reviews_created_at`, `ix_fine_tuning_datasets_created_at`, `ix_model_performance_created_at`, `ix_teams_company_id`, `ix_agent_team_memberships_agent_id`, `ix_agent_team_memberships_team_id`, `ix_agent_team_changes_company_id`, `ix_agent_team_changes_changed_at`, plus primary key indexes and uniques (`uq_agent_team_memberships_agent_id_team_id`, `uq_teams_company_id_name`).
+
 **New Tables Created:**
 - ✅ `teams` table
 - ✅ `agent_team_memberships` table  

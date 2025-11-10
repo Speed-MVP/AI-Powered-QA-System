@@ -40,6 +40,11 @@ Enable org-wide dashboards keyed by `agent_id`/`team_id` and granular drill-down
 
 ### Data Model
 
+- Verified in Neon (project `bold-hall-43067603`, branch `development` `br-cold-meadow-a12zp93y`) on 2025‑11‑10:
+  - Present tables: `teams`, `agent_team_memberships`, `agent_team_changes`, `users`, `recordings`, `evaluations`, `policy_templates`, `evaluation_criteria`, `evaluation_rubric_levels`, `evaluation_versions`, `category_scores`, `policy_violations`, `audit_logs`, `import_jobs`, `human_reviews`, `fine_tuning_datasets`, `fine_tuning_samples`, `model_performance`, `data_retention_policies`, `compliance_reports`, `companies`, `transcripts`, `alembic_version`.
+  - Key indexes in place for performance: `ix_users_email`, `ix_recordings_*`, `ix_evaluations_*`, `ix_teams_company_id`, `ix_agent_team_memberships_agent_id`, `ix_agent_team_memberships_team_id`, and uniques `uq_agent_team_memberships_agent_id_team_id`, `uq_teams_company_id_name`.
+  - Schema changes aligned with roadmap: `agent_id` and `team_id` exist on `recordings` and `evaluations`; audit and tracking tables (`agent_team_changes`, `import_jobs`) exist.
+
 - agents/teams represented by `users` with roles; add `teams` and `agent_team_memberships` tables.
 - Add `agent_id`, `team_id` to `recordings`/`evaluations` if not already derivable.
 - Add audit columns to `teams` and `agent_team_memberships`: `created_by`, `created_at`, `updated_by`, `updated_at`, `deleted_at`.
