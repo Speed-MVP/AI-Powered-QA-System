@@ -210,9 +210,33 @@ async def delete_recording(
         # But we'll delete explicitly to be sure
         from app.models.evaluation import Evaluation
         from app.models.transcript import Transcript
+        from app.models.policy_violation import PolicyViolation
+        from app.models.category_score import CategoryScore
+        from app.models.audit import EvaluationVersion
+        from app.models.human_review import HumanReview
+
+        evaluation = db.query(Evaluation).filter(Evaluation.recording_id == recording_id).first()
+        if evaluation:
+            logger.info(f"Deleting related evaluation data for recording {recording_id}")
+
+            db.query(PolicyViolation).filter(
+                PolicyViolation.evaluation_id == evaluation.id
+            ).delete(synchronize_session=False)
+            db.query(CategoryScore).filter(
+                CategoryScore.evaluation_id == evaluation.id
+            ).delete(synchronize_session=False)
+            db.query(EvaluationVersion).filter(
+                EvaluationVersion.evaluation_id == evaluation.id
+            ).delete(synchronize_session=False)
+            db.query(HumanReview).filter(
+                HumanReview.evaluation_id == evaluation.id
+            ).delete(synchronize_session=False)
+
+            db.delete(evaluation)
+            db.flush()
         
-        db.query(Evaluation).filter(Evaluation.recording_id == recording_id).delete()
         db.query(Transcript).filter(Transcript.recording_id == recording_id).delete()
+
         
         # Delete recording
         db.delete(recording)
