@@ -92,6 +92,15 @@ Scope: This roadmap lists high-impact features to implement after evaluation tes
   - Metric targets per org/team/agent; on‑track/off‑track flags; lightweight alerts; industry/tenant benchmark overlays.
 
 ### 12) Dashboard Specifications (No Coaching/Disputes)
+- UI Navigation (Navbar):
+  - Role/Session-aware menu.
+    - Unauthenticated/marketing: `Home`, `Features`, `Pricing`, `Login`, `Sign up`.
+    - Authenticated QA (agent): `Dashboard`, `My Evaluations`, `Analytics`, `Recordings`, `Profile`.
+    - Authenticated Supervisor/Manager: `Dashboard`, `Agents`, `Teams`, `Analytics`, `Compliance`, `Settings`.
+  - Behavior:
+    - On login, navbar switches to the authenticated set based on role/claims.
+    - Preserve deep links and active state; responsive/mobile menu parity.
+    - Hide or disable routes without permission (RBAC).
 - Supervisor (Org‑wide):
   - KPIs: FCR%, Avg QA score, CSAT, NPS, AHT, Compliance pass rate, Top violations, Confidence distribution, Model usage/cost.
   - Views: Agent and Team leaderboards; Trends (7/30/90 days); Heatmaps (category scores vs team/agent); Risk Center (critical violations by pack/region).
