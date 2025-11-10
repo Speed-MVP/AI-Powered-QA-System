@@ -1,6 +1,6 @@
 import { useCallback, useState, useEffect, useRef } from 'react'
 import { useDropzone } from 'react-dropzone'
-import { FaCloudUploadAlt, FaCheckCircle, FaSpinner, FaFileAudio, FaPlay, FaChartBar, FaCog, FaExclamationCircle, FaTrash, FaRedo, FaVolumeUp, FaPause, FaHistory, FaTimes, FaUser } from 'react-icons/fa'
+import { FaCloudUploadAlt, FaCheckCircle, FaSpinner, FaFileAudio, FaPlay, FaChartBar, FaCog, FaExclamationCircle, FaTrash, FaRedo, FaVolumeUp, FaPause, FaHistory, FaTimes, FaUser, FaInfoCircle } from 'react-icons/fa'
 import { Link } from 'react-router-dom'
 import { api } from '@/lib/api'
 
@@ -75,6 +75,36 @@ export function Test() {
   const [showHistory, setShowHistory] = useState(false)
   const [audioError, setAudioError] = useState<string | null>(null)
   const [loadingAudio, setLoadingAudio] = useState(false)
+  const [notification, setNotification] = useState<{ type: 'success' | 'error' | 'info'; message: string } | null>(null)
+  const notificationTimeout = useRef<ReturnType<typeof setTimeout> | null>(null)
+
+  const showNotification = (type: 'success' | 'error' | 'info', message: string, duration = 5000) => {
+    if (notificationTimeout.current) {
+      clearTimeout(notificationTimeout.current)
+      notificationTimeout.current = null
+    }
+    setNotification({ type, message })
+    notificationTimeout.current = setTimeout(() => {
+      setNotification(null)
+      notificationTimeout.current = null
+    }, duration)
+  }
+
+  const dismissNotification = () => {
+    if (notificationTimeout.current) {
+      clearTimeout(notificationTimeout.current)
+      notificationTimeout.current = null
+    }
+    setNotification(null)
+  }
+
+  useEffect(() => {
+    return () => {
+      if (notificationTimeout.current) {
+        clearTimeout(notificationTimeout.current)
+      }
+    }
+  }, [])
 
   const formatFileSize = (bytes: number) => {
     if (bytes === 0) return '0 Bytes'
@@ -126,7 +156,7 @@ export function Test() {
     } catch (error: any) {
       console.error('Failed to load audio URL:', error)
       setAudioError(error.message || 'Failed to load audio file')
-      alert('Failed to load audio file: ' + (error.message || 'Unknown error'))
+      showNotification('error', 'Failed to load audio file: ' + (error.message || 'Unknown error'))
       setLoadingAudio(false)
     }
   }
@@ -387,10 +417,10 @@ export function Test() {
         setAudioUrl(null)
         setResult(null)
       }
-      alert('Recording deleted successfully')
+      showNotification('success', 'Recording deleted successfully')
     } catch (error: any) {
       console.error('Failed to delete recording:', error)
-      alert('Failed to delete recording: ' + (error.message || 'Unknown error'))
+      showNotification('error', 'Failed to delete recording: ' + (error.message || 'Unknown error'))
     }
   }
 
@@ -402,7 +432,7 @@ export function Test() {
 
     try {
       await api.reevaluateRecording(recordingId)
-      alert('Re-evaluation started. Please wait for processing to complete.')
+      showNotification('info', 'Re-evaluation started. Results will update once processing completes.')
       // Begin polling immediately (don't rely on stale history state)
       setIsProcessing(true)
       setResult(null)
@@ -439,7 +469,7 @@ export function Test() {
             setIsProcessing(false)
             await loadHistory()
           } else if (updated.status === 'failed') {
-            alert('Re-evaluation failed: ' + (updated.error_message || 'Unknown error'))
+            showNotification('error', 'Re-evaluation failed: ' + (updated.error_message || 'Unknown error'))
             setIsProcessing(false)
             await loadHistory()
           } else {
@@ -466,7 +496,7 @@ export function Test() {
         errorMessage = 'Server error: ' + (error.message || 'Internal server error occurred')
       }
       
-      alert(`Failed to start re-evaluation: ${errorMessage}`)
+      showNotification('error', `Failed to start re-evaluation: ${errorMessage}`)
     }
   }
 
@@ -502,12 +532,12 @@ export function Test() {
         
         setResult(processingResult)
       } else {
-        alert('Recording is not yet processed. Status: ' + recording.status)
+        showNotification('info', 'Recording is not yet processed. Status: ' + recording.status)
       }
       setIsProcessing(false)
     } catch (error: any) {
       console.error('Failed to load results:', error)
-      alert('Failed to load results: ' + (error.message || 'Unknown error'))
+      showNotification('error', 'Failed to load results: ' + (error.message || 'Unknown error'))
       setIsProcessing(false)
     }
   }
@@ -756,6 +786,43 @@ export function Test() {
       </div>
 
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        {notification && (
+          <div
+            className={`mb-6 rounded-lg border p-4 shadow-sm flex items-start justify-between space-x-4 ${
+              notification.type === 'success'
+                ? 'bg-green-50 border-green-200'
+                : notification.type === 'error'
+                ? 'bg-red-50 border-red-200'
+                : 'bg-blue-50 border-blue-200'
+            }`}
+          >
+            <div className="flex items-start space-x-3">
+              <div className="mt-1">
+                {notification.type === 'success' && <FaCheckCircle className="w-5 h-5 text-green-600" />}
+                {notification.type === 'error' && <FaExclamationCircle className="w-5 h-5 text-red-600" />}
+                {notification.type === 'info' && <FaInfoCircle className="w-5 h-5 text-blue-600" />}
+              </div>
+              <p
+                className={`text-sm leading-6 ${
+                  notification.type === 'success'
+                    ? 'text-green-800'
+                    : notification.type === 'error'
+                    ? 'text-red-800'
+                    : 'text-blue-800'
+                }`}
+              >
+                {notification.message}
+              </p>
+            </div>
+            <button
+              onClick={dismissNotification}
+              className="text-slate-500 hover:text-slate-700 transition-colors"
+              aria-label="Dismiss notification"
+            >
+              <FaTimes className="w-4 h-4" />
+            </button>
+          </div>
+        )}
         {/* Status Dashboard */}
         <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
           <div className="bg-white dark:bg-slate-800 rounded-lg border border-slate-200 dark:border-slate-700 p-6">
