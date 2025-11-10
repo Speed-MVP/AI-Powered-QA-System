@@ -99,7 +99,7 @@ function AppRoutes() {
           }
         />
         <Route
-          path="results"
+          path="results/:recordingId"
           element={
             <SEOWrapper seoConfig={pageSEO.dashboard}>
               <ProtectedRoute>

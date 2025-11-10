@@ -500,47 +500,7 @@ export function Test() {
     }
   }
 
-  // Load recording results
-  const loadRecordingResults = async (recordingId: string) => {
-    try {
-      setIsProcessing(true)
-      setResult(null)
-      setSelectedRecordingId(recordingId)
-      
-      const recording = await api.getRecording(recordingId)
-      if (recording.status === 'completed') {
-        const evaluation = await api.getEvaluation(recordingId)
-        const transcriptData = await api.getTranscript(recordingId)
-        
-        const processingResult: ProcessingResult = {
-          transcript: transcriptData.transcript_text,
-          diarizedSegments: transcriptData.diarized_segments || null,
-          overallScore: evaluation.overall_score,
-          resolutionDetected: evaluation.resolution_detected,
-          resolutionConfidence: evaluation.resolution_confidence,
-          categoryScores: evaluation.category_scores.map(cs => ({
-            category: cs.category_name,
-            score: cs.score,
-            feedback: cs.feedback || ''
-          })),
-          violations: evaluation.policy_violations.map(v => ({
-            type: v.violation_type,
-            severity: v.severity as 'critical' | 'major' | 'minor',
-            description: v.description
-          }))
-        }
-        
-        setResult(processingResult)
-      } else {
-        showNotification('info', 'Recording is not yet processed. Status: ' + recording.status)
-      }
-      setIsProcessing(false)
-    } catch (error: any) {
-      console.error('Failed to load results:', error)
-      showNotification('error', 'Failed to load results: ' + (error.message || 'Unknown error'))
-      setIsProcessing(false)
-    }
-  }
+  // Removed: loadRecordingResults (navigation now handled via Link to /results/:recordingId)
 
   // Upload file to backend (using direct upload to avoid CORS)
   const uploadFile = async (file: File) => {
@@ -958,13 +918,13 @@ export function Test() {
                               <FaVolumeUp className="w-4 h-4 mr-1" />
                               Listen
                             </button>
-                            <button
-                              onClick={() => loadRecordingResults(recording.id)}
+                            <Link
+                              to={`/results/${recording.id}`}
                               className="inline-flex items-center px-3 py-1.5 border border-transparent text-sm font-medium rounded-md text-white bg-blue-600 hover:bg-blue-700"
                             >
                               <FaChartBar className="w-4 h-4 mr-1" />
                               Results
-                            </button>
+                            </Link>
                             <button
                               onClick={() => handleReevaluate(recording.id)}
                               className="inline-flex items-center px-3 py-1.5 border border-slate-300 dark:border-slate-600 rounded-md text-sm font-medium text-slate-700 dark:text-slate-200 bg-white dark:bg-slate-700 hover:bg-slate-50 dark:hover:bg-slate-600"
