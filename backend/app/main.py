@@ -6,7 +6,19 @@ from fastapi.exceptions import RequestValidationError
 from starlette.exceptions import HTTPException as StarletteHTTPException
 from app.config import settings
 from app.database import init_db
-from app.routes import auth, recordings, evaluations, templates, health, fine_tuning, batch_processing, supervisor
+from app.routes import (
+    auth,
+    recordings,
+    evaluations,
+    templates,
+    health,
+    fine_tuning,
+    batch_processing,
+    supervisor,
+    teams,
+    agents,
+    imports,
+)
 import logging
 
 # Setup logging
@@ -86,6 +98,9 @@ app.include_router(templates.router, prefix="/api/templates", tags=["templates"]
 app.include_router(fine_tuning.router, prefix="/api", tags=["fine-tuning"])
 app.include_router(batch_processing.router, prefix="/api/batch", tags=["batch-processing"])
 app.include_router(supervisor.router, prefix="/api", tags=["supervisor"])
+app.include_router(teams.router, prefix="/api", tags=["teams"])
+app.include_router(agents.router, prefix="/api", tags=["agents"])
+app.include_router(imports.router, prefix="/api", tags=["bulk-import"])
 
 @app.get("/")
 async def root():

@@ -42,6 +42,12 @@ export function Layout() {
                     Dashboard
                   </Link>
                   <Link
+                    to="/supervisor"
+                    className="text-gray-600 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white text-sm font-medium"
+                  >
+                    Supervisor
+                  </Link>
+                  <Link
                     to="/human-review"
                     className="text-gray-600 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white text-sm font-medium"
                   >
@@ -52,6 +58,24 @@ export function Layout() {
                     className="text-gray-600 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white text-sm font-medium"
                   >
                     Templates
+                  </Link>
+                  <Link
+                    to="/teams"
+                    className="text-gray-600 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white text-sm font-medium"
+                  >
+                    Teams
+                  </Link>
+                  <Link
+                    to="/agents"
+                    className="text-gray-600 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white text-sm font-medium"
+                  >
+                    Agents
+                  </Link>
+                  <Link
+                    to="/audit-log"
+                    className="text-gray-600 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white text-sm font-medium"
+                  >
+                    Audit
                   </Link>
                   <Link
                     to="/test"
@@ -147,6 +171,12 @@ export function Layout() {
                   Dashboard
                 </Link>
                 <Link
+                  to="/supervisor"
+                  className="text-gray-600 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white text-sm font-medium"
+                >
+                  Supervisor
+                </Link>
+                <Link
                   to="/human-review"
                   className="text-gray-600 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white text-sm font-medium"
                 >
@@ -157,6 +187,24 @@ export function Layout() {
                   className="text-gray-600 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white text-sm font-medium"
                 >
                   Templates
+                </Link>
+                <Link
+                  to="/teams"
+                  className="text-gray-600 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white text-sm font-medium"
+                >
+                  Teams
+                </Link>
+                <Link
+                  to="/agents"
+                  className="text-gray-600 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white text-sm font-medium"
+                >
+                  Agents
+                </Link>
+                <Link
+                  to="/audit-log"
+                  className="text-gray-600 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white text-sm font-medium"
+                >
+                  Audit
                 </Link>
                 <Link
                   to="/test"

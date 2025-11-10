@@ -7,6 +7,10 @@ from app.schemas.policy_template import (
     EvaluationCriteriaCreate,
     EvaluationCriteriaResponse,
 )
+from app.schemas.team import TeamCreate, TeamUpdate, TeamResponse
+from app.schemas.agent import AgentCreate, AgentUpdate, AgentResponse, AgentTeamMembershipResponse
+from app.schemas.import_job import ImportJobResponse
+from app.schemas.audit import AgentAuditLogResponse
 
 __all__ = [
     "UserCreate",
@@ -23,5 +27,14 @@ __all__ = [
     "PolicyTemplateResponse",
     "EvaluationCriteriaCreate",
     "EvaluationCriteriaResponse",
+    "TeamCreate",
+    "TeamUpdate",
+    "TeamResponse",
+    "AgentCreate",
+    "AgentUpdate",
+    "AgentResponse",
+    "AgentTeamMembershipResponse",
+    "ImportJobResponse",
+    "AgentAuditLogResponse",
 ]
 

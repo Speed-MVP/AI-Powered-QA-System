@@ -7,6 +7,7 @@ from app.database import SessionLocal
 from app.models.user import User, UserRole
 from app.models.agent_team import AgentTeamMembership
 from app.models.team import Team
+from sqlalchemy.orm import joinedload
 from typing import List, Optional
 from datetime import datetime
 import logging
@@ -72,10 +73,12 @@ class AgentService:
                 if not team:
                     raise ValueError(f"Team {team_id} not found")
                 
+                # Use the same session for team assignment
                 self.assign_agent_to_team(
                     agent_id=agent.id,
                     team_id=team_id,
-                    created_by=created_by or agent.id
+                    created_by=created_by or agent.id,
+                    db=db  # Pass the existing session
                 )
             
             # Log change
@@ -92,6 +95,7 @@ class AgentService:
             )
             
             db.commit()
+            db.refresh(agent)  # Refresh to ensure object is attached for serialization
             return agent
         except Exception as e:
             db.rollback()
@@ -104,14 +108,15 @@ class AgentService:
         """Get agents, optionally filtered by team."""
         db = SessionLocal()
         try:
-            query = db.query(User).filter(
+            query = db.query(User).options(
+                joinedload(User.team_memberships).joinedload(AgentTeamMembership.team)
+            ).filter(
                 User.company_id == company_id,
                 User.deleted_at.is_(None)
             )
             
             # Filter by team if provided
             if team_id:
-                from app.models.agent_team import AgentTeamMembership
                 memberships = db.query(AgentTeamMembership).filter(
                     AgentTeamMembership.team_id == team_id,
                     AgentTeamMembership.deleted_at.is_(None)
@@ -131,7 +136,9 @@ class AgentService:
         """Get single agent by ID."""
         db = SessionLocal()
         try:
-            agent = db.query(User).filter(
+            agent = db.query(User).options(
+                joinedload(User.team_memberships).joinedload(AgentTeamMembership.team)
+            ).filter(
                 User.id == agent_id,
                 User.deleted_at.is_(None)
             ).first()
@@ -236,9 +243,21 @@ class AgentService:
         finally:
             db.close()
     
-    def assign_agent_to_team(self, agent_id: str, team_id: str, created_by: str) -> AgentTeamMembership:
-        """Add agent to team (create membership)."""
-        db = SessionLocal()
+    def assign_agent_to_team(self, agent_id: str, team_id: str, created_by: str, db=None) -> AgentTeamMembership:
+        """Add agent to team (create membership).
+        
+        Args:
+            agent_id: ID of the agent
+            team_id: ID of the team
+            created_by: ID of the user creating the membership
+            db: Optional database session. If provided, uses this session and doesn't commit/close.
+                If None, creates a new session and commits/closes it.
+        """
+        should_close = False
+        if db is None:
+            db = SessionLocal()
+            should_close = True
+        
         try:
             # Check if already assigned
             existing = db.query(AgentTeamMembership).filter(
@@ -282,14 +301,17 @@ class AgentService:
                 company_id=agent.company_id
             )
             
-            db.commit()
+            if should_close:
+                db.commit()
             return membership
         except Exception as e:
-            db.rollback()
+            if should_close:
+                db.rollback()
             logger.error(f"Error assigning agent to team: {e}")
             raise
         finally:
-            db.close()
+            if should_close:
+                db.close()
     
     def remove_agent_from_team(self, agent_id: str, team_id: str, deleted_by: str) -> None:
         """Remove agent from team (soft delete membership)."""
