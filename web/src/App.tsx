@@ -10,6 +10,10 @@ import { Pricing } from '@/pages/Pricing'
 import { Features } from '@/pages/Features'
 import { FAQ } from '@/pages/FAQ'
 import { SignIn } from '@/pages/SignIn'
+import { TeamsListPage } from '@/pages/TeamsListPage'
+import { AgentsListPage } from '@/pages/AgentsListPage'
+import { AuditTrailPage } from '@/pages/AuditTrailPage'
+import { SupervisorDashboard } from '@/pages/SupervisorDashboard'
 import { AuthProvider, useAuth } from '@/contexts/AuthContext'
 import { useSEO, pageSEO } from '@/hooks/useSEO'
 
@@ -125,6 +129,46 @@ function AppRoutes() {
             <SEOWrapper seoConfig={pageSEO.dashboard}>
               <ProtectedRoute>
                 <HumanReview />
+              </ProtectedRoute>
+            </SEOWrapper>
+          }
+        />
+        <Route
+          path="teams"
+          element={
+            <SEOWrapper seoConfig={pageSEO.dashboard}>
+              <ProtectedRoute>
+                <TeamsListPage />
+              </ProtectedRoute>
+            </SEOWrapper>
+          }
+        />
+        <Route
+          path="agents"
+          element={
+            <SEOWrapper seoConfig={pageSEO.dashboard}>
+              <ProtectedRoute>
+                <AgentsListPage />
+              </ProtectedRoute>
+            </SEOWrapper>
+          }
+        />
+        <Route
+          path="audit-log"
+          element={
+            <SEOWrapper seoConfig={pageSEO.dashboard}>
+              <ProtectedRoute>
+                <AuditTrailPage />
+              </ProtectedRoute>
+            </SEOWrapper>
+          }
+        />
+        <Route
+          path="supervisor"
+          element={
+            <SEOWrapper seoConfig={pageSEO.dashboard}>
+              <ProtectedRoute>
+                <SupervisorDashboard />
               </ProtectedRoute>
             </SEOWrapper>
           }

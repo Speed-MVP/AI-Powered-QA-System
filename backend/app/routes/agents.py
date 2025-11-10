@@ -71,6 +71,35 @@ async def create_agent(
     return build_agent_response(fresh_agent)
 
 
+@router.get("/audit-log", response_model=List[AgentAuditLogResponse])
+async def get_audit_log(
+    agent_id: Optional[str] = Query(None),
+    team_id: Optional[str] = Query(None),
+    entity_type: Optional[str] = Query(None, description="agent|team|membership"),
+    date_from: Optional[datetime] = Query(None),
+    date_to: Optional[datetime] = Query(None),
+    limit: int = Query(100, ge=1, le=500),
+    current_user: User = Depends(get_current_user),
+):
+    """Get immutable audit trail (Supervisor+ only)."""
+    ensure_supervisor(current_user)
+    if team_id:
+        _validate_team_access(team_id, current_user)
+    if agent_id:
+        _load_agent_or_404(agent_id, current_user)
+
+    changes = audit_service.get_changes(
+        company_id=current_user.company_id,
+        agent_id=agent_id,
+        team_id=team_id,
+        entity_type=entity_type,
+        date_from=date_from,
+        date_to=date_to,
+        limit=limit,
+    )
+    return changes
+
+
 @router.get("/{agent_id}", response_model=AgentResponse)
 async def get_agent(
     agent_id: str,
@@ -116,7 +145,7 @@ async def update_agent(
     return build_agent_response(fresh_agent)
 
 
-@router.delete("/{agent_id}", status_code=204)
+@router.delete("/{agent_id}")
 async def delete_agent(
     agent_id: str,
     current_user: User = Depends(get_current_user),
@@ -125,33 +154,4 @@ async def delete_agent(
     ensure_supervisor(current_user)
     _load_agent_or_404(agent_id, current_user)
     agent_service.delete_agent(agent_id=agent_id, deleted_by=current_user.id)
-    return None
-
-
-@router.get("/audit-log", response_model=List[AgentAuditLogResponse])
-async def get_audit_log(
-    agent_id: Optional[str] = Query(None),
-    team_id: Optional[str] = Query(None),
-    entity_type: Optional[str] = Query(None, description="agent|team|membership"),
-    date_from: Optional[datetime] = Query(None),
-    date_to: Optional[datetime] = Query(None),
-    limit: int = Query(100, ge=1, le=500),
-    current_user: User = Depends(get_current_user),
-):
-    """Get immutable audit trail (Supervisor+ only)."""
-    ensure_supervisor(current_user)
-    if team_id:
-        _validate_team_access(team_id, current_user)
-    if agent_id:
-        _load_agent_or_404(agent_id, current_user)
-
-    changes = audit_service.get_changes(
-        company_id=current_user.company_id,
-        agent_id=agent_id,
-        team_id=team_id,
-        entity_type=entity_type,
-        date_from=date_from,
-        date_to=date_to,
-        limit=limit,
-    )
-    return changes
+    return {"status": "deleted"}

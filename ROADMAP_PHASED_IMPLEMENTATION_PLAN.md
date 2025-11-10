@@ -524,7 +524,18 @@ async def get_audit_log(org_id: UUID,
 
 ## 1.5 Frontend Pages (React/TypeScript)
 
-**Location:** `frontend/src/pages/`
+**Status:** 🚧 In progress — foundational React pages + modals wired to live APIs (2025-11-10).
+
+**Location:** `web/src/pages/`
+
+**What shipped so far:**
+- ✅ `TeamsListPage.tsx` with create/edit modal, agent counts, and CSV/XLSX bulk import entry point.
+- ✅ `AgentsListPage.tsx` with team filters, CRUD modal, and shared import flow.
+- ✅ `AuditTrailPage.tsx` with filters, CSV export, and live `/agents/audit-log` feed.
+- ✅ `SupervisorDashboard.tsx` surfaces KPI cards + recent audit activity (backed by `/api/supervisor/evaluations`, `/api/agents/audit-log`).
+- ✅ Shared UI: `TeamFormModal`, `AgentFormModal`, `BulkImportModal` (client-side mapping + preview + normalized uploads).
+- ✅ Shared UI: `TeamFormModal`, `AgentFormModal`, `BulkImportModal` (now sends uploaded CSV/Excel straight to the backend for parsing to avoid frontend SheetJS risks).
+- ✅ `Layout`/routing updates so authenticated users can access the new flows.
 
 ### 1.5.1 Teams List Page
 
@@ -569,24 +580,15 @@ async def get_audit_log(org_id: UUID,
 **Functionality:**
 ```
 Step 1: File Upload
-  - File input (accept .csv)
+  - File input (accept .csv, .xlsx, .xlsm)
   - Drag-and-drop support
-  
-Step 2: Column Mapping
-  - Show CSV column headers
-  - User maps: "Source Column" → "Target Field" (agent_name, email, team_name, employee_id)
-  - Visual UI: Dropdowns or drag-drop
-  
-Step 3: Preview
-  - Show first 10 CSV rows
-  - Highlight validation errors in red
-  - Show mapping preview (e.g., "Column 'Full Name' → agent_name")
-  
-Step 4: Confirm & Import
-  - Button: "Import"
-  - Show progress bar (polling job_id)
-  - On completion: Show summary (X rows imported, Y errors)
-  - Link to errors (downloadable CSV)
+  - Show selected file metadata before confirming
+Step 2: Confirm & Import
+  - Submit the file to `/api/agents/bulk-import`
+  - Backend handles CSV/Excel parsing, validation, and team creation
+Step 3: Import Status
+  - Poll `/agents/bulk-import/{job_id}` every 2 seconds
+  - Surface validation errors / completion summary (backend generated)
 ```
 
 **API Calls:**

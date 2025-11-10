@@ -58,6 +58,7 @@ class TeamService:
             )
             
             db.commit()
+            db.refresh(team)  # Refresh to ensure object is attached for serialization
             return team
         except Exception as e:
             db.rollback()

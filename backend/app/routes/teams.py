@@ -67,7 +67,7 @@ async def update_team(
         raise HTTPException(status_code=400, detail=str(exc)) from exc
 
 
-@router.delete("/{team_id}", status_code=204)
+@router.delete("/{team_id}")
 async def delete_team(
     team_id: str,
     current_user: User = Depends(get_current_user),
@@ -78,7 +78,7 @@ async def delete_team(
     if not team or team.company_id != current_user.company_id:
         raise HTTPException(status_code=404, detail="Team not found")
     team_service.delete_team(team_id=team_id, deleted_by=current_user.id)
-    return None
+    return {"status": "deleted"}
 
 
 @router.get("/{team_id}/agents", response_model=List[AgentResponse])
