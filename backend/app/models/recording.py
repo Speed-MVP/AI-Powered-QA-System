@@ -27,9 +27,15 @@ class Recording(Base):
     uploaded_at = Column(DateTime, default=datetime.utcnow, index=True)
     processed_at = Column(DateTime, nullable=True)
     
+    # Phase 1: Agent/Team associations
+    agent_id = Column(String(36), ForeignKey("users.id"), nullable=True, index=True)
+    team_id = Column(String(36), ForeignKey("teams.id"), nullable=True)
+    
     # Relationships
     company = relationship("Company", back_populates="recordings")
-    uploaded_by_user = relationship("User", back_populates="recordings")
+    uploaded_by_user = relationship("User", back_populates="recordings", foreign_keys=[uploaded_by_user_id])
+    agent = relationship("User", foreign_keys=[agent_id])
+    team = relationship("Team", back_populates="recordings")
     transcript = relationship("Transcript", uselist=False, back_populates="recording")
     evaluation = relationship("Evaluation", uselist=False, back_populates="recording")
 

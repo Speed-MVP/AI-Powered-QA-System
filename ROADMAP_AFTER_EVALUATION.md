@@ -2,16 +2,68 @@
 
 Scope: This roadmap lists high-impact features to implement after evaluation testing. It explicitly excludes Coaching & Goals, Human‑in‑the‑Loop & Disputes, Integrations (CRM/ticketing/dialers/WFM/BI/webhooks), and coaching queues.
 
-### 1) Agent and Team Directory
-- Objective: Enable org-wide dashboards keyed by `agent_id`/`team_id` and granular drill-downs.
-- Data model:
-  - agents/teams may be represented by existing `users` with roles; add `teams` and `agent_team_memberships` if needed.
-  - Add `agent_id`, `team_id` to `recordings`/`evaluations` if not already derivable.
-- API:
-  - GET `/agents`, `/teams`, `/agents/{id}/summary`, `/teams/{id}/summary`.
-- Dashboard:
-  - Leaderboards by team/agent; cohort comparisons; filter by timeframe, channel, language.
+## 1) Agent and Team Directory
 
+### Objective
+Enable org-wide dashboards keyed by `agent_id`/`team_id` and granular drill-downs. Establish a scalable, audit-compliant agent/team data model that serves as the foundation for all downstream analytics.
+
+### Critical Context: Philippine BPO Market Reality
+
+**Important:** The agent/team data ingestion strategy must account for the actual technology landscape of Philippine BPOs. Unlike enterprise SaaS targeting Global 500 companies, Philippine BPOs (especially SMEs) operate in a significantly different environment:
+
+- **Enterprise BPOs (500+ agents):** Using Genesys Cloud, Five9, or NICE CXone, but these are primarily contact center platforms with minimal HR system integration. Agent rosters are typically manually created within these platforms, not synced from HR systems.
+- **Medium BPOs (100-300 agents):** Hybrid of cloud and legacy systems; inconsistent or non-existent HR system infrastructure. Limited expectations for advanced integrations.
+- **Small BPOs (30-100 agents):** Primarily manual operations using spreadsheets and Excel; no formal HR system; no SCIM/API infrastructure.
+
+**Critical finding:** SCIM 2.0 and API-first integrations are not feasible for 80%+ of Philippine BPO market in MVP phase. Most small-to-medium operations still rely on manual spreadsheet-based agent management. Modern integration patterns (Okta, Azure AD, Workday syncs) exist in the enterprise market but are absent in Philippine BPOs.
+
+### Recommended Ingestion Strategy
+
+**Phase 1 (MVP):** Manual UI + Bulk CSV/Excel Import (Non-Source-of-Truth)
+- **Manual UI:** Supervisors can create agents/teams one-by-one in your system via forms.
+- **CSV Bulk Import:** Provide a validated bulk import interface with:
+  - Column mapping (so they map "Employee Name" to `agent_name`)
+  - Preview and validation before commit
+  - Conflict resolution (duplicate detection, update vs. insert logic)
+  - Full audit trail logging who uploaded what, when, and what changed
+- **Key principle:** CSV is a **convenience tool for onboarding**, not the source of truth. Once data enters your system, you own it and track all changes.
+- **Audit Trail:** Every agent/team creation, update, and deletion is immutably logged with timestamp, user, and change details (required for compliance).
+
+**Phase 2 (6-12 months, based on customer requests):** Platform-Specific Integrations
+- Monitor which systems your customers request integrations with (likely Genesys Cloud, Five9, basic HR systems if they exist).
+- Build adapters for the top 3 platforms your paying customers request.
+- Focus on one-way sync (pull agent roster from their platform on schedule or manual trigger).
+
+**Phase 3 (18+ months):** SCIM 2.0 and Identity Provider Support
+- Implement SCIM 2.0 protocol for enterprise customers with mature identity infrastructure.
+- This is a **long-tail feature** for the Philippine market; deprioritize in MVP.
+
+### Data Model
+
+- agents/teams represented by `users` with roles; add `teams` and `agent_team_memberships` tables.
+- Add `agent_id`, `team_id` to `recordings`/`evaluations` if not already derivable.
+- Add audit columns to `teams` and `agent_team_memberships`: `created_by`, `created_at`, `updated_by`, `updated_at`, `deleted_at`.
+- Maintain immutable change log: `agent_team_changes(id, agent_id, team_id, change_type, old_value, new_value, changed_by, changed_at)`.
+
+### API Endpoints
+
+- `GET /agents` — List all agents with filters (team, status, created_date range)
+- `GET /teams` — List all teams
+- `GET /agents/{id}/summary` — Agent KPI snapshot (QA score, FCR%, CSAT, recent evaluations)
+- `GET /teams/{id}/summary` — Team KPI snapshot
+- `GET /teams/{id}/agents` — List agents in a specific team
+- `POST /agents/bulk-import` — Initiate CSV bulk import (returns import job ID for polling)
+- `GET /agents/bulk-import/{job_id}` — Poll import status, validation errors, preview
+- `GET /agents/audit-log` — Immutable audit trail of all agent/team changes (for compliance reporting)
+
+### Dashboard
+
+- Leaderboards by team/agent (QA score, FCR%, CSAT, AHT); cohort comparisons
+- Filters by timeframe, channel, language, team, agent
+- Quick drill-down from dashboard to individual agent/team performance page
+- Audit trail visibility for supervisors (who created/modified agent assignments, when)
+
+---
 ### 2) CSAT/NPS Capture and Correlation
 - Objective: Tie QA outcomes to customer feedback.
 - Data model:

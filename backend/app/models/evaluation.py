@@ -30,10 +30,16 @@ class Evaluation(Base):
     status = Column(Enum(EvaluationStatus), default=EvaluationStatus.pending)
     created_at = Column(DateTime, default=datetime.utcnow, index=True)
     
+    # Phase 1: Agent/Team associations
+    agent_id = Column(String(36), ForeignKey("users.id"), nullable=True, index=True)
+    team_id = Column(String(36), ForeignKey("teams.id"), nullable=True)
+    
     # Relationships
     recording = relationship("Recording", back_populates="evaluation")
     policy_template = relationship("PolicyTemplate", back_populates="evaluations")
-    evaluated_by_user = relationship("User", back_populates="evaluations")
+    evaluated_by_user = relationship("User", back_populates="evaluations", foreign_keys=[evaluated_by_user_id])
+    agent = relationship("User", foreign_keys=[agent_id])
+    team = relationship("Team", back_populates="evaluations")
     category_scores = relationship("CategoryScore", back_populates="evaluation", cascade="all, delete-orphan")
     policy_violations = relationship("PolicyViolation", back_populates="evaluation", cascade="all, delete-orphan")
     human_review = relationship("HumanReview", uselist=False, back_populates="evaluation", cascade="all, delete-orphan")  # Phase 3

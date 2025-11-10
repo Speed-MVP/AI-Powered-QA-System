@@ -23,10 +23,18 @@ class User(Base):
     role = Column(Enum(UserRole), default=UserRole.reviewer)
     is_active = Column(Boolean, default=True)
     created_at = Column(DateTime, default=datetime.utcnow)
+    # Phase 1: Audit fields
+    created_by = Column(String(36), ForeignKey("users.id"), nullable=True)
+    updated_by = Column(String(36), ForeignKey("users.id"), nullable=True)
+    deleted_at = Column(DateTime, nullable=True)
     
     # Relationships
     company = relationship("Company", back_populates="users")
     recordings = relationship("Recording", back_populates="uploaded_by_user")
     evaluations = relationship("Evaluation", back_populates="evaluated_by_user")
     human_reviews = relationship("HumanReview", back_populates="reviewer", cascade="all, delete-orphan")  # Phase 3
+    # Phase 1: Agent/Team relationships
+    team_memberships = relationship("AgentTeamMembership", foreign_keys="AgentTeamMembership.agent_id", back_populates="agent")
+    created_teams = relationship("Team", foreign_keys="Team.created_by", back_populates="created_by_user")
+    updated_teams = relationship("Team", foreign_keys="Team.updated_by", back_populates="updated_by_user")
 
