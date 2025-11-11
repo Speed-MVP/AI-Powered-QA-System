@@ -12,10 +12,11 @@ ENV PYTHONUNBUFFERED=1 \
 
 # Install system dependencies
 RUN apt-get update && apt-get install -y --no-install-recommends \
-    gcc \
+    build-essential \
     pkg-config \
     postgresql-client \
     libpq-dev \
+    libc6-dev \
     libavformat-dev \
     libavcodec-dev \
     libavdevice-dev \
