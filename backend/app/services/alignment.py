@@ -1,14 +1,24 @@
 """
 Forced Alignment Service for Precise Word-Level Timestamps
 Phase 2: Accuracy & Intelligence Expansion
+
+NOTE: This service requires optional dependencies that are NOT installed by default:
+- torch (PyTorch)
+- faster-whisper
+- FFmpeg development libraries
+
+If these dependencies are not installed, this module will fail to import.
+This is expected and handled gracefully in deepgram.py with a try/except block.
+Alignment is disabled in production (use_forced_alignment=False in process_recording.py).
 """
 
 import logging
 import asyncio
 from typing import List, Dict, Any, Optional, Tuple
 import numpy as np
-import torch
-from faster_whisper import WhisperModel
+# These imports will fail if dependencies are not installed - this is expected
+import torch  # Required: torch package
+from faster_whisper import WhisperModel  # Required: faster-whisper package
 import io
 import aiohttp
 from app.config import settings
