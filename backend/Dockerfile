@@ -16,6 +16,13 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     pkg-config \
     postgresql-client \
     libpq-dev \
+    libavformat-dev \
+    libavcodec-dev \
+    libavdevice-dev \
+    libavutil-dev \
+    libavfilter-dev \
+    libswscale-dev \
+    libswresample-dev \
     && rm -rf /var/lib/apt/lists/*
 
 # Copy requirements first for better Docker layer caching
