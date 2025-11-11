@@ -11,7 +11,13 @@ ENV PYTHONUNBUFFERED=1 \
     PORT=8080
 
 # Install system dependencies
-RUN apt-get update && apt-get install -y --no-install-recommends \
+# Install FFmpeg 6.x from Debian 12 (bullseye) for compatibility with av==11.*
+RUN echo "deb http://deb.debian.org/debian bullseye main" >> /etc/apt/sources.list.d/bullseye-ffmpeg.list && \
+    echo "Package: libavformat-dev libavcodec-dev libavdevice-dev libavutil-dev libavfilter-dev libswscale-dev libswresample-dev" > /etc/apt/preferences.d/ffmpeg-pinning && \
+    echo "Pin: release n=bullseye" >> /etc/apt/preferences.d/ffmpeg-pinning && \
+    echo "Pin-Priority: 1001" >> /etc/apt/preferences.d/ffmpeg-pinning && \
+    apt-get update && \
+    apt-get install -y --no-install-recommends \
     build-essential \
     pkg-config \
     postgresql-client \
@@ -24,7 +30,8 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     libavfilter-dev \
     libswscale-dev \
     libswresample-dev \
-    && rm -rf /var/lib/apt/lists/*
+    && rm -f /etc/apt/sources.list.d/bullseye-ffmpeg.list /etc/apt/preferences.d/ffmpeg-pinning && \
+    rm -rf /var/lib/apt/lists/*
 
 # Copy requirements first for better Docker layer caching
 COPY requirements.txt .
