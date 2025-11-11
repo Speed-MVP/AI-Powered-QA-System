@@ -2,10 +2,17 @@ import aiohttp
 from app.config import settings
 import logging
 from typing import List, Dict, Optional
-from app.services.alignment import AlignmentService  # Phase 2: Forced alignment
 import re
 
 logger = logging.getLogger(__name__)
+
+# Optional import for alignment service (requires faster-whisper, which is currently disabled)
+try:
+    from app.services.alignment import AlignmentService
+    ALIGNMENT_AVAILABLE = True
+except ImportError:
+    ALIGNMENT_AVAILABLE = False
+    logger.warning("AlignmentService not available - faster-whisper dependencies not installed")
 
 
 class DeepgramService:
@@ -79,7 +86,7 @@ class DeepgramService:
 
                 # Phase 2: Forced Alignment for precise timestamps (optional)
                 aligned_segments = diarized_segments
-                if use_forced_alignment:
+                if use_forced_alignment and ALIGNMENT_AVAILABLE:
                     logger.info("Starting forced alignment...")
                     try:
                         alignment_service = AlignmentService()
@@ -93,6 +100,9 @@ class DeepgramService:
                     except Exception as e:
                         logger.warning(f"Forced alignment failed: {e}, using Deepgram segments")
                         aligned_segments = diarized_segments
+                elif use_forced_alignment and not ALIGNMENT_AVAILABLE:
+                    logger.warning("Alignment requested but AlignmentService not available - faster-whisper dependencies not installed")
+                    aligned_segments = diarized_segments
                 else:
                     logger.info("Alignment disabled - using Deepgram segments directly")
 
