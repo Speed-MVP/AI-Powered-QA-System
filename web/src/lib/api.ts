@@ -201,15 +201,36 @@ class ApiClient {
   }
 
   async uploadFileDirect(file: File) {
-    const formData = new FormData()
-    formData.append('file', file)
-
     // Get token from instance or localStorage (use same key)
     const token = this.token || (typeof window !== 'undefined' ? localStorage.getItem('auth_token') : null)
     
     if (!token) {
       throw new Error('Not authenticated. Please log in first.')
     }
+
+    // Cloud Run has a 32MB limit, so for files > 30MB, use signed URL method automatically
+    // This is transparent to the user - they just upload normally
+    const FILE_SIZE_LIMIT = 30 * 1024 * 1024 // 30MB in bytes
+    
+    if (file.size > FILE_SIZE_LIMIT) {
+      // Use signed URL method for large files
+      try {
+        // Step 1: Get signed URL from backend
+        const { signed_url, file_url } = await this.getSignedUploadUrl(file.name)
+        
+        // Step 2: Upload directly to GCP Storage using signed URL
+        await this.uploadFileToStorage(signed_url, file)
+        
+        // Step 3: Register the file with the backend
+        return await this.uploadRecording(file.name, file_url)
+      } catch (error: any) {
+        throw new Error(error.message || 'Failed to upload large file using signed URL method')
+      }
+    }
+
+    // For smaller files, try direct upload first
+    const formData = new FormData()
+    formData.append('file', file)
 
     const response = await fetch(`${this.baseUrl}/api/recordings/upload-direct`, {
       method: 'POST',
@@ -226,6 +247,18 @@ class ApiClient {
       if (response.status === 401) {
         this.setToken(null)
         throw new Error('Session expired. Please log in again.')
+      }
+      
+      // If we get a 413 error (Content Too Large), automatically fallback to signed URL method
+      if (response.status === 413) {
+        try {
+          // Fallback to signed URL method
+          const { signed_url, file_url } = await this.getSignedUploadUrl(file.name)
+          await this.uploadFileToStorage(signed_url, file)
+          return await this.uploadRecording(file.name, file_url)
+        } catch (fallbackError: any) {
+          throw new Error(fallbackError.message || 'Upload failed. File may be too large.')
+        }
       }
       
       throw new Error(error.detail || 'Upload failed')
