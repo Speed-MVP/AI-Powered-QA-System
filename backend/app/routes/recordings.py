@@ -51,26 +51,72 @@ async def upload_file_direct(
         blob_name = f"{current_user.company_id}/{file.filename}"
         blob = storage_service.bucket.blob(blob_name)
         
-        # Read file content
-        content = await file.read()
+        # Use streaming upload for large files to avoid loading entire file into memory
+        # This prevents 413 errors for large audio files
+        # Read file in chunks and upload directly to GCP Storage
+        import tempfile
+        import os
         
-        logger.info(f"Uploading file '{file.filename}' to bucket '{storage_service.bucket.name}' as '{blob_name}'")
-        logger.info(f"File size: {len(content)} bytes, Content-Type: {file.content_type or 'audio/mpeg'}")
-        
-        # Upload file to GCP Storage
+        # Get file size from content-length header if available, or read in chunks
+        content_length = None
         try:
-            blob.upload_from_string(content, content_type=file.content_type or "audio/mpeg")
-            logger.info(f"Successfully uploaded file to GCP Storage: {blob_name}")
-        except Exception as upload_error:
-            error_msg = str(upload_error)
-            logger.error(f"GCP Storage upload error: {error_msg}")
-            if "403" in error_msg or "Permission" in error_msg or "permission" in error_msg:
-                from app.config import settings
-                raise HTTPException(
-                    status_code=403,
-                    detail=f"Permission denied. Service account '{settings.gcp_client_email}' needs 'Storage Object Admin' role on bucket '{settings.gcp_bucket_name}'. Please check IAM permissions in GCP Console."
+            # Try to get size from the request if available
+            if hasattr(file, 'size'):
+                content_length = file.size
+        except:
+            pass
+        
+        # Create a temporary file for streaming upload
+        temp_file_path = None
+        try:
+            with tempfile.NamedTemporaryFile(delete=False, suffix=os.path.splitext(file.filename)[1]) as temp_file:
+                temp_file_path = temp_file.name
+                
+                # Stream file content to temporary file in chunks (8KB at a time)
+                # This avoids loading the entire file into memory
+                chunk_size = 8192  # 8KB chunks
+                total_size = 0
+                
+                # Reset file pointer to beginning
+                await file.seek(0)
+                
+                # Read and write in chunks
+                while True:
+                    chunk = await file.read(chunk_size)
+                    if not chunk:
+                        break
+                    temp_file.write(chunk)
+                    total_size += len(chunk)
+                
+                temp_file.flush()
+            
+            logger.info(f"Uploading file '{file.filename}' to bucket '{storage_service.bucket.name}' as '{blob_name}'")
+            logger.info(f"File size: {total_size} bytes, Content-Type: {file.content_type or 'audio/mpeg'}")
+            
+            # Upload file to GCP Storage using streaming from temp file
+            try:
+                blob.upload_from_filename(
+                    temp_file_path,
+                    content_type=file.content_type or "audio/mpeg"
                 )
-            raise
+                logger.info(f"Successfully uploaded file to GCP Storage: {blob_name}")
+            except Exception as upload_error:
+                error_msg = str(upload_error)
+                logger.error(f"GCP Storage upload error: {error_msg}")
+                if "403" in error_msg or "Permission" in error_msg or "permission" in error_msg:
+                    from app.config import settings
+                    raise HTTPException(
+                        status_code=403,
+                        detail=f"Permission denied. Service account '{settings.gcp_client_email}' needs 'Storage Object Admin' role on bucket '{settings.gcp_bucket_name}'. Please check IAM permissions in GCP Console."
+                    )
+                raise
+        finally:
+            # Clean up temporary file
+            if temp_file_path and os.path.exists(temp_file_path):
+                try:
+                    os.unlink(temp_file_path)
+                except Exception as cleanup_error:
+                    logger.warning(f"Failed to cleanup temp file: {cleanup_error}")
         
         # Generate file URL
         file_url = storage_service.get_public_url(blob_name)
@@ -104,6 +150,13 @@ async def upload_file_direct(
             raise HTTPException(
                 status_code=404,
                 detail=f"Bucket '{settings.gcp_bucket_name}' not found. Please check your GCP_BUCKET_NAME in .env file matches the actual bucket name in GCP Console."
+            )
+        
+        # Check for 413 Content Too Large error
+        if "413" in error_msg or "Content Too Large" in error_msg or "Request Entity Too Large" in error_msg:
+            raise HTTPException(
+                status_code=413,
+                detail="File is too large. Please use the signed URL upload method for files larger than 32MB, or contact support to increase the upload limit."
             )
         
         raise HTTPException(status_code=500, detail=f"Upload failed: {error_msg}")

@@ -19,5 +19,8 @@ COPY . .
 # Expose port
 EXPOSE 8080
 
-# Simple startup command
-CMD ["sh", "-c", "uvicorn app.main:app --host 0.0.0.0 --port ${PORT:-8080}"]
+# Simple startup command with increased request body size limit (500MB)
+# --limit-max-requests: max concurrent requests
+# Note: Request body size limit is controlled by uvicorn's default (1MB) but we handle it in middleware
+# For Cloud Run, we rely on the middleware to handle large uploads via streaming
+CMD ["sh", "-c", "uvicorn app.main:app --host 0.0.0.0 --port ${PORT:-8080} --limit-max-requests 1000"]

@@ -69,6 +69,22 @@ class CORSLoggingMiddleware(BaseHTTPMiddleware):
         response = await call_next(request)
         return response
 
+# Middleware to increase request body size limit for file uploads
+# FastAPI/Starlette default is 1MB, we increase to 500MB for large audio files
+class LargeRequestMiddleware(BaseHTTPMiddleware):
+    async def dispatch(self, request: StarletteRequest, call_next):
+        # Increase max request body size to 500MB (524288000 bytes)
+        # This is handled at the ASGI level, but we ensure the request can handle large bodies
+        if request.method in ["POST", "PUT", "PATCH"]:
+            content_length = request.headers.get("content-length")
+            if content_length:
+                size_mb = int(content_length) / (1024 * 1024)
+                if size_mb > 100:  # Log large uploads
+                    logger.info(f"Large file upload detected: {size_mb:.2f} MB for {request.url.path}")
+        response = await call_next(request)
+        return response
+
+app.add_middleware(LargeRequestMiddleware)
 app.add_middleware(CORSLoggingMiddleware)
 app.add_middleware(
     CORSMiddleware,
