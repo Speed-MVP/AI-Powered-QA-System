@@ -197,7 +197,7 @@ export function Results() {
     try {
       await api.reevaluateRecording(recordingId)
       alert('Re-evaluation started. Please return later or refresh to check status.')
-      navigate('/test')
+      navigate('/demo')
     } catch (e: any) {
       alert('Failed to start re-evaluation: ' + (e.message || 'Unknown error'))
     }
@@ -283,7 +283,7 @@ export function Results() {
         <div className="flex items-center justify-between mb-6">
           <div className="flex items-center space-x-3">
             <Link
-              to="/test"
+              to="/demo"
               className="inline-flex items-center px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-md text-sm font-medium text-slate-700 dark:text-slate-200 bg-white dark:bg-slate-700 hover:bg-slate-50 dark:hover:bg-slate-600"
             >
               <FaArrowLeft className="w-4 h-4 mr-2" />

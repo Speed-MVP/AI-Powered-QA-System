@@ -84,6 +84,10 @@ function AppRoutes() {
           }
         />
         <Route
+          path="test"
+          element={<Navigate to="/demo" replace />}
+        />
+        <Route
           path="home"
           element={
             <SEOWrapper seoConfig={pageSEO.home}>

@@ -81,10 +81,10 @@ export function Layout() {
                     Audit
                   </Link>
                   <Link
-                    to="/test"
+                    to="/demo"
                     className="text-gray-600 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white text-sm font-medium"
                   >
-                    Test
+                    Demo
                   </Link>
                 </>
               ) : (
@@ -96,10 +96,10 @@ export function Layout() {
                     Home
                   </Link>
                   <Link
-                    to="/test"
+                    to="/demo"
                     className="text-gray-600 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white text-sm font-medium"
                   >
-                    Test
+                    Demo
                   </Link>
                   <Link
                     to="/pricing"
@@ -210,10 +210,10 @@ export function Layout() {
                   Audit
                 </Link>
                 <Link
-                  to="/test"
+                  to="/demo"
                   className="text-gray-600 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white text-sm font-medium"
                 >
-                  Test
+                  Demo
                 </Link>
               </>
             ) : (
@@ -225,10 +225,10 @@ export function Layout() {
                   Home
                 </Link>
                 <Link
-                  to="/test"
+                  to="/demo"
                   className="text-gray-600 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white text-sm font-medium"
                 >
-                  Test
+                  Demo
                 </Link>
                 <Link
                   to="/pricing"

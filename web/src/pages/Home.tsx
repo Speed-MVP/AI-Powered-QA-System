@@ -66,7 +66,7 @@ export function Home() {
               </p>
               <div className="flex flex-col sm:flex-row gap-4 justify-center lg:justify-start">
                 <Link
-                  to="/test"
+                  to="/demo"
                   className="inline-flex items-center justify-center px-8 py-4 bg-brand-500 text-white rounded-lg font-semibold hover:bg-brand-600 shadow-lg hover:shadow-xl hover:-translate-y-0.5 transition-all duration-200"
                 >
                   Get Started
@@ -332,7 +332,7 @@ export function Home() {
           </p>
           <div className="flex flex-col sm:flex-row gap-4 justify-center">
             <Link
-              to="/test"
+              to="/demo"
               className="inline-flex items-center justify-center px-8 py-4 bg-white text-brand-600 rounded-lg font-semibold hover:bg-gray-100 transition-colors shadow-lg"
             >
               Start Free Trial

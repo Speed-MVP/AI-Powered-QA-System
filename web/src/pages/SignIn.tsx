@@ -14,7 +14,7 @@ export function SignIn() {
   // Redirect if already authenticated
   useEffect(() => {
     if (isAuthenticated) {
-      navigate('/test', { replace: true })
+      navigate('/demo', { replace: true })
     }
   }, [isAuthenticated, navigate])
 
@@ -26,7 +26,7 @@ export function SignIn() {
     try {
       await login(email, password)
       // Navigation will happen automatically via useEffect when isAuthenticated becomes true
-      navigate('/test', { replace: true })
+      navigate('/demo', { replace: true })
     } catch (err: any) {
       setError(err.message || 'Login failed. Please check your credentials.')
       console.error('Login error:', err)
