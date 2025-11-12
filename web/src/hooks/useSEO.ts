@@ -168,8 +168,7 @@ export const pageSEO = {
     title: 'Sign In | Qualitidex',
     description: 'Access your AI-powered quality assurance dashboard. Secure login for call center quality management.',
     keywords: 'sign in, login, QA dashboard, secure access, quality assurance login, call center dashboard access',
-    url: '/sign-in',
-    noindex: true
+    url: '/sign-in'
   },
   dashboard: {
     title: 'Dashboard | Qualitidex',
@@ -178,10 +177,10 @@ export const pageSEO = {
     url: '/dashboard',
     noindex: true
   },
-  test: {
-    title: 'Test Qualitidex | Upload Call Recordings for AI Evaluation',
-    description: 'Upload call recordings and test our AI-powered quality assurance system. Get instant evaluations using advanced speech-to-text and LLM analysis.',
-    keywords: 'test QA, upload recordings, AI evaluation demo, call analysis, quality assurance demo, automated call evaluation, voice analytics test, customer service QA trial',
-    url: '/test'
+  demo: {
+    title: 'Demo Qualitidex | Upload Call Recordings for AI Evaluation',
+    description: 'Upload call recordings and demo our AI-powered quality assurance system. Get instant evaluations using advanced speech-to-text and LLM analysis.',
+    keywords: 'demo QA, upload recordings, AI evaluation demo, call analysis, quality assurance demo, automated call evaluation, voice analytics demo, customer service QA trial',
+    url: '/demo'
   }
 }

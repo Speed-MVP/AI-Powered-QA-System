@@ -68,17 +68,15 @@ function AppRoutes() {
         <Route
           index
           element={
-            <SEOWrapper seoConfig={pageSEO.test}>
-              <ProtectedRoute>
-                <Test />
-              </ProtectedRoute>
+            <SEOWrapper seoConfig={pageSEO.home}>
+              <Home />
             </SEOWrapper>
           }
         />
         <Route
-          path="test"
+          path="demo"
           element={
-            <SEOWrapper seoConfig={pageSEO.test}>
+            <SEOWrapper seoConfig={pageSEO.demo}>
               <ProtectedRoute>
                 <Test />
               </ProtectedRoute>
