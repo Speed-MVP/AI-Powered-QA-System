@@ -182,7 +182,6 @@ export const pageSEO = {
     title: 'Test Qualitidex | Upload Call Recordings for AI Evaluation',
     description: 'Upload call recordings and test our AI-powered quality assurance system. Get instant evaluations using advanced speech-to-text and LLM analysis.',
     keywords: 'test QA, upload recordings, AI evaluation demo, call analysis, quality assurance demo, automated call evaluation, voice analytics test, customer service QA trial',
-    url: '/test',
-    noindex: true
+    url: '/test'
   }
 }
