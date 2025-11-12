@@ -2,7 +2,6 @@ import aiohttp
 from app.config import settings
 import logging
 from typing import List, Dict, Optional
-from app.services.alignment import AlignmentService  # Phase 2: Forced alignment
 import re
 
 logger = logging.getLogger(__name__)
@@ -82,6 +81,8 @@ class DeepgramService:
                 if use_forced_alignment:
                     logger.info("Starting forced alignment...")
                     try:
+                        # Lazy import to avoid importing heavy/optional deps at startup
+                        from app.services.alignment import AlignmentService  # type: ignore
                         alignment_service = AlignmentService()
                         alignment_result = await alignment_service.align_transcript(
                             audio_url=file_url,

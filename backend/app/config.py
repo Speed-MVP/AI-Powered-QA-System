@@ -40,7 +40,7 @@ class Settings(BaseSettings):
     cors_origins: str = "http://localhost:5173,https://ai-powered-qa-system.vercel.app,https://qualitidex.com,https://www.qualitidex.com"
 
     # Alignment Service (Phase 2)
-    enable_alignment: bool = True
+    enable_alignment: bool = False
     alignment_timeout_seconds: int = 120
     alignment_max_duration_seconds: int = 180  # Skip alignment for files longer than this
 
