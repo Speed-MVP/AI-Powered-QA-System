@@ -1,4 +1,4 @@
-import { Link, Outlet, useNavigate } from 'react-router-dom'
+import { Link, Outlet } from 'react-router-dom'
 import { useThemeStore } from '@/store/themeStore'
 import { useAuth } from '@/contexts/AuthContext'
 import { Sun, Moon, LogOut, User } from 'lucide-react'
@@ -10,7 +10,6 @@ export function Layout() {
   const theme = useThemeStore((state) => state.theme)
   const toggleTheme = useThemeStore((state) => state.toggleTheme)
   const { isAuthenticated, user, logout } = useAuth()
-  const navigate = useNavigate()
 
   useEffect(() => {
     document.documentElement.classList.toggle('dark', theme === 'dark')
@@ -22,10 +21,14 @@ export function Layout() {
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex items-center justify-between h-16">
             <div className="flex items-center flex-shrink-0">
-              <Link to="/" className="flex items-center space-x-2">
-                <div className="w-8 h-8 bg-gradient-to-br from-brand-500 to-brand-600 rounded-lg flex items-center justify-center">
-                  <span className="text-white font-bold text-lg">Q</span>
-                </div>
+              <Link to="/" className="flex items-center space-x-3">
+                <img
+                  src="/Logo.svg"
+                  alt="Qualitidex"
+                  className="h-8 w-auto"
+                  loading="lazy"
+                  decoding="async"
+                />
                 <span className="font-semibold text-gray-900 dark:text-white text-lg">
                   Qualitidex
                 </span>

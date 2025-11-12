@@ -155,7 +155,7 @@ export const pageSEO = {
   pricing: {
     title: 'Pricing | Qualitidex - Affordable Call Center Quality Assurance',
     description: 'Choose the perfect plan for your call center. Free trial available. Transparent pricing with no hidden fees. Scale from startup to enterprise.',
-    keywords: 'QA pricing, call center pricing, AI evaluation pricing, subscription plans, free trial',
+    keywords: 'QA pricing, call center pricing, AI evaluation pricing, subscription plans, free trial, quality assurance pricing, call center software pricing, automated QA costs, call monitoring pricing, customer service software pricing',
     url: '/pricing'
   },
   faq: {
@@ -167,21 +167,21 @@ export const pageSEO = {
   signIn: {
     title: 'Sign In | Qualitidex',
     description: 'Access your AI-powered quality assurance dashboard. Secure login for call center quality management.',
-    keywords: 'sign in, login, QA dashboard, secure access',
+    keywords: 'sign in, login, QA dashboard, secure access, quality assurance login, call center dashboard access',
     url: '/sign-in',
     noindex: true
   },
   dashboard: {
     title: 'Dashboard | Qualitidex',
     description: 'Monitor your call center quality assurance metrics, view evaluations, and manage policies from your personalized dashboard.',
-    keywords: 'QA dashboard, evaluation results, quality metrics, policy management',
+    keywords: 'QA dashboard, evaluation results, quality metrics, policy management, call center analytics dashboard, automated QA metrics, customer service evaluation dashboard',
     url: '/dashboard',
     noindex: true
   },
   test: {
     title: 'Test Qualitidex | Upload Call Recordings for AI Evaluation',
     description: 'Upload call recordings and test our AI-powered quality assurance system. Get instant evaluations using advanced speech-to-text and LLM analysis.',
-    keywords: 'test QA, upload recordings, AI evaluation demo, call analysis',
+    keywords: 'test QA, upload recordings, AI evaluation demo, call analysis, quality assurance demo, automated call evaluation, voice analytics test, customer service QA trial',
     url: '/test',
     noindex: true
   }
