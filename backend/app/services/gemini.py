@@ -2,7 +2,6 @@ from app.config import settings
 from sqlalchemy.orm import Session
 from app.database import SessionLocal
 from app.models.evaluation_criteria import EvaluationCriteria
-from app.services.rag import RAGService  # Phase 1: RAG retrieval layer
 from typing import Dict, Any, Optional, List
 import logging
 import json
@@ -118,14 +117,8 @@ class GeminiService:
             if not criteria:
                 raise Exception(f"No evaluation criteria found for template {policy_template_id}")
 
-            # Phase 1: RAG Retrieval - Get relevant policy snippets for the call topic
-            # Reduced top_k from 5 to 3 for faster processing
-            rag_service = RAGService()
-            rag_results = rag_service.retrieve_relevant_policies(
-                transcript=transcript_text,
-                policy_template_id=policy_template_id,
-                top_k=3  # Reduced from 5 to 3 for faster processing
-            )
+            # RAG retrieval removed for simplicity/performance
+            rag_results = None
 
             # Build prompt with retrieved policy context and rule engine results
             prompt = self._build_prompt(transcript_text, criteria, sentiment_analysis, rag_results, rule_results)
@@ -235,11 +228,8 @@ class GeminiService:
         criteria_list_text = ", ".join([f'"{name}"' for name in criteria_names])
         criteria_list_bullet = "\n".join([f"   - \"{name}\"" for name in criteria_names])
 
-        # Phase 1: Add RAG-retrieved policy context
+        # RAG policy context removed
         policy_context = ""
-        if rag_results and rag_results.get("retrieved_policies"):
-            rag_service = RAGService()
-            policy_context = rag_service.format_policy_context(rag_results["retrieved_policies"])
 
         # Phase 2: Add rule engine violations (CRITICAL - these are confirmed violations)
         rule_violations_text = ""
