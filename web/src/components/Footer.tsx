@@ -20,10 +20,10 @@ export function Footer() {
           <div className="space-y-4">
             <Link to="/" className="flex items-center space-x-2">
               <div className="w-10 h-10 bg-gradient-to-br from-brand-500 to-brand-600 rounded-lg flex items-center justify-center">
-                <span className="text-white font-bold text-xl">AI</span>
+                <span className="text-white font-bold text-xl">Q</span>
               </div>
               <span className="font-bold text-gray-900 dark:text-white text-xl">
-                QA System
+                Qualitidex
               </span>
             </Link>
             <p className="text-sm text-gray-600 dark:text-gray-400 leading-relaxed">
@@ -244,10 +244,10 @@ export function Footer() {
               <div>
                 <p className="font-medium text-gray-900 dark:text-white">Email</p>
                 <a
-                  href="mailto:support@qasystem.com"
+                  href="mailto:support@qualitidex.com"
                   className="text-gray-600 dark:text-gray-400 hover:text-brand-500 dark:hover:text-brand-400 transition-colors"
                 >
-                  support@qasystem.com
+                  support@qualitidex.com
                 </a>
               </div>
             </div>
@@ -312,7 +312,7 @@ export function Footer() {
             </div>
             <div className="text-sm text-gray-600 dark:text-gray-400">
               <p>
-                &copy; {currentYear} AI QA System. All rights reserved.
+                &copy; {currentYear} Qualitidex. All rights reserved.
               </p>
             </div>
           </div>

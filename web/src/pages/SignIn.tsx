@@ -49,7 +49,7 @@ export function SignIn() {
             Sign In
           </h1>
           <p className="text-gray-600 dark:text-gray-400 text-center mb-8">
-            Login to access the QA System
+            Login to access Qualitidex
           </p>
 
           {/* Error Message */}

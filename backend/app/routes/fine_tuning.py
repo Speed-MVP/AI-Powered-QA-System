@@ -196,16 +196,36 @@ async def get_pending_reviews(
     try:
         logger.info(f"Getting pending reviews for user {current_user.id}")
 
-        # Get pending reviews with related data using joined load
+        # Get pending reviews with all related data using eager loading
         from sqlalchemy.orm import joinedload
+        from app.models.recording import Recording
+        
         reviews = db.query(HumanReview).options(
-            joinedload(HumanReview.evaluation)
+            joinedload(HumanReview.evaluation).joinedload(Evaluation.recording)
         ).filter(
             HumanReview.review_status == ReviewStatus.pending
         ).offset(skip).limit(limit).all()
 
         logger.info(f"Found {len(reviews)} pending reviews")
 
+        if not reviews:
+            return []
+
+        # Batch load all transcripts in one query
+        evaluation_ids = [r.evaluation_id for r in reviews if r.evaluation_id]
+        recording_ids = [r.evaluation.recording_id for r in reviews if r.evaluation and r.evaluation.recording_id]
+        
+        transcripts = db.query(Transcript).filter(
+            Transcript.recording_id.in_(recording_ids)
+        ).all()
+        
+        # Create a mapping for quick lookup
+        transcript_map = {t.recording_id: t for t in transcripts}
+
+        # Batch get audio URLs (if needed)
+        from app.services.storage import StorageService
+        storage_service = StorageService()
+        
         result = []
         for review in reviews:
             evaluation = review.evaluation
@@ -213,19 +233,17 @@ async def get_pending_reviews(
                 logger.warning(f"Review {review.id} has no associated evaluation")
                 continue
 
-            # Get transcript for this recording
-            transcript = db.query(Transcript).filter(Transcript.recording_id == evaluation.recording_id).first()
+            recording_id = evaluation.recording_id
+            transcript = transcript_map.get(recording_id)
 
             if not transcript:
-                logger.warning(f"No transcript found for recording {evaluation.recording_id}")
+                logger.warning(f"No transcript found for recording {recording_id}")
                 continue
 
-            # Get audio download URL
+            # Get audio download URL (only if recording exists)
             audio_url = None
             if evaluation.recording:
                 try:
-                    from app.services.storage import StorageService
-                    storage_service = StorageService()
                     blob_name = f"{evaluation.recording.company_id}/{evaluation.recording.file_name}"
                     audio_url = storage_service.get_signed_download_url(blob_name, expiration_minutes=60)
                 except Exception as e:

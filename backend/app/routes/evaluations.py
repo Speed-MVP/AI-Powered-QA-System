@@ -72,36 +72,36 @@ async def get_evaluation(
     return evaluation_dict
 
 
-@router.get("/{recording_id}/with-template")
+@router.get("/{evaluation_id}/with-template")
 async def get_evaluation_with_template(
-    recording_id: str,
+    evaluation_id: str,
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
     """Get evaluation results with full template details for human review"""
-    # First verify the recording belongs to the user's company
+    # Get evaluation
+    evaluation = db.query(Evaluation).filter(
+        Evaluation.id == evaluation_id
+    ).first()
+
+    if not evaluation:
+        raise HTTPException(status_code=404, detail="Evaluation not found")
+
+    # Verify the recording belongs to the user's company
     recording = db.query(Recording).filter(
-        Recording.id == recording_id,
+        Recording.id == evaluation.recording_id,
         Recording.company_id == current_user.company_id
     ).first()
 
     if not recording:
         raise HTTPException(status_code=404, detail="Recording not found")
 
-    # Get evaluation
-    evaluation = db.query(Evaluation).filter(
-        Evaluation.recording_id == recording_id
-    ).first()
-
-    if not evaluation:
-        raise HTTPException(status_code=404, detail="Evaluation not found")
-
     # Get policy template with criteria and rubric levels
     from sqlalchemy.orm import joinedload
     from app.models.policy_template import PolicyTemplate
 
     template = db.query(PolicyTemplate).options(
-        joinedload(PolicyTemplate.criteria).joinedload('rubric_levels')
+        joinedload(PolicyTemplate.evaluation_criteria).joinedload('rubric_levels')
     ).filter(
         PolicyTemplate.id == evaluation.policy_template_id,
         PolicyTemplate.company_id == current_user.company_id
@@ -165,7 +165,7 @@ async def get_evaluation_with_template(
                         for level in sorted(criterion.rubric_levels, key=lambda x: x.level_order)
                     ]
                 }
-                for criterion in template.criteria
+                for criterion in template.evaluation_criteria
             ]
         }
     }

@@ -141,45 +141,45 @@ export const useSEO = ({
 // Predefined SEO configurations for different pages
 export const pageSEO = {
   home: {
-    title: 'AI-Powered QA System | Intelligent Call Center Quality Assurance',
+    title: 'Qualitidex | Intelligent Call Center Quality Assurance',
     description: 'Transform your call center operations with AI-powered quality assurance. Upload recordings, get instant evaluations using custom policies. 90-97% cost reduction vs manual QA.',
     keywords: 'AI QA system, call center quality assurance, speech-to-text evaluation, automated QA, customer service evaluation, policy compliance, call center analytics',
     url: '/'
   },
   features: {
-    title: 'Features | AI-Powered QA System for Call Centers',
+    title: 'Features | Qualitidex for Call Centers',
     description: 'Discover powerful features including custom policy templates, real-time transcription, advanced analytics, and enterprise-grade security for comprehensive QA evaluation.',
     keywords: 'QA features, call center automation, policy templates, real-time analytics, enterprise security, batch processing',
     url: '/features'
   },
   pricing: {
-    title: 'Pricing | AI QA System - Affordable Call Center Quality Assurance',
+    title: 'Pricing | Qualitidex - Affordable Call Center Quality Assurance',
     description: 'Choose the perfect plan for your call center. Free trial available. Transparent pricing with no hidden fees. Scale from startup to enterprise.',
     keywords: 'QA pricing, call center pricing, AI evaluation pricing, subscription plans, free trial',
     url: '/pricing'
   },
   faq: {
-    title: 'FAQ | AI-Powered QA System - Frequently Asked Questions',
+    title: 'FAQ | Qualitidex - Frequently Asked Questions',
     description: 'Get answers to common questions about AI-powered quality assurance, implementation, security, pricing, and technical specifications.',
     keywords: 'QA FAQ, call center questions, AI evaluation help, implementation guide, security questions',
     url: '/faq'
   },
   signIn: {
-    title: 'Sign In | AI QA System',
+    title: 'Sign In | Qualitidex',
     description: 'Access your AI-powered quality assurance dashboard. Secure login for call center quality management.',
     keywords: 'sign in, login, QA dashboard, secure access',
     url: '/sign-in',
     noindex: true
   },
   dashboard: {
-    title: 'Dashboard | AI QA System',
+    title: 'Dashboard | Qualitidex',
     description: 'Monitor your call center quality assurance metrics, view evaluations, and manage policies from your personalized dashboard.',
     keywords: 'QA dashboard, evaluation results, quality metrics, policy management',
     url: '/dashboard',
     noindex: true
   },
   test: {
-    title: 'Test QA System | Upload Call Recordings for AI Evaluation',
+    title: 'Test Qualitidex | Upload Call Recordings for AI Evaluation',
     description: 'Upload call recordings and test our AI-powered quality assurance system. Get instant evaluations using advanced speech-to-text and LLM analysis.',
     keywords: 'test QA, upload recordings, AI evaluation demo, call analysis',
     url: '/test',

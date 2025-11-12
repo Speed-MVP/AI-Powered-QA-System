@@ -47,10 +47,10 @@ export function Home() {
             {/* Left Column - Text Content */}
             <div className="text-center lg:text-left">
               <div className="inline-flex items-center justify-center w-16 h-16 bg-gradient-to-br from-brand-500 to-brand-600 rounded-2xl mb-4 shadow-lg">
-                <span className="text-white font-bold text-2xl">AI</span>
+                <span className="text-white font-bold text-2xl">Q</span>
               </div>
               <h1 className="text-3xl md:text-4xl lg:text-5xl font-bold text-gray-900 dark:text-white mb-4 tracking-tight">
-                AI-Powered QA System
+                Qualitidex
               </h1>
               <p className="text-base md:text-lg text-gray-600 dark:text-gray-400 mb-4 max-w-2xl lg:max-w-none mx-auto lg:mx-0 leading-relaxed">
                 Transform your call center operations with intelligent quality assurance

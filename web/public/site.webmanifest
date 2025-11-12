@@ -1,6 +1,6 @@
 {
-  "name": "AI-Powered QA System",
-  "short_name": "AI QA System",
+  "name": "Qualitidex",
+  "short_name": "Qualitidex",
   "description": "Intelligent call center quality assurance platform",
   "start_url": "/",
   "display": "standalone",

@@ -24,10 +24,10 @@ export function Layout() {
             <div className="flex items-center flex-shrink-0">
               <Link to="/" className="flex items-center space-x-2">
                 <div className="w-8 h-8 bg-gradient-to-br from-brand-500 to-brand-600 rounded-lg flex items-center justify-center">
-                  <span className="text-white font-bold text-lg">AI</span>
+                  <span className="text-white font-bold text-lg">Q</span>
                 </div>
                 <span className="font-semibold text-gray-900 dark:text-white text-lg">
-                  QA System
+                  Qualitidex
                 </span>
               </Link>
             </div>
