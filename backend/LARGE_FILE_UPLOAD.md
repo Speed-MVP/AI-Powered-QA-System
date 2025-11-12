@@ -6,15 +6,34 @@ If you're experiencing `413 (Content Too Large)` errors when uploading files, th
 
 ## Solutions
 
-### Option 1: Use Signed URL Upload (Recommended for Large Files)
+### Option 1: Configure CORS on GCP Storage Bucket (Recommended for Large Files)
 
-For files larger than 32MB, use the signed URL upload method:
+To enable direct browser uploads to GCP Storage (bypassing Cloud Run's 32MB limit):
 
-1. Call `/api/recordings/signed-url` to get a signed upload URL
-2. Upload directly to GCP Storage using the signed URL
-3. Call `/api/recordings/upload` with the file URL
+1. **Run the configuration script:**
+   ```bash
+   cd backend
+   python configure_gcp_storage_cors.py
+   ```
 
-This bypasses the backend entirely for the file upload, avoiding the 32MB limit.
+2. **Or configure manually in GCP Console:**
+   - Go to [GCP Storage Console](https://console.cloud.google.com/storage/browser)
+   - Select your bucket
+   - Click "Configuration" tab
+   - Scroll to "CORS configuration"
+   - Add this configuration:
+   ```json
+   [
+     {
+       "origin": ["https://www.qualitidex.com", "https://qualitidex.com", "http://localhost:5173"],
+       "method": ["PUT", "POST", "GET", "HEAD", "DELETE"],
+       "responseHeader": ["Content-Type", "Content-Length", "x-goog-resumable"],
+       "maxAgeSeconds": 3600
+     }
+   ]
+   ```
+
+3. **After configuring CORS**, the frontend will automatically use signed URL uploads for files > 30MB.
 
 ### Option 2: Increase Cloud Run Request Size Limit
 
