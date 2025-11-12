@@ -133,8 +133,8 @@ class GeminiService:
             rag_results = None
             if RAG_AVAILABLE:
                 try:
-            rag_service = RAGService()
-            rag_results = rag_service.retrieve_relevant_policies(
+                    rag_service = RAGService()
+                    rag_results = rag_service.retrieve_relevant_policies(
                         transcript_text=transcript_text,
                         evaluation_criteria=criteria,
                         top_k=3  # Get top 3 most relevant policies
