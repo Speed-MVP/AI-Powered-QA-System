@@ -40,7 +40,7 @@ echo "Checking environment variables..."\n\
 [ -z "$GCP_PROJECT_ID" ] && echo "WARNING: GCP_PROJECT_ID not set"\n\
 [ -z "$JWT_SECRET" ] && echo "WARNING: JWT_SECRET not set"\n\
 echo "Testing Python import..."\n\
-if python -c "from app.main import app; print('Python import successful')" 2>&1; then\n\
+if python -c 'from app.main import app; print("Python import successful")' 2>&1; then\n\
   echo "Python import test passed"\n\
 else\n\
   echo "ERROR: Python import failed"\n\
