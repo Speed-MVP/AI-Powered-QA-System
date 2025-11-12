@@ -32,7 +32,6 @@ EXPOSE 8080
 
 # Create startup script to handle migrations and server startup gracefully
 RUN echo '#!/bin/sh\n\
-set -e\n\
 echo "=== Starting Application ==="\n\
 echo "PORT: ${PORT:-8080}"\n\
 echo "Checking environment variables..."\n\
@@ -40,10 +39,10 @@ echo "Checking environment variables..."\n\
 [ -z "$GCP_PROJECT_ID" ] && echo "WARNING: GCP_PROJECT_ID not set"\n\
 [ -z "$JWT_SECRET" ] && echo "WARNING: JWT_SECRET not set"\n\
 echo "Running database migrations..."\n\
-if alembic upgrade head 2>&1; then\n\
+if timeout 30 alembic upgrade head 2>&1; then\n\
   echo "Migrations completed successfully"\n\
 else\n\
-  echo "WARNING: Database migrations failed. Continuing anyway..."\n\
+  echo "WARNING: Database migrations failed or timed out. Continuing anyway..."\n\
   echo "The application will start but database operations may fail."\n\
 fi\n\
 echo "Starting FastAPI server on port ${PORT:-8080}..."\n\

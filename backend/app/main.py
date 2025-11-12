@@ -83,7 +83,16 @@ async def general_exception_handler(request: Request, exc: Exception):
 @app.on_event("startup")
 async def startup_event():
     logger.info("Starting up FastAPI server...")
-    init_db()
+    logger.info(f"Environment: {settings.environment}")
+    logger.info(f"Database URL configured: {'Yes' if settings.database_url != 'postgresql://placeholder:placeholder@localhost:5432/placeholder' else 'No (using placeholder)'}")
+    logger.info(f"GCP Project ID configured: {'Yes' if settings.gcp_project_id != 'placeholder-project' else 'No (using placeholder)'}")
+    logger.info(f"JWT Secret configured: {'Yes' if settings.jwt_secret != 'placeholder-jwt-secret-that-is-long-enough-for-validation-but-should-be-replaced' else 'No (using placeholder)'}")
+    try:
+        init_db()
+        logger.info("Database initialized successfully")
+    except Exception as e:
+        logger.error(f"Failed to initialize database: {e}")
+        logger.warning("Application will continue but database operations may fail")
 
 @app.on_event("shutdown")
 async def shutdown_event():
