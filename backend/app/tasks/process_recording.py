@@ -35,8 +35,7 @@ async def process_recording_task(recording_id: str):
         # Step 1: Transcribe
         logger.info(f"Transcribing {recording_id}...")
         deepgram = DeepgramService()
-        # Explicitly disable alignment for faster processing
-        transcript_data = await deepgram.transcribe(recording.file_url, use_forced_alignment=False)
+        transcript_data = await deepgram.transcribe(recording.file_url)
         
         # Save transcript
         transcript = Transcript(

@@ -12,13 +12,9 @@ class DeepgramService:
         self.api_key = settings.deepgram_api_key
         self.base_url = "https://api.deepgram.com/v1/listen"
     
-    async def transcribe(self, file_url: str, use_forced_alignment: Optional[bool] = None):
-        """Transcribe audio with diarization"""
-        # Use configuration setting if not explicitly specified
-        if use_forced_alignment is None:
-            use_forced_alignment = settings.enable_alignment
-
-        logger.info(f"Transcription starting - alignment enabled: {use_forced_alignment}")
+    async def transcribe(self, file_url: str):
+        """Transcribe audio with diarization (alignment removed)"""
+        logger.info("Transcription starting - alignment disabled/removed")
 
         headers = {
             "Authorization": f"Token {self.api_key}",
@@ -76,27 +72,6 @@ class DeepgramService:
                 # Extract confidence
                 confidence = data["results"]["channels"][0].get("alternatives", [{}])[0].get("confidence", 0)
 
-                # Phase 2: Forced Alignment for precise timestamps (optional)
-                aligned_segments = diarized_segments
-                if use_forced_alignment:
-                    logger.info("Starting forced alignment...")
-                    try:
-                        # Lazy import to avoid importing heavy/optional deps at startup
-                        from app.services.alignment import AlignmentService  # type: ignore
-                        alignment_service = AlignmentService()
-                        alignment_result = await alignment_service.align_transcript(
-                            audio_url=file_url,
-                            deepgram_transcript=transcript,
-                            deepgram_segments=diarized_segments
-                        )
-                        aligned_segments = alignment_result.get("aligned_segments", diarized_segments)
-                        logger.info(f"Forced alignment completed with {len(aligned_segments)} segments")
-                    except Exception as e:
-                        logger.warning(f"Forced alignment failed: {e}, using Deepgram segments")
-                        aligned_segments = diarized_segments
-                else:
-                    logger.info("Alignment disabled - using Deepgram segments directly")
-
                 # Extract sentiment analysis (voice-based tone detection)
                 # NOW: Capture sentiment for BOTH caller and agent
                 sentiment_data = []
@@ -120,8 +95,7 @@ class DeepgramService:
                 
                 return {
                     "transcript": transcript,
-                    "diarized_segments": aligned_segments,  # Phase 2: Use aligned segments with precise timestamps
-                    "original_diarized_segments": diarized_segments,  # Keep original for comparison
+                    "diarized_segments": diarized_segments,
                     "confidence": confidence,
                     "sentiment_analysis": sentiment_data,  # BOTH caller and agent
                     "voice_baselines": voice_baselines  # NEW: Natural voice characteristics
