@@ -16,9 +16,16 @@ import re
 import logging
 import uuid
 import os
-from openpyxl import load_workbook
 
 logger = logging.getLogger(__name__)
+
+# Optional import for Excel support
+try:
+    from openpyxl import load_workbook
+    OPENPYXL_AVAILABLE = True
+except ImportError:
+    OPENPYXL_AVAILABLE = False
+    logger.warning("openpyxl package not installed. Excel file import will not be available.")
 
 
 @dataclass
@@ -235,6 +242,12 @@ class CSVImportService:
             raise
 
     def _parse_xlsx_file(self, file_path: str) -> List[Dict[str, str]]:
+        if not OPENPYXL_AVAILABLE:
+            raise ImportError(
+                "openpyxl package is required for Excel file import. "
+                "Install it with: pip install openpyxl"
+            )
+        
         rows: List[Dict[str, str]] = []
         workbook = None
         try:
@@ -464,6 +477,11 @@ class CSVImportService:
                     next(reader, None)
                     return sum(1 for row in reader if any(row))
             if file_format == 'xlsx':
+                if not OPENPYXL_AVAILABLE:
+                    raise ImportError(
+                        "openpyxl package is required for Excel file import. "
+                        "Install it with: pip install openpyxl"
+                    )
                 workbook = None
                 try:
                     workbook = load_workbook(filename=file_path, read_only=True, data_only=True)

@@ -10,11 +10,18 @@ from app.services.fine_tuning import FineTuningService
 from typing import Dict, Any, Optional, List
 import logging
 from datetime import datetime, timedelta
-import schedule
 import threading
 import time
 
 logger = logging.getLogger(__name__)
+
+# Optional import for scheduling (not required for basic functionality)
+try:
+    import schedule
+    SCHEDULE_AVAILABLE = True
+except ImportError:
+    SCHEDULE_AVAILABLE = False
+    logger.warning("schedule package not installed. Continuous learning scheduling will be disabled.")
 
 
 class ContinuousLearningService:
@@ -33,8 +40,18 @@ class ContinuousLearningService:
         """
         Start the continuous learning process.
         This would run as a background service in production.
+        Note: Scheduling requires 'schedule' package. Without it, only manual retraining is available.
         """
         try:
+            if not SCHEDULE_AVAILABLE:
+                logger.warning("schedule package not available. Continuous learning scheduling disabled.")
+                return {
+                    "success": False,
+                    "status": "disabled",
+                    "error": "schedule package not installed. Install it to enable automatic scheduling.",
+                    "note": "Manual retraining is still available via trigger_manual_retraining()"
+                }
+
             # Schedule weekly retraining
             schedule.every(self.retraining_interval_days).days.do(self._perform_weekly_retraining)
 
@@ -57,6 +74,10 @@ class ContinuousLearningService:
 
     def _run_continuous_learning(self):
         """Background thread for continuous learning."""
+        if not SCHEDULE_AVAILABLE:
+            logger.warning("Continuous learning thread not started - schedule package not available")
+            return
+
         logger.info("Continuous learning thread started")
 
         while True:
