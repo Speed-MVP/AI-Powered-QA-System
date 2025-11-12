@@ -37,7 +37,7 @@ class Settings(BaseSettings):
     log_level: str = "INFO"
 
     # CORS
-    cors_origins: str = "http://localhost:5173,https://ai-powered-qa-system.vercel.app,https://qualitidex.com,https://www.qualitidex.com"
+    cors_origins: str = "http://localhost:5173,https://ai-powered-qa-system.vercel.app,https://qualitidex.com,https://www.qualitidex.com,https://api.qualitidex.com"
 
     # Alignment removed
 

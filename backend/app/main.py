@@ -4,6 +4,8 @@ from fastapi.middleware.trustedhost import TrustedHostMiddleware
 from fastapi.responses import JSONResponse
 from fastapi.exceptions import RequestValidationError
 from starlette.exceptions import HTTPException as StarletteHTTPException
+from starlette.middleware.base import BaseHTTPMiddleware
+from starlette.requests import Request as StarletteRequest
 from app.config import settings
 from app.database import init_db
 from app.routes import (
@@ -40,15 +42,42 @@ cors_origins = [
     if origin.strip()
 ]
 
+# Add common variations of the origin (with and without www)
+# This helps catch cases where the origin might be slightly different
+enhanced_origins = set(cors_origins)
+for origin in cors_origins:
+    if origin.startswith("https://"):
+        # Add www version if not present
+        if "www." not in origin:
+            enhanced_origins.add(origin.replace("https://", "https://www."))
+        # Add non-www version if www is present
+        elif origin.startswith("https://www."):
+            enhanced_origins.add(origin.replace("https://www.", "https://"))
+
+cors_origins = list(enhanced_origins)
+
 logger.info(f"CORS origins configured: {cors_origins}")
 
+# Add CORS logging middleware to help debug CORS issues
+class CORSLoggingMiddleware(BaseHTTPMiddleware):
+    async def dispatch(self, request: StarletteRequest, call_next):
+        origin = request.headers.get("origin")
+        if origin:
+            logger.debug(f"Incoming request from origin: {origin}, path: {request.url.path}, method: {request.method}")
+            if origin not in cors_origins:
+                logger.warning(f"Request from origin '{origin}' not in allowed CORS origins: {cors_origins}")
+        response = await call_next(request)
+        return response
+
+app.add_middleware(CORSLoggingMiddleware)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=cors_origins,  # Frontend URLs from environment variable
     allow_credentials=True,
-    allow_methods=["*"],
+    allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS", "PATCH"],
     allow_headers=["*"],
     expose_headers=["*"],
+    max_age=3600,  # Cache preflight requests for 1 hour
 )
 
 app.add_middleware(TrustedHostMiddleware, allowed_hosts=["*"])

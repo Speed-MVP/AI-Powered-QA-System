@@ -108,12 +108,16 @@ DATABASE_URL=postgresql://user:password@host:5432/dbname
 CORS_ORIGINS=https://your-app.vercel.app
 ```
 
-**Multiple frontends:**
+**Multiple frontends (including www and non-www variants):**
 ```
-CORS_ORIGINS=https://your-app.vercel.app,https://staging.vercel.app,http://localhost:5173
+CORS_ORIGINS=https://qualitidex.com,https://www.qualitidex.com,http://localhost:5173
 ```
 
-**Note**: No spaces after commas
+**Important**: 
+- Include both `www` and non-`www` versions of your domain (e.g., `https://qualitidex.com` AND `https://www.qualitidex.com`)
+- No spaces after commas
+- The backend will automatically add variations, but it's best to explicitly include all domains you use
+- If you get CORS errors, check that your frontend's exact origin URL is in this list
 
 ## Verification
 
