@@ -15,7 +15,7 @@ from app.models.evaluation import Evaluation
 from app.models.transcript import Transcript
 from app.middleware.auth import get_current_user
 from app.models.user import User
-from app.schemas.human_review import HumanReviewSubmit
+from app.schemas.human_review import HumanReviewCreate
 from typing import Dict, Any, List
 import logging
 
@@ -313,7 +313,7 @@ async def create_test_human_review(
 @router.post("/human-reviews/{review_id}/submit")
 async def submit_human_review(
     review_id: str,
-    review_data: HumanReviewSubmit,
+    review_data: HumanReviewCreate,
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):

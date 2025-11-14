@@ -20,6 +20,7 @@ from app.routes import (
     teams,
     agents,
     imports,
+    human_reviews,
 )
 import logging
 
@@ -155,6 +156,7 @@ app.include_router(supervisor.router, prefix="/api", tags=["supervisor"])
 app.include_router(teams.router, prefix="/api", tags=["teams"])
 app.include_router(agents.router, prefix="/api", tags=["agents"])
 app.include_router(imports.router, prefix="/api", tags=["bulk-import"])
+app.include_router(human_reviews.router, prefix="/api/human_reviews", tags=["human-reviews"])
 
 @app.get("/")
 async def root():
