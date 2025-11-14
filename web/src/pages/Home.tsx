@@ -46,11 +46,17 @@ export function Home() {
           <div className="grid lg:grid-cols-2 gap-12 items-center">
             {/* Left Column - Text Content */}
             <div className="text-center lg:text-left">
-              <div className="inline-flex items-center justify-center w-16 h-16 bg-gradient-to-br from-brand-500 to-brand-600 rounded-2xl mb-4 shadow-lg">
-                <span className="text-white font-bold text-2xl">AI</span>
+              <div className="inline-flex items-center justify-center mb-4">
+                <img
+                  src="/Logo.svg"
+                  alt="Qualitidex"
+                  className="h-16 w-auto drop-shadow-lg"
+                  loading="lazy"
+                  decoding="async"
+                />
               </div>
               <h1 className="text-3xl md:text-4xl lg:text-5xl font-bold text-gray-900 dark:text-white mb-4 tracking-tight">
-                AI-Powered QA System
+                Qualitidex
               </h1>
               <p className="text-base md:text-lg text-gray-600 dark:text-gray-400 mb-4 max-w-2xl lg:max-w-none mx-auto lg:mx-0 leading-relaxed">
                 Transform your call center operations with intelligent quality assurance
@@ -60,7 +66,7 @@ export function Home() {
               </p>
               <div className="flex flex-col sm:flex-row gap-4 justify-center lg:justify-start">
                 <Link
-                  to="/test"
+                  to="/demo"
                   className="inline-flex items-center justify-center px-8 py-4 bg-brand-500 text-white rounded-lg font-semibold hover:bg-brand-600 shadow-lg hover:shadow-xl hover:-translate-y-0.5 transition-all duration-200"
                 >
                   Get Started
@@ -326,7 +332,7 @@ export function Home() {
           </p>
           <div className="flex flex-col sm:flex-row gap-4 justify-center">
             <Link
-              to="/test"
+              to="/demo"
               className="inline-flex items-center justify-center px-8 py-4 bg-white text-brand-600 rounded-lg font-semibold hover:bg-gray-100 transition-colors shadow-lg"
             >
               Start Free Trial

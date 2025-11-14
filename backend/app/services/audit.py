@@ -400,3 +400,12 @@ class AuditService:
             return {"success": False, "error": str(e)}
         finally:
             db.close()
+
+
+
+
+
+
+
+
+

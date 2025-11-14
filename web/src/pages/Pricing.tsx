@@ -390,7 +390,7 @@ export function Pricing() {
                   </ul>
                 </div>
                 <div>
-                  <h4 className="font-semibold text-green-700 dark:text-green-300 mb-3">With AI QA System:</h4>
+                  <h4 className="font-semibold text-green-700 dark:text-green-300 mb-3">With Qualitidex:</h4>
                   <ul className="space-y-2 text-sm text-green-700 dark:text-green-300">
                     <li>• 5 QA specialists needed</li>
                     <li>• ₱299,000 monthly cost</li>

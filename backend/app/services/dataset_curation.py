@@ -4,14 +4,14 @@ Phase 3: Fine-Tuning & Self-Learning
 """
 
 from app.database import SessionLocal
-from app.models.human_review import HumanReview, FineTuningDataset, FineTuningSample, ModelPerformance
+from app.models.human_review import HumanReview, FineTuningDataset, FineTuningSample, ModelPerformance, ReviewStatus
 from app.models.evaluation import Evaluation
 from app.models.transcript import Transcript
 from typing import List, Dict, Any, Optional, Tuple
 import logging
 from datetime import datetime, timedelta
-import numpy as np
-from sklearn.model_selection import train_test_split
+import random
+import statistics
 
 logger = logging.getLogger(__name__)
 
@@ -52,8 +52,10 @@ class DatasetCurationService:
             completed_reviews = db.query(HumanReview).filter(HumanReview.review_status == 'completed').all()
 
             if completed_reviews:
-                avg_accuracy_rating = np.mean([r.ai_score_accuracy for r in completed_reviews])
-                avg_difficulty = np.mean([r.difficulty_rating for r in completed_reviews if r.difficulty_rating])
+                accuracy_vals = [r.ai_score_accuracy for r in completed_reviews if r.ai_score_accuracy is not None]
+                difficulty_vals = [r.difficulty_rating for r in completed_reviews if r.difficulty_rating is not None]
+                avg_accuracy_rating = statistics.mean(accuracy_vals) if accuracy_vals else 0.0
+                avg_difficulty = statistics.mean(difficulty_vals) if difficulty_vals else 0.0
             else:
                 avg_accuracy_rating = 0.0
                 avg_difficulty = 0.0
@@ -199,38 +201,26 @@ class DatasetCurationService:
                 sample.split = "train"
             return
 
-        # Stratify by quality score to ensure balanced splits
-        quality_scores = [sample.quality_score or 3.0 for sample in samples]
+        # Simple random split into train/validation/test (80/10/10) without heavy deps
+        rng = random.Random(42)
+        shuffled = samples[:]
+        rng.shuffle(shuffled)
 
-        # Create stratified split
-        try:
-            train_val, test = train_test_split(
-                samples, test_size=0.1, stratify=quality_scores, random_state=42
-            )
-            train, val = train_test_split(
-                train_val, test_size=0.111, stratify=[s.quality_score or 3.0 for s in train_val], random_state=42
-            )
+        n = len(shuffled)
+        test_count = max(1, int(round(n * 0.10)))
+        val_count = max(1, int(round(n * 0.10)))
+        train_count = max(0, n - test_count - val_count)
 
-            # Update splits in database
-            for sample in train:
-                sample.split = "train"
-            for sample in val:
-                sample.split = "validation"
-            for sample in test:
-                sample.split = "test"
+        train = shuffled[:train_count]
+        val = shuffled[train_count:train_count + val_count]
+        test = shuffled[train_count + val_count:]
 
-        except ValueError:
-            # Fallback to random split if stratification fails
-            logger.warning("Stratification failed, using random split")
-            train_val, test = train_test_split(samples, test_size=0.1, random_state=42)
-            train, val = train_test_split(train_val, test_size=0.111, random_state=42)
-
-            for sample in train:
-                sample.split = "train"
-            for sample in val:
-                sample.split = "validation"
-            for sample in test:
-                sample.split = "test"
+        for sample in train:
+            sample.split = "train"
+        for sample in val:
+            sample.split = "validation"
+        for sample in test:
+            sample.split = "test"
 
     def _extract_call_metadata(self, evaluation: Evaluation, transcript: Transcript) -> Dict[str, Any]:
         """Extract call metadata for fine-tuning context."""
@@ -297,13 +287,17 @@ class DatasetCurationService:
             return 0.0
 
         # Factors: AI accuracy rating, reviewer consistency, difficulty balance
-        avg_accuracy = np.mean([r.ai_score_accuracy for r in completed_reviews])
+        accuracy_vals = [r.ai_score_accuracy for r in completed_reviews if r.ai_score_accuracy is not None]
+        avg_accuracy = statistics.mean(accuracy_vals) if accuracy_vals else 0.0
 
         # Check difficulty distribution (prefer balanced)
-        difficulties = [r.difficulty_rating for r in completed_reviews if r.difficulty_rating]
-        if difficulties:
-            difficulty_std = np.std(difficulties)
-            difficulty_balance = 1.0 / (1.0 + difficulty_std)  # Lower std = better balance
+        difficulties = [r.difficulty_rating for r in completed_reviews if r.difficulty_rating is not None]
+        if difficulties and len(difficulties) > 1:
+            try:
+                difficulty_std = statistics.pstdev(difficulties)
+            except statistics.StatisticsError:
+                difficulty_std = 0.0
+            difficulty_balance = 1.0 / (1.0 + float(difficulty_std))  # Lower std = better balance
         else:
             difficulty_balance = 0.5
 
@@ -311,3 +305,85 @@ class DatasetCurationService:
         quality_score = (avg_accuracy * 0.7 + difficulty_balance * 0.3)
 
         return round(float(quality_score), 2)
+
+    def add_review_to_active_dataset(self, review_id: str, db):
+        """Add a completed human review to the active fine-tuning dataset for real-time learning."""
+        try:
+            review = db.query(HumanReview).filter(HumanReview.id == review_id).first()
+            if not review or review.review_status != ReviewStatus.completed:
+                logger.warning(f"Review {review_id} not found or not completed")
+                return
+
+            # Get evaluation and transcript
+            evaluation = db.query(Evaluation).filter(Evaluation.id == review.evaluation_id).first()
+            transcript = db.query(Transcript).filter(Transcript.recording_id == evaluation.recording_id).first()
+            if not evaluation or not transcript:
+                logger.warning(f"Evaluation or transcript not found for review {review_id}")
+                return
+
+            # Get or create active dataset
+            active_dataset = db.query(FineTuningDataset).filter(FineTuningDataset.is_active == True).first()
+            if not active_dataset:
+                # Create active learning dataset
+                active_dataset = FineTuningDataset(
+                    name="Active_Learning_Dataset",
+                    description="Real-time learning from human reviews",
+                    model_version="gemini-1.5-pro",
+                    is_active=True
+                )
+                db.add(active_dataset)
+                db.flush()
+                logger.info(f"Created new active dataset {active_dataset.id}")
+
+            # Check if sample already exists
+            existing_sample = db.query(FineTuningSample).filter(
+                FineTuningSample.source_evaluation_id == evaluation.id
+            ).first()
+            if existing_sample:
+                logger.info(f"Sample already exists for evaluation {evaluation.id}")
+                return
+
+            # Extract violations from evaluation
+            violations = []
+            if evaluation.llm_analysis and "violations" in evaluation.llm_analysis:
+                violations = evaluation.llm_analysis["violations"]
+
+            # Create sample
+            sample = FineTuningSample(
+                dataset_id=active_dataset.id,
+                transcript_text=transcript.transcript_text,
+                diarized_segments=transcript.diarized_segments,
+                sentiment_analysis=transcript.sentiment_analysis,
+                voice_baselines=getattr(transcript, 'voice_baselines', None),
+                call_metadata={
+                    "source": "human_review",
+                    "evaluation_id": evaluation.id,
+                    "ai_confidence": evaluation.confidence_score,
+                    "duration_seconds": 300  # Placeholder
+                },
+                policy_template_id=evaluation.policy_template_id,
+                expected_category_scores=review.human_category_scores,
+                expected_violations=violations,
+                expected_overall_score=review.human_overall_score,
+                source_evaluation_id=evaluation.id,
+                quality_score=review.ai_score_accuracy,
+                difficulty_level="medium",  # Could be calculated
+                split="train",
+                used_in_training=False
+            )
+            db.add(sample)
+            db.flush()
+
+            # Update dataset statistics
+            active_dataset.total_samples += 1
+            active_dataset.training_samples += 1
+
+            db.commit()
+            logger.info(f"Added human review {review_id} to active dataset {active_dataset.id} as sample {sample.id}")
+
+        except Exception as e:
+            logger.error(f"Error adding review {review_id} to dataset: {e}")
+            db.rollback()
+            raise
+
+

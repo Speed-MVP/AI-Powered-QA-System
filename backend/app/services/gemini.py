@@ -2,7 +2,7 @@ from app.config import settings
 from sqlalchemy.orm import Session
 from app.database import SessionLocal
 from app.models.evaluation_criteria import EvaluationCriteria
-from app.services.rag import RAGService  # Phase 1: RAG retrieval layer
+from app.models.evaluation import Evaluation
 from typing import Dict, Any, Optional, List
 import logging
 import json
@@ -15,6 +15,17 @@ try:
 except ImportError:
     GEMINI_AVAILABLE = False
     logger.warning("google-generativeai not installed. Gemini service will not work.")
+
+try:
+    from app.services.rag import RAGService
+    RAG_AVAILABLE = True
+except ImportError:
+    RAG_AVAILABLE = False
+    logger.warning("RAG service not available. Policy context will not be retrieved.")
+
+from app.models.human_review import HumanReview, ReviewStatus
+from app.models.transcript import Transcript
+from app.models.category_score import CategoryScore
 
 
 class GeminiService:
@@ -119,16 +130,32 @@ class GeminiService:
                 raise Exception(f"No evaluation criteria found for template {policy_template_id}")
 
             # Phase 1: RAG Retrieval - Get relevant policy snippets for the call topic
-            # Reduced top_k from 5 to 3 for faster processing
-            rag_service = RAGService()
-            rag_results = rag_service.retrieve_relevant_policies(
-                transcript=transcript_text,
+            rag_results = None
+            if RAG_AVAILABLE:
+                try:
+                    rag_service = RAGService()
+                    rag_results = rag_service.retrieve_relevant_policies(
+                        transcript_text=transcript_text,
+                        evaluation_criteria=criteria,
+                        top_k=3  # Get top 3 most relevant policies
+                    )
+                    logger.info(f"RAG retrieval completed: {len(rag_results.get('retrieved_policies', []))} policies retrieved using {rag_results.get('method', 'unknown')} method")
+                except Exception as e:
+                    logger.warning(f"RAG retrieval failed, continuing without policy context: {e}")
+                    rag_results = None
+            else:
+                logger.debug("RAG service not available, skipping policy context retrieval")
+
+            # Phase 2: Retrieve similar past human-reviewed evaluations for in-context learning
+            human_review_examples = self._retrieve_similar_human_reviews(
+                transcript_text=transcript_text,
                 policy_template_id=policy_template_id,
-                top_k=3  # Reduced from 5 to 3 for faster processing
+                db=db,
+                max_examples=3  # Limit to 3 examples to keep prompt size manageable
             )
 
-            # Build prompt with retrieved policy context and rule engine results
-            prompt = self._build_prompt(transcript_text, criteria, sentiment_analysis, rag_results, rule_results)
+            # Build prompt with retrieved policy context, human review examples, and rule engine results
+            prompt = self._build_prompt(transcript_text, criteria, sentiment_analysis, rag_results, rule_results, human_review_examples)
 
             # Phase 4: Call selected model (Flash or Pro)
             if model is None:
@@ -199,7 +226,159 @@ class GeminiService:
         finally:
             db.close()
     
-    def _build_prompt(self, transcript: str, criteria: list, sentiment_analysis: Optional[List[Dict[str, Any]]] = None, rag_results: Optional[Dict[str, Any]] = None, rule_results: Optional[Dict[str, Any]] = None) -> str:
+    def _retrieve_similar_human_reviews(
+        self,
+        transcript_text: str,
+        policy_template_id: str,
+        db: Session,
+        max_examples: int = 3
+    ) -> List[Dict[str, Any]]:
+        """
+        Retrieve similar past human-reviewed evaluations for in-context learning.
+        Uses keyword-based similarity to find similar transcripts.
+        
+        Args:
+            transcript_text: Current transcript text
+            policy_template_id: Policy template ID
+            db: Database session
+            max_examples: Maximum number of examples to retrieve
+            
+        Returns:
+            List of human review examples with transcript snippets, AI scores, and human scores
+        """
+        try:
+            # Get completed human reviews for the same policy template
+            human_reviews = db.query(HumanReview).join(
+                Evaluation, HumanReview.evaluation_id == Evaluation.id
+            ).filter(
+                Evaluation.policy_template_id == policy_template_id,
+                HumanReview.review_status == ReviewStatus.completed,
+                HumanReview.human_overall_score.isnot(None)  # Only reviews with human scores
+            ).order_by(
+                HumanReview.updated_at.desc()  # Most recent first
+            ).limit(20).all()  # Get more candidates, then filter by similarity
+            
+            if not human_reviews:
+                logger.debug("No human-reviewed evaluations found for in-context learning")
+                return []
+            
+            # Extract keywords from current transcript for similarity matching
+            import re
+            if RAG_AVAILABLE:
+                try:
+                    rag_service = RAGService()
+                    current_keywords = rag_service._extract_keywords(transcript_text[:3000])
+                except Exception:
+                    # Fallback to simple keyword extraction
+                    words = re.findall(r'\b\w+\b', transcript_text.lower()[:3000])
+                    stop_words = {'the', 'a', 'an', 'and', 'or', 'but', 'in', 'on', 'at', 'to', 'for', 'of', 'with', 'by', 'is', 'was', 'are', 'were', 'be', 'been', 'have', 'has', 'had', 'do', 'does', 'did', 'will', 'would', 'should', 'could', 'may', 'might', 'must', 'can', 'this', 'that', 'these', 'those', 'i', 'you', 'he', 'she', 'it', 'we', 'they'}
+                    current_keywords = set([w for w in words if len(w) > 3 and w not in stop_words])[:30]
+            else:
+                # Simple keyword extraction
+                words = re.findall(r'\b\w+\b', transcript_text.lower()[:3000])
+                stop_words = {'the', 'a', 'an', 'and', 'or', 'but', 'in', 'on', 'at', 'to', 'for', 'of', 'with', 'by', 'is', 'was', 'are', 'were', 'be', 'been', 'have', 'has', 'had', 'do', 'does', 'did', 'will', 'would', 'should', 'could', 'may', 'might', 'must', 'can', 'this', 'that', 'these', 'those', 'i', 'you', 'he', 'she', 'it', 'we', 'they'}
+                current_keywords = set([w for w in words if len(w) > 3 and w not in stop_words])[:30]
+            
+            # Score each human review by similarity
+            scored_reviews = []
+            stop_words = {'the', 'a', 'an', 'and', 'or', 'but', 'in', 'on', 'at', 'to', 'for', 'of', 'with', 'by', 'is', 'was', 'are', 'were', 'be', 'been', 'have', 'has', 'had', 'do', 'does', 'did', 'will', 'would', 'should', 'could', 'may', 'might', 'must', 'can', 'this', 'that', 'these', 'those', 'i', 'you', 'he', 'she', 'it', 'we', 'they'}
+            
+            for review in human_reviews:
+                # Get transcript for this review
+                evaluation = db.query(Evaluation).filter(Evaluation.id == review.evaluation_id).first()
+                if not evaluation:
+                    continue
+                
+                transcript = db.query(Transcript).filter(Transcript.recording_id == evaluation.recording_id).first()
+                if not transcript or not transcript.transcript_text:
+                    continue
+                
+                # Extract keywords from past transcript
+                past_transcript = transcript.transcript_text[:3000]  # Limit length
+                if RAG_AVAILABLE:
+                    try:
+                        rag_service = RAGService()
+                        past_keywords = rag_service._extract_keywords(past_transcript)
+                    except Exception:
+                        words = re.findall(r'\b\w+\b', past_transcript.lower())
+                        past_keywords = set([w for w in words if len(w) > 3 and w not in stop_words])[:30]
+                else:
+                    words = re.findall(r'\b\w+\b', past_transcript.lower())
+                    past_keywords = set([w for w in words if len(w) > 3 and w not in stop_words])[:30]
+                
+                # Calculate Jaccard similarity
+                intersection = len(current_keywords.intersection(past_keywords))
+                union = len(current_keywords.union(past_keywords))
+                similarity = intersection / union if union > 0 else 0.0
+                
+                # Get AI category scores
+                ai_category_scores = {}
+                ai_scores = db.query(CategoryScore).filter(CategoryScore.evaluation_id == evaluation.id).all()
+                for score in ai_scores:
+                    ai_category_scores[score.category_name] = score.score
+                
+                # Get human category scores
+                human_category_scores = review.human_category_scores or {}
+                
+                # Calculate score difference (higher difference = more informative example)
+                score_difference = abs(evaluation.overall_score - (review.human_overall_score or evaluation.overall_score))
+                
+                scored_reviews.append({
+                    "review": review,
+                    "evaluation": evaluation,
+                    "transcript": transcript,
+                    "similarity": similarity,
+                    "score_difference": score_difference,
+                    "ai_category_scores": ai_category_scores,
+                    "human_category_scores": human_category_scores,
+                    "ai_overall_score": evaluation.overall_score,
+                    "human_overall_score": review.human_overall_score
+                })
+            
+            # Sort by similarity (descending) and score difference (descending) - prefer similar but informative examples
+            scored_reviews.sort(key=lambda x: (x["similarity"], x["score_difference"]), reverse=True)
+            
+            # Get top examples (filter by minimum similarity threshold)
+            min_similarity = 0.1  # At least 10% keyword overlap
+            top_examples = [ex for ex in scored_reviews if ex["similarity"] >= min_similarity][:max_examples]
+            
+            # If we don't have enough examples with similarity, just take the most recent ones
+            if len(top_examples) < max_examples:
+                top_examples = scored_reviews[:max_examples]
+            
+            # Format examples
+            examples = []
+            for example in top_examples:
+                transcript_snippet = example["transcript"].transcript_text[:1000]  # First 1000 chars
+                
+                # Format category scores comparison
+                category_comparison = []
+                all_categories = set(list(example["ai_category_scores"].keys()) + list(example["human_category_scores"].keys()))
+                for category in sorted(all_categories):
+                    ai_score = example["ai_category_scores"].get(category, "N/A")
+                    human_score = example["human_category_scores"].get(category, "N/A")
+                    if ai_score != human_score:
+                        category_comparison.append(f"  - {category}: AI={ai_score}, Human={human_score} (CORRECTED)")
+                    else:
+                        category_comparison.append(f"  - {category}: AI={ai_score}, Human={human_score}")
+                
+                examples.append({
+                    "transcript_snippet": transcript_snippet,
+                    "ai_overall_score": example["ai_overall_score"],
+                    "human_overall_score": example["human_overall_score"],
+                    "category_comparison": "\n".join(category_comparison) if category_comparison else "No category scores available",
+                    "ai_feedback": example["review"].ai_recommendation or "No feedback",
+                    "similarity": example["similarity"]
+                })
+            
+            logger.info(f"Retrieved {len(examples)} human review examples for in-context learning")
+            return examples
+            
+        except Exception as e:
+            logger.warning(f"Failed to retrieve human review examples: {e}")
+            return []
+    
+    def _build_prompt(self, transcript: str, criteria: list, sentiment_analysis: Optional[List[Dict[str, Any]]] = None, rag_results: Optional[Dict[str, Any]] = None, rule_results: Optional[Dict[str, Any]] = None, human_review_examples: Optional[List[Dict[str, Any]]] = None) -> str:
         """Build LLM prompt with rubric-based evaluation"""
         criteria_text_parts = []
         
@@ -238,8 +417,15 @@ class GeminiService:
         # Phase 1: Add RAG-retrieved policy context
         policy_context = ""
         if rag_results and rag_results.get("retrieved_policies"):
-            rag_service = RAGService()
-            policy_context = rag_service.format_policy_context(rag_results["retrieved_policies"])
+            policy_context = "\n\nRELEVANT POLICY CONTEXT (Use this context to better understand the evaluation criteria):\n"
+            for i, policy in enumerate(rag_results["retrieved_policies"], 1):
+                similarity_score = rag_results.get("similarity_scores", [])
+                score = similarity_score[i-1] if i-1 < len(similarity_score) else 0.0
+                policy_context += f"\n{i}. {policy['category_name']} (Relevance: {score:.2%}):\n"
+                policy_context += f"   {policy['evaluation_prompt']}\n"
+                policy_context += f"   Weight: {policy['weight']}%, Passing Score: {policy['passing_score']}/100\n"
+            policy_context += "\nNOTE: Use the above policy context to provide more context-aware evaluations. "
+            policy_context += "The relevance scores indicate how closely each policy matches the call content.\n"
 
         # Phase 2: Add rule engine violations (CRITICAL - these are confirmed violations)
         rule_violations_text = ""
@@ -253,9 +439,30 @@ class GeminiService:
 
             rule_violations_text += "REMINDER: Rule violations are DETERMINISTIC and CONFIRMED. Match performance to lower rubric levels that reflect these violations.\n"
 
+        # Phase 3: Add human review examples for in-context learning (few-shot learning)
+        human_examples_text = ""
+        if human_review_examples and len(human_review_examples) > 0:
+            human_examples_text = "\n\nLEARNING FROM PAST HUMAN EVALUATIONS (Use these examples to understand how humans evaluate calls):\n"
+            human_examples_text += "These are real examples of how human reviewers evaluated similar calls. Use them to guide your evaluation.\n\n"
+            
+            for i, example in enumerate(human_review_examples, 1):
+                human_examples_text += f"EXAMPLE {i} (Similarity: {example['similarity']:.1%}):\n"
+                human_examples_text += f"TRANSCRIPT SNIPPET:\n{example['transcript_snippet'][:800]}...\n\n"
+                human_examples_text += f"AI EVALUATION:\n  Overall Score: {example['ai_overall_score']}/100\n"
+                human_examples_text += f"  Category Scores:\n{example['category_comparison']}\n\n"
+                human_examples_text += f"HUMAN EVALUATION (GROUND TRUTH):\n  Overall Score: {example['human_overall_score']}/100\n"
+                human_examples_text += f"  Category Scores:\n{example['category_comparison']}\n"
+                if example.get('ai_feedback') and example['ai_feedback'] != "No feedback":
+                    human_examples_text += f"  Human Feedback on AI: {example['ai_feedback']}\n"
+                human_examples_text += "\nLESSON: Compare the AI and Human evaluations above. Notice where the AI was correct and where it needed correction. "
+                human_examples_text += "Use these insights to improve your evaluation of the current call.\n\n"
+            
+            human_examples_text += "IMPORTANT: Use these examples to learn how humans evaluate calls, but remember that each call is unique. "
+            human_examples_text += "Don't blindly copy scores - instead, understand the reasoning behind human evaluations and apply similar reasoning to the current call.\n"
+
         prompt = f"""You are a FAIR, UNBIASED, and BALANCED quality assurance evaluator. Your job is to evaluate customer service calls with realistic expectations, acknowledging that perfect performance is rare and that tone/emotion detection has limitations. Be HONEST but REALISTIC in your assessments.
 
-{policy_context}{rule_violations_text}
+{policy_context}{rule_violations_text}{human_examples_text}
 
 ALLOWED CATEGORIES (YOU MUST USE ONLY THESE):
 {criteria_list_bullet}

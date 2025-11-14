@@ -28,16 +28,16 @@ class HumanReview(Base):
 
     id = Column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
     evaluation_id = Column(String(36), ForeignKey("evaluations.id"), nullable=False, unique=True)
-    reviewer_user_id = Column(String(36), ForeignKey("users.id"), nullable=False)
+    reviewer_user_id = Column(String(36), ForeignKey("users.id"), nullable=True)
 
     # Human evaluation scores (ground truth for fine-tuning)
-    human_overall_score = Column(Integer, nullable=False)  # 0-100
+    human_overall_score = Column(Integer, nullable=True)  # 0-100 - Filled when review is submitted
 
     # Category-level human scores
-    human_category_scores = Column(JSONB, nullable=False)  # {"Empathy": 85, "Professionalism": 92, ...}
+    human_category_scores = Column(JSONB, nullable=True)  # {"Empathy": 85, "Professionalism": 92, ...} - Filled when review is submitted
 
     # Human assessment of AI evaluation
-    ai_score_accuracy = Column(Numeric(3, 1), nullable=False)  # 1.0-5.0 scale
+    ai_score_accuracy = Column(Numeric(3, 1), nullable=True)  # 1.0-5.0 scale - Filled when review is submitted
     ai_recommendation = Column(Text, nullable=True)  # Human feedback on AI performance
 
     # Review metadata
@@ -175,3 +175,5 @@ class ModelPerformance(Base):
 
     # Relationships
     dataset = relationship("FineTuningDataset")
+
+

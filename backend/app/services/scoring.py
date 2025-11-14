@@ -3,7 +3,6 @@ from decimal import Decimal
 from app.models.evaluation_criteria import EvaluationCriteria
 from sqlalchemy.orm import Session
 import logging
-import numpy as np
 
 logger = logging.getLogger(__name__)
 

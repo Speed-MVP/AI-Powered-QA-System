@@ -1,217 +1,280 @@
 """
-RAG (Retrieval-Augmented Generation) Service for Policy Retrieval
-Phase 1: Foundation - RAG Retrieval Layer
+Lightweight RAG (Retrieval-Augmented Generation) service using text-based similarity.
+No numpy/sklearn dependencies - uses pure Python for keyword extraction and text matching.
 """
-
-from app.database import SessionLocal
-from app.models.evaluation_criteria import EvaluationCriteria
-from app.models.policy_template import PolicyTemplate
-from typing import List, Dict, Any, Optional
 import logging
-import numpy as np
-from sklearn.metrics.pairwise import cosine_similarity
+from typing import List, Dict, Any, Optional
 import re
+from collections import Counter
+
+logger = logging.getLogger(__name__)
 
 try:
     import google.generativeai as genai
     GEMINI_AVAILABLE = True
 except ImportError:
     GEMINI_AVAILABLE = False
-    logger = logging.getLogger(__name__)
-    logger.warning("google-generativeai not installed. RAG embeddings will not work.")
+    logger.warning("google-generativeai not installed. RAG service will use keyword-based matching only.")
 
-logger = logging.getLogger(__name__)
+# Import settings separately (always available)
+from app.config import settings
 
 
 class RAGService:
     """
-    Retrieval-Augmented Generation service for retrieving relevant policy snippets.
-    Uses vector embeddings to find the most relevant policy clauses for a call topic.
+    RAG service for retrieving relevant policy snippets based on transcript context.
+    Uses keyword-based text similarity matching with optional Gemini embeddings fallback.
     """
-
+    
     def __init__(self):
-        self.embedding_model = None
-        if GEMINI_AVAILABLE:
-            # Use text-embedding-004 for vector embeddings
-            self.embedding_model = "models/text-embedding-004"
-
-    def _get_embedding(self, text: str) -> Optional[np.ndarray]:
-        """Get vector embedding for text using Gemini text-embedding-004"""
-        if not GEMINI_AVAILABLE or not self.embedding_model:
-            logger.warning("Gemini embeddings not available")
-            return None
-
-        try:
-            result = genai.embed_content(
-                model=self.embedding_model,
-                content=text,
-                task_type="retrieval_document"
-            )
-            return np.array(result['embedding'])
-        except Exception as e:
-            logger.error(f"Error getting embedding: {e}")
-            return None
-
-    def _extract_call_topics(self, transcript: str) -> List[str]:
+        self.use_embeddings = False
+        if GEMINI_AVAILABLE and settings.gemini_api_key:
+            try:
+                genai.configure(api_key=settings.gemini_api_key)
+                # Try to use embeddings if available
+                # Note: Gemini embeddings may not be available in all regions/versions
+                self.use_embeddings = True
+                logger.info("RAG service initialized with Gemini embeddings support")
+            except Exception as e:
+                logger.warning(f"Gemini embeddings not available, using keyword-based matching: {e}")
+                self.use_embeddings = False
+        else:
+            logger.info("RAG service initialized with keyword-based matching only")
+    
+    def _extract_keywords(self, text: str, max_keywords: int = 20) -> set:
         """
-        Extract potential call topics from transcript for better policy retrieval.
-        Returns topics like ["late delivery", "account issue", "refund request", etc.]
+        Extract keywords from text using simple word frequency analysis.
+        
+        Args:
+            text: Text to extract keywords from
+            max_keywords: Maximum number of keywords to extract
+            
+        Returns:
+            Set of keywords (normalized to lowercase)
         """
-        topics = []
-
-        # Common call topics and their indicators
-        topic_indicators = {
-            "late delivery": ["late", "delayed", "delivery", "shipping", "tracking", "package"],
-            "account issue": ["account", "login", "password", "access", "blocked", "locked"],
-            "billing": ["bill", "charge", "payment", "refund", "credit", "invoice", "price"],
-            "product issue": ["broken", "defective", "not working", "quality", "damage", "faulty"],
-            "return": ["return", "exchange", "refund", "replacement", "send back"],
-            "complaint": ["unacceptable", "frustrated", "angry", "terrible", "worst", "disappointed"],
-            "technical support": ["error", "bug", "glitch", "website", "app", "system"],
-            "cancellation": ["cancel", "terminate", "end service", "close account"],
-            "upgrade": ["upgrade", "change plan", "modify", "add service"],
-            "general inquiry": ["question", "information", "help", "how do i", "can you"]
+        # Remove punctuation and convert to lowercase
+        text = re.sub(r'[^\w\s]', ' ', text.lower())
+        
+        # Split into words
+        words = text.split()
+        
+        # Common stop words to filter out
+        stop_words = {
+            'the', 'a', 'an', 'and', 'or', 'but', 'in', 'on', 'at', 'to', 'for',
+            'of', 'with', 'by', 'from', 'as', 'is', 'was', 'are', 'were', 'been',
+            'be', 'have', 'has', 'had', 'do', 'does', 'did', 'will', 'would',
+            'should', 'could', 'may', 'might', 'must', 'can', 'this', 'that',
+            'these', 'those', 'i', 'you', 'he', 'she', 'it', 'we', 'they', 'me',
+            'him', 'her', 'us', 'them', 'my', 'your', 'his', 'her', 'its', 'our',
+            'their', 'what', 'which', 'who', 'whom', 'whose', 'where', 'when',
+            'why', 'how', 'all', 'each', 'every', 'both', 'few', 'more', 'most',
+            'other', 'some', 'such', 'no', 'nor', 'not', 'only', 'own', 'same',
+            'so', 'than', 'too', 'very', 'just', 'now'
         }
-
-        transcript_lower = transcript.lower()
-
-        # Check for topic indicators in transcript
-        for topic, indicators in topic_indicators.items():
-            if any(indicator in transcript_lower for indicator in indicators):
-                topics.append(topic)
-
-        # If no specific topics found, add general fallback
-        if not topics:
-            topics.append("general customer service")
-
-        return topics
-
-    def _prepare_policy_documents(self, criteria: List[EvaluationCriteria]) -> List[Dict[str, Any]]:
+        
+        # Filter out stop words and short words
+        keywords = [word for word in words if len(word) > 2 and word not in stop_words]
+        
+        # Count word frequency
+        word_freq = Counter(keywords)
+        
+        # Get top keywords
+        top_keywords = [word for word, _ in word_freq.most_common(max_keywords)]
+        
+        return set(top_keywords)
+    
+    def _jaccard_similarity(self, set1: set, set2: set) -> float:
         """
-        Prepare policy documents for vector search.
-        Each document contains policy text, category, and embedding.
+        Calculate Jaccard similarity between two sets.
+        
+        Args:
+            set1: First set
+            set2: Second set
+            
+        Returns:
+            Jaccard similarity score (0-1)
         """
-        documents = []
-
-        for criterion in criteria:
-            # Create searchable document from evaluation prompt and rubric levels
-            policy_text = f"Category: {criterion.category_name}\n"
-            policy_text += f"Evaluation Prompt: {criterion.evaluation_prompt}\n"
-
-            # Add rubric levels if available
-            if criterion.rubric_levels:
-                policy_text += "Rubric Levels:\n"
-                for level in sorted(criterion.rubric_levels, key=lambda x: x.level_order):
-                    examples = f" Examples: {level.examples}" if level.examples else ""
-                    policy_text += f"- {level.level_name} ({level.min_score}-{level.max_score}): {level.description}{examples}\n"
-
-            document = {
-                "id": criterion.id,
-                "category": criterion.category_name,
-                "text": policy_text,
-                "weight": float(criterion.weight),
-                "passing_score": criterion.passing_score
-            }
-
-            # Get embedding for the policy text
-            embedding = self._get_embedding(policy_text)
-            if embedding is not None:
-                document["embedding"] = embedding
-                documents.append(document)
-            else:
-                logger.warning(f"Could not get embedding for criterion {criterion.category_name}")
-
-        return documents
-
+        if not set1 or not set2:
+            return 0.0
+        
+        intersection = len(set1.intersection(set2))
+        union = len(set1.union(set2))
+        
+        if union == 0:
+            return 0.0
+        
+        return intersection / union
+    
+    def _get_embedding(self, text: str) -> Optional[List[float]]:
+        """
+        Get embedding vector for text using Gemini embeddings API (if available).
+        
+        Args:
+            text: Text to embed
+            
+        Returns:
+            List of floats representing the embedding vector, or None if unavailable
+        """
+        if not self.use_embeddings:
+            return None
+        
+        try:
+            # Try Gemini embeddings API
+            # Note: This may not be available in all Gemini API versions
+            result = genai.embed_content(
+                model='models/embedding-001',
+                content=text[:8000],  # Limit text length
+                task_type='retrieval_document'
+            )
+            return result.get('embedding')
+        except Exception as e:
+            logger.debug(f"Embeddings not available, using keyword matching: {e}")
+            return None
+    
+    def _cosine_similarity(self, vec1: List[float], vec2: List[float]) -> float:
+        """
+        Calculate cosine similarity between two vectors using pure Python.
+        No numpy/sklearn dependencies.
+        
+        Args:
+            vec1: First vector
+            vec2: Second vector
+            
+        Returns:
+            Cosine similarity score (0-1)
+        """
+        if len(vec1) != len(vec2):
+            return 0.0
+        
+        # Dot product
+        dot_product = sum(a * b for a, b in zip(vec1, vec2))
+        
+        # Magnitudes
+        magnitude1 = sum(a * a for a in vec1) ** 0.5
+        magnitude2 = sum(a * a for a in vec2) ** 0.5
+        
+        if magnitude1 == 0 or magnitude2 == 0:
+            return 0.0
+        
+        # Cosine similarity
+        return dot_product / (magnitude1 * magnitude2)
+    
     def retrieve_relevant_policies(
         self,
-        transcript: str,
-        policy_template_id: str,
-        top_k: int = 5
+        transcript_text: str,
+        evaluation_criteria: List[Any],
+        top_k: int = 3
     ) -> Dict[str, Any]:
         """
-        Retrieve the most relevant policy clauses for a given call transcript.
-        Returns top-k most relevant policy snippets based on semantic similarity.
+        Retrieve top-K most relevant evaluation criteria based on transcript context.
+        Uses keyword-based matching with optional embeddings fallback.
+        
+        Args:
+            transcript_text: Call transcript text
+            evaluation_criteria: List of EvaluationCriteria objects
+            top_k: Number of top criteria to retrieve
+            
+        Returns:
+            Dictionary with retrieved policies and similarity scores
         """
-        db = SessionLocal()
-        try:
-            # Get evaluation criteria for the policy template
-            criteria = db.query(EvaluationCriteria).filter(
-                EvaluationCriteria.policy_template_id == policy_template_id
-            ).all()
-
-            if not criteria:
-                logger.warning(f"No criteria found for template {policy_template_id}")
-                return {"retrieved_policies": [], "call_topics": []}
-
-            # Extract call topics from transcript
-            call_topics = self._extract_call_topics(transcript)
-            logger.info(f"Extracted call topics: {call_topics}")
-
-            # Prepare policy documents with embeddings
-            policy_documents = self._prepare_policy_documents(criteria)
-
-            if not policy_documents:
-                logger.warning("No policy documents with embeddings available")
-                return {"retrieved_policies": [], "call_topics": call_topics}
-
-            # Create search query from transcript + topics
-            search_query = f"Call transcript topics: {', '.join(call_topics)}\n\n{transcript[:1000]}"  # Limit transcript length
-            query_embedding = self._get_embedding(search_query)
-
-            if query_embedding is None:
-                logger.warning("Could not get embedding for search query")
-                # Fallback: return all policies if embeddings fail
-                return {
-                    "retrieved_policies": [doc for doc in policy_documents[:top_k]],
-                    "call_topics": call_topics
-                }
-
-            # Calculate similarities
-            similarities = []
-            for doc in policy_documents:
-                if "embedding" in doc:
-                    similarity = cosine_similarity(
-                        query_embedding.reshape(1, -1),
-                        doc["embedding"].reshape(1, -1)
-                    )[0][0]
-                    similarities.append((doc, similarity))
-
-            # Sort by similarity and return top-k
-            similarities.sort(key=lambda x: x[1], reverse=True)
-            top_documents = [doc for doc, sim in similarities[:top_k]]
-
-            # Also include policies that are always relevant (high weight categories)
-            high_priority_categories = ["Empathy", "Professionalism", "Resolution", "Communication"]
-            for doc in policy_documents:
-                if (doc["category"] in high_priority_categories and
-                    doc not in top_documents and
-                    len(top_documents) < top_k + 2):  # Allow a few extra
-                    top_documents.append(doc)
-
-            logger.info(f"Retrieved {len(top_documents)} relevant policy documents")
-
+        if not evaluation_criteria:
             return {
-                "retrieved_policies": top_documents,
-                "call_topics": call_topics,
-                "search_query": search_query
+                "retrieved_policies": [],
+                "similarity_scores": [],
+                "method": "none"
+            }
+        
+        try:
+            # Extract keywords from transcript
+            transcript_keywords = self._extract_keywords(transcript_text[:5000])  # Limit to first 5000 chars
+            
+            # Try embeddings first if available
+            transcript_embedding = None
+            if self.use_embeddings:
+                transcript_embedding = self._get_embedding(transcript_text[:8000])
+            
+            # Score each criteria
+            criteria_with_scores = []
+            
+            for criteria in evaluation_criteria:
+                # Create context text from criteria
+                criteria_text = f"{criteria.category_name}: {criteria.evaluation_prompt}"
+                criteria_keywords = self._extract_keywords(criteria_text)
+                
+                # Calculate similarity
+                similarity = 0.0
+                method_used = "keyword"
+                
+                if transcript_embedding:
+                    # Try embeddings-based similarity
+                    try:
+                        criteria_embedding = self._get_embedding(criteria_text)
+                        if criteria_embedding:
+                            similarity = self._cosine_similarity(transcript_embedding, criteria_embedding)
+                            method_used = "embedding"
+                        else:
+                            # Fallback to keyword matching
+                            similarity = self._jaccard_similarity(transcript_keywords, criteria_keywords)
+                    except Exception as e:
+                        logger.debug(f"Embedding failed for {criteria.category_name}, using keywords: {e}")
+                        similarity = self._jaccard_similarity(transcript_keywords, criteria_keywords)
+                else:
+                    # Use keyword-based similarity
+                    similarity = self._jaccard_similarity(transcript_keywords, criteria_keywords)
+                
+                criteria_with_scores.append({
+                    "criteria": criteria,
+                    "similarity": similarity,
+                    "method": method_used,
+                    "text": criteria_text
+                })
+            
+            # Sort by similarity (descending)
+            criteria_with_scores.sort(key=lambda x: x["similarity"], reverse=True)
+            
+            # Get top-K (always include at least top 3 if available, but filter by relevance)
+            # Only include criteria with similarity > 0.1 (10% match)
+            relevant_criteria = [item for item in criteria_with_scores if item["similarity"] > 0.1]
+            
+            if not relevant_criteria:
+                # If no criteria meet threshold, use top criteria anyway
+                relevant_criteria = criteria_with_scores[:top_k]
+            else:
+                # Take top-K from relevant criteria
+                relevant_criteria = relevant_criteria[:top_k]
+            
+            # Build retrieved policies list
+            retrieved_policies = []
+            similarity_scores = []
+            
+            for item in relevant_criteria:
+                criteria = item["criteria"]
+                retrieved_policies.append({
+                    "category_name": criteria.category_name,
+                    "evaluation_prompt": criteria.evaluation_prompt,
+                    "weight": float(criteria.weight),
+                    "passing_score": criteria.passing_score
+                })
+                similarity_scores.append(item["similarity"])
+            
+            method_used = relevant_criteria[0]["method"] if relevant_criteria else "keyword"
+            
+            logger.info(f"Retrieved {len(retrieved_policies)} relevant policies using {method_used} matching")
+            
+            return {
+                "retrieved_policies": retrieved_policies,
+                "similarity_scores": similarity_scores,
+                "total_criteria": len(evaluation_criteria),
+                "method": method_used
+            }
+            
+        except Exception as e:
+            logger.error(f"RAG retrieval failed: {e}")
+            # Return empty result on error
+            return {
+                "retrieved_policies": [],
+                "similarity_scores": [],
+                "error": str(e),
+                "method": "error"
             }
 
-        finally:
-            db.close()
-
-    def format_policy_context(self, retrieved_policies: List[Dict[str, Any]]) -> str:
-        """
-        Format retrieved policies into a context string for the LLM prompt.
-        """
-        if not retrieved_policies:
-            return "No specific policy context available."
-
-        context_parts = ["RELEVANT POLICY CONTEXT (Retrieved based on call topic):\n"]
-
-        for i, policy in enumerate(retrieved_policies, 1):
-            context_parts.append(f"Policy {i}: {policy['category']} (Weight: {policy['weight']}%, Passing: {policy['passing_score']}/100)")
-            context_parts.append(policy['text'])
-            context_parts.append("")  # Empty line for readability
-
-        return "\n".join(context_parts)

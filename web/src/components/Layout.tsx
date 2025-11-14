@@ -1,4 +1,4 @@
-import { Link, Outlet, useNavigate } from 'react-router-dom'
+import { Link, Outlet } from 'react-router-dom'
 import { useThemeStore } from '@/store/themeStore'
 import { useAuth } from '@/contexts/AuthContext'
 import { Sun, Moon, LogOut, User } from 'lucide-react'
@@ -10,7 +10,6 @@ export function Layout() {
   const theme = useThemeStore((state) => state.theme)
   const toggleTheme = useThemeStore((state) => state.toggleTheme)
   const { isAuthenticated, user, logout } = useAuth()
-  const navigate = useNavigate()
 
   useEffect(() => {
     document.documentElement.classList.toggle('dark', theme === 'dark')
@@ -22,47 +21,106 @@ export function Layout() {
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex items-center justify-between h-16">
             <div className="flex items-center flex-shrink-0">
-              <Link to="/" className="flex items-center space-x-2">
-                <div className="w-8 h-8 bg-gradient-to-br from-brand-500 to-brand-600 rounded-lg flex items-center justify-center">
-                  <span className="text-white font-bold text-lg">AI</span>
-                </div>
+              <Link to="/" className="flex items-center space-x-3">
+                <img
+                  src="/Logo.svg"
+                  alt="Qualitidex"
+                  className="h-8 w-auto"
+                  loading="lazy"
+                  decoding="async"
+                />
                 <span className="font-semibold text-gray-900 dark:text-white text-lg">
-                  QA System
+                  Qualitidex
                 </span>
               </Link>
             </div>
 
             <div className="hidden md:flex items-center justify-center flex-1 space-x-8">
-              <Link
-                to="/home"
-                className="text-gray-600 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white text-sm font-medium"
-              >
-                Home
-              </Link>
-              <Link
-                to="/test"
-                className="text-gray-600 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white text-sm font-medium"
-              >
-                Test
-              </Link>
-              <Link
-                to="/pricing"
-                className="text-gray-600 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white text-sm font-medium"
-              >
-                Pricing
-              </Link>
-              <Link
-                to="/features"
-                className="text-gray-600 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white text-sm font-medium"
-              >
-                Features
-              </Link>
-              <Link
-                to="/faq"
-                className="text-gray-600 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white text-sm font-medium"
-              >
-                FAQ
-              </Link>
+              {isAuthenticated ? (
+                <>
+                  <Link
+                    to="/dashboard"
+                    className="text-gray-600 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white text-sm font-medium"
+                  >
+                    Dashboard
+                  </Link>
+                  <Link
+                    to="/supervisor"
+                    className="text-gray-600 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white text-sm font-medium"
+                  >
+                    Supervisor
+                  </Link>
+                  <Link
+                    to="/human-review"
+                    className="text-gray-600 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white text-sm font-medium"
+                  >
+                    Human Review
+                  </Link>
+                  <Link
+                    to="/policy-templates"
+                    className="text-gray-600 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white text-sm font-medium"
+                  >
+                    Templates
+                  </Link>
+                  <Link
+                    to="/teams"
+                    className="text-gray-600 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white text-sm font-medium"
+                  >
+                    Teams
+                  </Link>
+                  <Link
+                    to="/agents"
+                    className="text-gray-600 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white text-sm font-medium"
+                  >
+                    Agents
+                  </Link>
+                  <Link
+                    to="/audit-log"
+                    className="text-gray-600 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white text-sm font-medium"
+                  >
+                    Audit
+                  </Link>
+                  <Link
+                    to="/demo"
+                    className="text-gray-600 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white text-sm font-medium"
+                  >
+                    Demo
+                  </Link>
+                </>
+              ) : (
+                <>
+                  <Link
+                    to="/home"
+                    className="text-gray-600 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white text-sm font-medium"
+                  >
+                    Home
+                  </Link>
+                  <Link
+                    to="/demo"
+                    className="text-gray-600 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white text-sm font-medium"
+                  >
+                    Demo
+                  </Link>
+                  <Link
+                    to="/pricing"
+                    className="text-gray-600 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white text-sm font-medium"
+                  >
+                    Pricing
+                  </Link>
+                  <Link
+                    to="/features"
+                    className="text-gray-600 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white text-sm font-medium"
+                  >
+                    Features
+                  </Link>
+                  <Link
+                    to="/faq"
+                    className="text-gray-600 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white text-sm font-medium"
+                  >
+                    FAQ
+                  </Link>
+                </>
+              )}
             </div>
 
             <div className="flex items-center space-x-3 flex-shrink-0">
@@ -107,36 +165,91 @@ export function Layout() {
           </div>
 
           <div className="md:hidden flex justify-center items-center space-x-6 pb-4">
-            <Link
-              to="/home"
-              className="text-gray-600 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white text-sm font-medium"
-            >
-              Home
-            </Link>
-            <Link
-              to="/test"
-              className="text-gray-600 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white text-sm font-medium"
-            >
-              Test
-            </Link>
-            <Link
-              to="/pricing"
-              className="text-gray-600 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white text-sm font-medium"
-            >
-              Pricing
-            </Link>
-            <Link
-              to="/features"
-              className="text-gray-600 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white text-sm font-medium"
-            >
-              Features
-            </Link>
-            <Link
-              to="/faq"
-              className="text-gray-600 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white text-sm font-medium"
-            >
-              FAQ
-            </Link>
+            {isAuthenticated ? (
+              <>
+                <Link
+                  to="/dashboard"
+                  className="text-gray-600 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white text-sm font-medium"
+                >
+                  Dashboard
+                </Link>
+                <Link
+                  to="/supervisor"
+                  className="text-gray-600 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white text-sm font-medium"
+                >
+                  Supervisor
+                </Link>
+                <Link
+                  to="/human-review"
+                  className="text-gray-600 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white text-sm font-medium"
+                >
+                  Review
+                </Link>
+                <Link
+                  to="/policy-templates"
+                  className="text-gray-600 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white text-sm font-medium"
+                >
+                  Templates
+                </Link>
+                <Link
+                  to="/teams"
+                  className="text-gray-600 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white text-sm font-medium"
+                >
+                  Teams
+                </Link>
+                <Link
+                  to="/agents"
+                  className="text-gray-600 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white text-sm font-medium"
+                >
+                  Agents
+                </Link>
+                <Link
+                  to="/audit-log"
+                  className="text-gray-600 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white text-sm font-medium"
+                >
+                  Audit
+                </Link>
+                <Link
+                  to="/demo"
+                  className="text-gray-600 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white text-sm font-medium"
+                >
+                  Demo
+                </Link>
+              </>
+            ) : (
+              <>
+                <Link
+                  to="/home"
+                  className="text-gray-600 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white text-sm font-medium"
+                >
+                  Home
+                </Link>
+                <Link
+                  to="/demo"
+                  className="text-gray-600 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white text-sm font-medium"
+                >
+                  Demo
+                </Link>
+                <Link
+                  to="/pricing"
+                  className="text-gray-600 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white text-sm font-medium"
+                >
+                  Pricing
+                </Link>
+                <Link
+                  to="/features"
+                  className="text-gray-600 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white text-sm font-medium"
+                >
+                  Features
+                </Link>
+                <Link
+                  to="/faq"
+                  className="text-gray-600 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white text-sm font-medium"
+                >
+                  FAQ
+                </Link>
+              </>
+            )}
           </div>
         </div>
       </nav>

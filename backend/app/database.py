@@ -33,5 +33,12 @@ def get_db() -> Session:
 
 # Initialize database
 def init_db():
-    Base.metadata.create_all(bind=engine)
+    try:
+        logger.info("Creating database tables...")
+        Base.metadata.create_all(bind=engine)
+        logger.info("Database tables created successfully")
+    except Exception as e:
+        logger.error(f"Failed to create database tables: {e}")
+        logger.warning("Database initialization failed, but continuing...")
+        # Don't raise the exception - let the app start even if DB is not available
 
