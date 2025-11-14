@@ -1,273 +1,390 @@
 """
-Continuous Learning Service for Model Improvement
-Phase 3: Fine-Tuning & Self-Learning
+Continuous Learning Pipeline
+MVP Evaluation Improvements - Phase 3
+
+Collects human review data and uses it to improve AI evaluation quality through:
+- Few-shot example curation
+- Performance analytics
+- Model improvement suggestions
 """
 
-from app.database import SessionLocal
-from app.models.human_review import HumanReview, FineTuningDataset, ModelPerformance
-from app.services.dataset_curation import DatasetCurationService
-from app.services.fine_tuning import FineTuningService
-from typing import Dict, Any, Optional, List
+import json
 import logging
+from typing import Dict, List, Any, Optional, Tuple
 from datetime import datetime, timedelta
-import threading
-import time
+from sqlalchemy.orm import Session
+from sqlalchemy import and_, func, desc
+
+from app.models.human_review import HumanReview
+from app.models.evaluation import Evaluation
+from app.models.recording import Recording
+from app.database import SessionLocal
 
 logger = logging.getLogger(__name__)
-
-# Optional import for scheduling (not required for basic functionality)
-try:
-    import schedule
-    SCHEDULE_AVAILABLE = True
-except ImportError:
-    SCHEDULE_AVAILABLE = False
-    logger.warning("schedule package not installed. Continuous learning scheduling will be disabled.")
 
 
 class ContinuousLearningService:
     """
-    Service for continuous model improvement through regular retraining.
-    Phase 3: Weekly retrain fine-tuning dataset with newly reviewed calls.
+    Service for continuous learning from human reviews.
+    Improves AI evaluation quality over time.
     """
 
     def __init__(self):
-        self.dataset_service = DatasetCurationService()
-        self.fine_tuning_service = FineTuningService()
-        self.retraining_interval_days = 7  # Weekly retraining
-        self.min_new_reviews_for_retraining = 50  # Minimum new reviews to trigger retraining
+        self.db = SessionLocal()
 
-    def start_continuous_learning(self) -> Dict[str, Any]:
+    def collect_human_reviews_for_fine_tuning(
+        self,
+        days_back: int = 30,
+        min_confidence_threshold: float = 0.3
+    ) -> List[Dict[str, Any]]:
         """
-        Start the continuous learning process.
-        This would run as a background service in production.
-        Note: Scheduling requires 'schedule' package. Without it, only manual retraining is available.
+        Collect human-reviewed evaluations suitable for fine-tuning.
+
+        Args:
+            days_back: How many days of data to collect
+            min_confidence_threshold: Minimum AI confidence to include (focus on uncertain cases)
+
+        Returns:
+            List of fine-tuning examples with AI predictions and human corrections
         """
-        try:
-            if not SCHEDULE_AVAILABLE:
-                logger.warning("schedule package not available. Continuous learning scheduling disabled.")
-                return {
-                    "success": False,
-                    "status": "disabled",
-                    "error": "schedule package not installed. Install it to enable automatic scheduling.",
-                    "note": "Manual retraining is still available via trigger_manual_retraining()"
-                }
+        cutoff_date = datetime.utcnow() - timedelta(days=days_back)
 
-            # Schedule weekly retraining
-            schedule.every(self.retraining_interval_days).days.do(self._perform_weekly_retraining)
-
-            # Start background thread for continuous learning
-            learning_thread = threading.Thread(target=self._run_continuous_learning, daemon=True)
-            learning_thread.start()
-
-            logger.info(f"Started continuous learning with {self.retraining_interval_days}-day intervals")
-
-            return {
-                "success": True,
-                "status": "running",
-                "retraining_interval_days": self.retraining_interval_days,
-                "min_new_reviews_threshold": self.min_new_reviews_for_retraining
-            }
-
-        except Exception as e:
-            logger.error(f"Failed to start continuous learning: {e}")
-            return {"success": False, "error": str(e)}
-
-    def _run_continuous_learning(self):
-        """Background thread for continuous learning."""
-        if not SCHEDULE_AVAILABLE:
-            logger.warning("Continuous learning thread not started - schedule package not available")
-            return
-
-        logger.info("Continuous learning thread started")
-
-        while True:
-            try:
-                schedule.run_pending()
-                time.sleep(3600)  # Check every hour
-            except Exception as e:
-                logger.error(f"Error in continuous learning loop: {e}")
-                time.sleep(300)  # Wait 5 minutes before retrying
-
-    def _perform_weekly_retraining(self) -> Dict[str, Any]:
-        """
-        Perform weekly model retraining if sufficient new data is available.
-        """
-        try:
-            logger.info("Starting weekly retraining check")
-
-            # Check if we have enough new reviews for retraining
-            new_reviews_count = self._count_new_reviews_since_last_training()
-
-            if new_reviews_count < self.min_new_reviews_for_retraining:
-                logger.info(f"Insufficient new reviews: {new_reviews_count}/{self.min_new_reviews_for_retraining}. Skipping retraining.")
-                return {
-                    "success": True,
-                    "action": "skipped",
-                    "reason": "insufficient_data",
-                    "new_reviews": new_reviews_count
-                }
-
-            # Create new dataset version
-            dataset_result = self._create_updated_dataset()
-
-            if not dataset_result["success"]:
-                return dataset_result
-
-            # Start fine-tuning job
-            fine_tuning_result = self.fine_tuning_service.start_fine_tuning_job(
-                dataset_result["dataset_id"]
+        # Query human reviews with their evaluations
+        human_reviews = self.db.query(HumanReview).options(
+            HumanReview.evaluation,
+            HumanReview.evaluation.recording
+        ).filter(
+            and_(
+                HumanReview.created_at >= cutoff_date,
+                HumanReview.evaluation.has(),  # Has associated evaluation
+                HumanReview.evaluation.confidence_score <= min_confidence_threshold  # Focus on uncertain cases
             )
+        ).all()
 
-            if not fine_tuning_result["success"]:
-                return fine_tuning_result
+        fine_tuning_examples = []
 
-            # Update active dataset
-            self._update_active_dataset(dataset_result["dataset_id"])
+        for review in human_reviews:
+            example = self._create_fine_tuning_example(review)
+            if example:
+                fine_tuning_examples.append(example)
 
-            logger.info(f"Weekly retraining completed successfully. New dataset: {dataset_result['dataset_id']}")
+        logger.info(f"Collected {len(fine_tuning_examples)} fine-tuning examples from {len(human_reviews)} human reviews")
 
-            return {
-                "success": True,
-                "action": "retrained",
-                "dataset_id": dataset_result["dataset_id"],
-                "job_id": fine_tuning_result["job_id"],
-                "new_reviews_used": new_reviews_count
+        return fine_tuning_examples
+
+    def _create_fine_tuning_example(self, human_review: HumanReview) -> Optional[Dict[str, Any]]:
+        """
+        Create a fine-tuning example from a human review.
+        """
+        try:
+            evaluation = human_review.evaluation
+            recording = evaluation.recording
+
+            if not evaluation.llm_analysis or not recording or not recording.transcript:
+                return None
+
+            # Extract normalized transcript
+            transcript_text = recording.transcript.transcript_text
+            if hasattr(recording.transcript, 'normalized_text') and recording.transcript.normalized_text:
+                transcript_text = recording.transcript.normalized_text
+
+            # Create the example
+            example = {
+                "id": f"review_{human_review.id}",
+                "recording_id": human_review.evaluation_id,
+                "transcript": transcript_text,
+                "ai_prediction": {
+                    "overall_score": evaluation.overall_score,
+                    "category_scores": evaluation.llm_analysis.get("category_scores", {}),
+                    "violations": evaluation.llm_analysis.get("violations", []),
+                    "resolution": evaluation.llm_analysis.get("resolution", "unknown"),
+                    "confidence_score": evaluation.confidence_score
+                },
+                "human_correction": {
+                    "overall_score": human_review.human_overall_score,
+                    "category_scores": human_review.human_category_scores or {},
+                    "violations": human_review.human_violations or [],
+                    "reviewer_notes": human_review.reviewer_notes
+                },
+                "delta": human_review.delta or {},
+                "metadata": {
+                    "review_date": human_review.created_at.isoformat(),
+                    "ai_model": evaluation.model_version,
+                    "transcript_confidence": recording.transcript.transcription_confidence,
+                    "call_duration": self._calculate_call_duration(recording.transcript.diarized_segments or [])
+                }
             }
+
+            return example
 
         except Exception as e:
-            logger.error(f"Error during weekly retraining: {e}")
-            return {"success": False, "error": str(e)}
+            logger.warning(f"Failed to create fine-tuning example for review {human_review.id}: {e}")
+            return None
 
-    def _count_new_reviews_since_last_training(self) -> int:
-        """Count new reviews since the last training dataset was created."""
-        db = SessionLocal()
+    def _calculate_call_duration(self, segments: List[Dict]) -> Optional[float]:
+        """Calculate total call duration from segments."""
+        if not segments:
+            return None
+
+        start_time = min(s.get("start", 0) for s in segments)
+        end_time = max(s.get("end", 0) for s in segments)
+        return end_time - start_time
+
+    def select_few_shot_examples(
+        self,
+        category: str,
+        count: int = 3,
+        min_delta: float = 5.0
+    ) -> List[Dict[str, Any]]:
+        """
+        Select high-quality few-shot examples for prompt improvement.
+
+        Args:
+            category: Category to focus on (e.g., "Greeting", "Empathy")
+            count: Number of examples to select
+            min_delta: Minimum score difference to include
+
+        Returns:
+            List of few-shot examples
+        """
+        # Find reviews with significant delta in the specified category
+        reviews_with_delta = self.db.query(HumanReview).filter(
+            and_(
+                HumanReview.human_category_scores.isnot(None),
+                HumanReview.delta.isnot(None)
+            )
+        ).all()
+
+        candidates = []
+
+        for review in reviews_with_delta:
+            delta = review.delta or {}
+            category_deltas = delta.get("category_score_diffs", {})
+
+            if category in category_deltas:
+                delta_value = abs(category_deltas[category])
+                if delta_value >= min_delta:
+                    candidates.append((review, delta_value))
+
+        # Sort by delta magnitude and take top examples
+        candidates.sort(key=lambda x: x[1], reverse=True)
+        selected_reviews = candidates[:count]
+
+        examples = []
+        for review, delta_score in selected_reviews:
+            example = self._create_few_shot_example(review, category)
+            if example:
+                examples.append(example)
+
+        logger.info(f"Selected {len(examples)} few-shot examples for category '{category}'")
+        return examples
+
+    def _create_few_shot_example(self, human_review: HumanReview, category: str) -> Optional[Dict[str, Any]]:
+        """
+        Create a concise few-shot example for prompt inclusion.
+        """
         try:
-            # Find the most recent training dataset
-            latest_dataset = db.query(FineTuningDataset).filter(
-                FineTuningDataset.fine_tuning_status == "completed"
-            ).order_by(FineTuningDataset.created_at.desc()).first()
+            evaluation = human_review.evaluation
+            recording = evaluation.recording
 
-            if not latest_dataset:
-                # No previous training, count all eligible reviews
-                return db.query(HumanReview).filter(
-                    HumanReview.review_status == 'completed',
-                    HumanReview.included_in_training == False
-                ).count()
+            if not recording or not recording.transcript:
+                return None
 
-            # Count reviews created after the latest dataset
-            return db.query(HumanReview).filter(
-                HumanReview.review_status == 'completed',
-                HumanReview.included_in_training == False,
-                HumanReview.created_at > latest_dataset.created_at
-            ).count()
+            transcript = recording.transcript.transcript_text[:500]  # Limit length
 
-        finally:
-            db.close()
+            ai_score = evaluation.llm_analysis.get("category_scores", {}).get(category)
+            human_score = human_review.human_category_scores.get(category) if human_review.human_category_scores else None
 
-    def _create_updated_dataset(self) -> Dict[str, Any]:
-        """Create a new dataset version with recent reviews."""
-        # Get current date for versioning
-        today = datetime.utcnow().strftime("%Y%m%d")
-        version = f"2.0.{today}"
+            if ai_score is None or human_score is None:
+                return None
 
-        dataset_name = f"QA_FineTuning_{version}"
-        description = f"Continuous learning update - {datetime.utcnow().strftime('%Y-%m-%d')}"
-
-        # Create dataset using curation service
-        return self.dataset_service.create_fine_tuning_dataset(
-            name=dataset_name,
-            description=description,
-            min_reviews=self.min_new_reviews_for_retraining
-        )
-
-    def _update_active_dataset(self, new_dataset_id: str):
-        """Update which dataset is currently active."""
-        db = SessionLocal()
-        try:
-            # Deactivate current active dataset
-            db.query(FineTuningDataset).filter(
-                FineTuningDataset.is_active == True
-            ).update({"is_active": False})
-
-            # Activate new dataset
-            new_dataset = db.query(FineTuningDataset).filter(
-                FineTuningDataset.id == new_dataset_id
-            ).first()
-
-            if new_dataset:
-                new_dataset.is_active = True
-                db.commit()
-                logger.info(f"Activated new dataset: {new_dataset_id}")
-
-        finally:
-            db.close()
-
-    def get_learning_status(self) -> Dict[str, Any]:
-        """Get current status of continuous learning system."""
-        db = SessionLocal()
-        try:
-            # Get latest performance metrics
-            latest_performance = db.query(ModelPerformance).order_by(
-                ModelPerformance.created_at.desc()
-            ).first()
-
-            # Get active dataset
-            active_dataset = db.query(FineTuningDataset).filter(
-                FineTuningDataset.is_active == True
-            ).first()
-
-            # Get dataset statistics
-            stats = self.dataset_service.get_dataset_statistics()
-
-            # Calculate next retraining date
-            if active_dataset:
-                next_retraining = active_dataset.created_at + timedelta(days=self.retraining_interval_days)
-                days_until_retraining = (next_retraining - datetime.utcnow()).days
-            else:
-                days_until_retraining = 0
-
-            return {
-                "continuous_learning_active": True,
-                "retraining_interval_days": self.retraining_interval_days,
-                "min_reviews_threshold": self.min_new_reviews_for_retraining,
-                "days_until_next_retraining": max(0, days_until_retraining),
-                "active_dataset": {
-                    "id": active_dataset.id if active_dataset else None,
-                    "name": active_dataset.name if active_dataset else None,
-                    "version": active_dataset.version if active_dataset else None,
-                    "created_at": active_dataset.created_at.isoformat() if active_dataset else None
-                } if active_dataset else None,
-                "latest_performance": {
-                    "accuracy": float(latest_performance.accuracy_score) if latest_performance else None,
-                    "human_agreement": float(latest_performance.human_agreement_rate) if latest_performance else None,
-                    "human_review_rate": float(latest_performance.human_review_rate) if latest_performance else None,
-                    "evaluated_at": latest_performance.created_at.isoformat() if latest_performance else None
-                } if latest_performance else None,
-                "dataset_statistics": stats
+            example = {
+                "transcript_snippet": transcript,
+                "category": category,
+                "ai_score": ai_score,
+                "human_score": human_score,
+                "correction_reason": human_review.reviewer_notes or "Score adjustment based on human review"
             }
 
-        finally:
-            db.close()
+            return example
 
-    def trigger_manual_retraining(self, force: bool = False) -> Dict[str, Any]:
+        except Exception as e:
+            logger.warning(f"Failed to create few-shot example: {e}")
+            return None
+
+    def analyze_performance_trends(self, days: int = 30) -> Dict[str, Any]:
         """
-        Manually trigger retraining (for testing or urgent updates).
+        Analyze performance trends over time.
+
+        Returns:
+            Performance metrics and trends
         """
-        if force:
-            logger.info("Manual retraining triggered (forced)")
-            return self._perform_weekly_retraining()
-        else:
-            new_reviews = self._count_new_reviews_since_last_training()
-            if new_reviews >= self.min_new_reviews_for_retraining:
-                logger.info(f"Manual retraining triggered ({new_reviews} new reviews)")
-                return self._perform_weekly_retraining()
-            else:
-                return {
-                    "success": False,
-                    "error": f"Insufficient new reviews: {new_reviews}/{self.min_new_reviews_for_retraining}"
-                }
+        cutoff_date = datetime.utcnow() - timedelta(days=days)
 
+        # Get all evaluations in time period
+        evaluations = self.db.query(Evaluation).filter(
+            Evaluation.created_at >= cutoff_date
+        ).all()
 
+        # Get human reviews in time period
+        human_reviews = self.db.query(HumanReview).filter(
+            HumanReview.created_at >= cutoff_date
+        ).all()
 
+        # Calculate metrics
+        total_evaluations = len(evaluations)
+        total_reviews = len(human_reviews)
+        review_rate = total_reviews / total_evaluations if total_evaluations > 0 else 0
 
+        # Confidence distribution
+        confidence_levels = [e.confidence_score for e in evaluations if e.confidence_score is not None]
+        avg_confidence = sum(confidence_levels) / len(confidence_levels) if confidence_levels else 0
 
+        # Human-AI agreement analysis
+        agreements = []
+        for review in human_reviews:
+            if review.human_overall_score is not None and review.evaluation.overall_score is not None:
+                diff = abs(review.human_overall_score - review.evaluation.overall_score)
+                agreement = 1.0 if diff <= 5 else 0.0  # Within 5 points = agreement
+                agreements.append(agreement)
+
+        avg_agreement = sum(agreements) / len(agreements) if agreements else 0
+
+        # Category-level analysis
+        category_performance = self._analyze_category_performance(human_reviews)
+
+        analysis = {
+            "time_period_days": days,
+            "total_evaluations": total_evaluations,
+            "total_human_reviews": total_reviews,
+            "review_rate": review_rate,
+            "average_confidence": avg_confidence,
+            "human_ai_agreement": avg_agreement,
+            "category_performance": category_performance,
+            "generated_at": datetime.utcnow().isoformat()
+        }
+
+        logger.info(f"Performance analysis complete: {total_evaluations} evaluations, {total_reviews} reviews")
+        return analysis
+
+    def _analyze_category_performance(self, human_reviews: List[HumanReview]) -> Dict[str, Any]:
+        """
+        Analyze performance by category from human reviews.
+        """
+        category_stats = {}
+
+        for review in human_reviews:
+            if not review.human_category_scores or not review.evaluation.llm_analysis:
+                continue
+
+            ai_scores = review.evaluation.llm_analysis.get("category_scores", {})
+
+            for category, human_score in review.human_category_scores.items():
+                ai_score = ai_scores.get(category)
+
+                if ai_score is not None:
+                    if category not in category_stats:
+                        category_stats[category] = {
+                            "samples": 0,
+                            "total_error": 0,
+                            "agreements": 0
+                        }
+
+                    error = abs(ai_score - human_score)
+                    agreement = 1 if error <= 5 else 0
+
+                    category_stats[category]["samples"] += 1
+                    category_stats[category]["total_error"] += error
+                    category_stats[category]["agreements"] += agreement
+
+        # Calculate averages
+        for category, stats in category_stats.items():
+            samples = stats["samples"]
+            if samples > 0:
+                stats["avg_error"] = stats["total_error"] / samples
+                stats["agreement_rate"] = stats["agreements"] / samples
+            del stats["total_error"]  # Clean up
+
+        return category_stats
+
+    def generate_model_improvement_suggestions(self, performance_analysis: Dict[str, Any]) -> List[str]:
+        """
+        Generate actionable suggestions for model improvement based on performance analysis.
+        """
+        suggestions = []
+
+        # Review rate analysis
+        review_rate = performance_analysis.get("review_rate", 0)
+        if review_rate > 0.3:
+            suggestions.append("High human review rate detected. Consider adjusting confidence thresholds or improving AI accuracy.")
+        elif review_rate < 0.1:
+            suggestions.append("Very low human review rate. Consider increasing review sampling for quality assurance.")
+
+        # Agreement analysis
+        agreement = performance_analysis.get("human_ai_agreement", 0)
+        if agreement < 0.7:
+            suggestions.append(f"Low human-AI agreement ({agreement:.2f}). Focus on fine-tuning with more human review examples.")
+
+        # Category-specific suggestions
+        category_performance = performance_analysis.get("category_performance", {})
+        poor_categories = [
+            cat for cat, stats in category_performance.items()
+            if stats.get("avg_error", 0) > 10
+        ]
+
+        if poor_categories:
+            suggestions.append(f"High error rates in categories: {', '.join(poor_categories)}. Consider category-specific prompt improvements.")
+
+        # Confidence analysis
+        avg_confidence = performance_analysis.get("average_confidence", 0)
+        if avg_confidence < 0.5:
+            suggestions.append(f"Low average confidence ({avg_confidence:.2f}). Review confidence engine calibration.")
+
+        return suggestions
+
+    def export_training_dataset(self, output_path: str, days_back: int = 90) -> int:
+        """
+        Export comprehensive training dataset for model fine-tuning.
+
+        Args:
+            output_path: Path to save the JSON dataset
+            days_back: How many days of data to include
+
+        Returns:
+            Number of examples exported
+        """
+        examples = self.collect_human_reviews_for_fine_tuning(days_back=days_back, min_confidence_threshold=1.0)
+
+        # Add metadata
+        dataset = {
+            "metadata": {
+                "created_at": datetime.utcnow().isoformat(),
+                "days_back": days_back,
+                "total_examples": len(examples),
+                "version": "1.0"
+            },
+            "examples": examples
+        }
+
+        with open(output_path, 'w', encoding='utf-8') as f:
+            json.dump(dataset, f, indent=2, default=str)
+
+        logger.info(f"Exported {len(examples)} training examples to {output_path}")
+        return len(examples)
+
+    def get_weekly_report(self) -> Dict[str, Any]:
+        """
+        Generate weekly performance report.
+        """
+        # Analyze last 7 days
+        analysis = self.analyze_performance_trends(days=7)
+        suggestions = self.generate_model_improvement_suggestions(analysis)
+
+        report = {
+            "report_type": "weekly_performance",
+            "analysis": analysis,
+            "suggestions": suggestions,
+            "generated_at": datetime.utcnow().isoformat()
+        }
+
+        return report
