@@ -44,6 +44,11 @@ class Settings(BaseSettings):
     # Gemini Service (Phase 3-4)
     gemini_use_hybrid: bool = False  # Default to Pro only for reliability
     gemini_force_pro: bool = True    # Always use Pro model (more reliable)
+
+    # Cost Optimization Settings
+    enable_expensive_features: bool = False  # Enable RAG, human examples, advanced sentiment analysis
+    max_tokens_per_evaluation: int = 4000   # Token budget per evaluation
+    token_cost_threshold: float = 0.01     # Alert if evaluation costs more than $0.01
     
     class Config:
         env_file = ".env"

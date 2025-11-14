@@ -1,4 +1,4 @@
-from sqlalchemy import Column, String, DateTime, ForeignKey, Text, Numeric
+from sqlalchemy import Column, String, DateTime, ForeignKey, Text, Numeric, Float
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import relationship
 from app.database import Base
@@ -16,6 +16,10 @@ class Transcript(Base):
     sentiment_analysis = Column(JSONB, nullable=True)  # Voice-based sentiment analysis from Deepgram
     transcription_confidence = Column(Numeric(5, 2), nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow)
+
+    # MVP Evaluation Improvements: Quality metrics
+    deepgram_confidence = Column(Float, nullable=True)  # Deepgram confidence score
+    normalized_text = Column(Text, nullable=True)  # Normalized transcript text
     
     # Relationships
     recording = relationship("Recording", back_populates="transcript")

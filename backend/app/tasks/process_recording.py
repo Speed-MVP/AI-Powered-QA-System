@@ -43,7 +43,9 @@ async def process_recording_task(recording_id: str):
             transcript_text=transcript_data["transcript"],
             diarized_segments=transcript_data["diarized_segments"],
             sentiment_analysis=transcript_data.get("sentiment_analysis"),  # Voice-based sentiment
-            transcription_confidence=float(transcript_data["confidence"]) if transcript_data.get("confidence") else None
+            transcription_confidence=float(transcript_data["confidence"]) if transcript_data.get("confidence") else None,
+            # MVP Evaluation Improvements: Store Deepgram confidence
+            deepgram_confidence=float(transcript_data["confidence"]) if transcript_data.get("confidence") else None
         )
         db.add(transcript)
         db.commit()
@@ -100,12 +102,16 @@ async def process_recording_task(recording_id: str):
         elif sentiment_analysis_for_gemini is None:
             sentiment_analysis_for_gemini = None
 
-        evaluation_data = await gemini.evaluate(
+        evaluation_result = await gemini.evaluate(
             transcript_text=transcript.transcript_text,
             policy_template_id=policy_template.id,
             sentiment_analysis=sentiment_analysis_for_gemini,
             rule_results=rule_results  # Phase 2: Include rule engine results
         )
+
+        # MVP Evaluation Improvements: Extract evaluation data and raw response
+        evaluation_data = evaluation_result["evaluation"]
+        raw_llm_response = evaluation_result["raw_llm_response"]
 
         # Validate evaluation data
         if not evaluation_data or not isinstance(evaluation_data, dict):
@@ -163,6 +169,11 @@ async def process_recording_task(recording_id: str):
         # Extract customer tone from evaluation data
         customer_tone = evaluation_data.get("customer_tone")
         
+        # MVP Evaluation Improvements: Set reproducibility metadata
+        model_name = raw_llm_response.get("model", "unknown")
+        prompt_text = raw_llm_response.get("prompt", "")
+        generation_config = raw_llm_response.get("generation_config", {})
+
         evaluation = Evaluation(
             recording_id=recording_id,
             policy_template_id=policy_template.id,
@@ -174,7 +185,16 @@ async def process_recording_task(recording_id: str):
             requires_human_review=confidence_result["requires_human_review"],  # Phase 1: Human routing flag
             customer_tone=customer_tone,
             llm_analysis=evaluation_data,
-            status=EvaluationStatus.completed
+            status=EvaluationStatus.completed,
+            # MVP Evaluation Improvements: Reproducibility metadata
+            prompt_id=f"eval_{policy_template.id}_{recording_id}",  # Generate deterministic prompt ID
+            prompt_version="1.0",  # Version for prompt template
+            model_version=model_name,
+            model_temperature=generation_config.get("temperature", 0.0),
+            model_top_p=generation_config.get("top_p", 1.0),
+            llm_raw=raw_llm_response,  # Store full raw response
+            rubric_version="1.0",  # Version for rubric system
+            evaluation_seed=recording_id  # Use recording ID as deterministic seed
         )
         db.add(evaluation)
         db.flush()

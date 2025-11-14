@@ -12,6 +12,9 @@ from app.models.policy_violation import PolicyViolation
 from app.models.team import Team
 from app.models.agent_team import AgentTeamMembership, AgentTeamChange, TeamRole
 from app.models.import_job import ImportJob
+# MVP Evaluation Improvements
+from app.models.human_review import HumanReview, ReviewStatus
+from app.models.rule_engine_results import RuleEngineResults
 
 __all__ = [
     "Company",
@@ -33,5 +36,9 @@ __all__ = [
     "AgentTeamChange",
     "TeamRole",
     "ImportJob",
+    # MVP Evaluation Improvements
+    "HumanReview",
+    "ReviewStatus",
+    "RuleEngineResults",
 ]
 

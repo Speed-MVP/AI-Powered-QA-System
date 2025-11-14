@@ -21,37 +21,24 @@ class ReviewStatus(str, enum.Enum):
 
 class HumanReview(Base):
     """
-    Human-reviewed evaluations for fine-tuning dataset curation.
-    Phase 3: Collect 1000+ human-reviewed calls for fine-tuning.
+    Human-reviewed evaluations for dataset capture and comparison.
+    MVP Evaluation Improvements: Human-review dataset capture and storage schema.
     """
     __tablename__ = "human_reviews"
 
     id = Column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
+    recording_id = Column(String(36), ForeignKey("recordings.id"), nullable=False)
     evaluation_id = Column(String(36), ForeignKey("evaluations.id"), nullable=False, unique=True)
-    reviewer_user_id = Column(String(36), ForeignKey("users.id"), nullable=True)
+    reviewer_id = Column(String(36), ForeignKey("users.id"), nullable=True)  # Nullable for anonymous reviews
 
-    # Human evaluation scores (ground truth for fine-tuning)
-    human_overall_score = Column(Integer, nullable=True)  # 0-100 - Filled when review is submitted
-
-    # Category-level human scores
-    human_category_scores = Column(JSONB, nullable=True)  # {"Empathy": 85, "Professionalism": 92, ...} - Filled when review is submitted
-
-    # Human assessment of AI evaluation
-    ai_score_accuracy = Column(Numeric(3, 1), nullable=True)  # 1.0-5.0 scale - Filled when review is submitted
-    ai_recommendation = Column(Text, nullable=True)  # Human feedback on AI performance
-
-    # Review metadata
-    review_status = Column(Enum(ReviewStatus), default=ReviewStatus.pending)
-    time_spent_seconds = Column(Integer, nullable=True)  # How long human took to review
-    difficulty_rating = Column(Numeric(2, 1), nullable=True)  # 1.0-5.0 difficulty scale
-
-    # Fine-tuning metadata
-    included_in_training = Column(Boolean, default=False)
-    training_split = Column(String(20), nullable=True)  # "train", "validation", "test"
-    training_notes = Column(Text, nullable=True)
+    # Human evaluation data
+    human_scores = Column(JSONB, nullable=True)  # category -> score (e.g., {"greeting": 80, "empathy": 60})
+    human_violations = Column(JSONB, nullable=True)  # list of violations with evidence
+    ai_scores = Column(JSONB, nullable=True)  # snapshot of AI scores for comparison
+    delta = Column(JSONB, nullable=True)  # computed ai->human differences
+    reviewer_notes = Column(Text, nullable=True)
 
     created_at = Column(DateTime, default=datetime.utcnow, index=True)
-    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
     # Relationships
     evaluation = relationship("Evaluation", back_populates="human_review")
