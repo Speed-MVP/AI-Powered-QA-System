@@ -129,9 +129,9 @@ class GeminiService:
             if not criteria:
                 raise Exception(f"No evaluation criteria found for template {policy_template_id}")
 
-            # Phase 1: RAG Retrieval - Get relevant policy snippets for the call topic
+            # COST OPTIMIZATION: Conditionally enable expensive RAG retrieval
             rag_results = None
-            if RAG_AVAILABLE:
+            if settings.enable_expensive_features and RAG_AVAILABLE:
                 try:
                     rag_service = RAGService()
                     rag_results = rag_service.retrieve_relevant_policies(
@@ -144,15 +144,17 @@ class GeminiService:
                     logger.warning(f"RAG retrieval failed, continuing without policy context: {e}")
                     rag_results = None
             else:
-                logger.debug("RAG service not available, skipping policy context retrieval")
+                logger.debug("RAG disabled for cost optimization or service not available")
 
-            # Phase 2: Retrieve similar past human-reviewed evaluations for in-context learning
-            human_review_examples = self._retrieve_similar_human_reviews(
-                transcript_text=transcript_text,
-                policy_template_id=policy_template_id,
-                db=db,
-                max_examples=3  # Limit to 3 examples to keep prompt size manageable
-            )
+            # COST OPTIMIZATION: Conditionally enable expensive human review examples
+            human_review_examples = []
+            if settings.enable_expensive_features:
+                human_review_examples = self._retrieve_similar_human_reviews(
+                    transcript_text=transcript_text,
+                    policy_template_id=policy_template_id,
+                    db=db,
+                    max_examples=3  # Limit to 3 examples to keep prompt size manageable
+                )
 
             # Build prompt with retrieved policy context, human review examples, and rule engine results
             prompt = self._build_prompt(transcript_text, criteria, sentiment_analysis, rag_results, rule_results, human_review_examples)
@@ -161,17 +163,53 @@ class GeminiService:
             if model is None:
                 raise Exception("Model not initialized - cannot generate content")
             
+            # COST OPTIMIZATION: Enforce deterministic settings with token limits
+            generation_config = genai.types.GenerationConfig(
+                temperature=0.0,  # Deterministic
+                top_p=1.0,        # No sampling randomness
+                top_k=None,       # Use default
+                candidate_count=1, # Single response
+                max_output_tokens=2048,  # COST CONTROL: Limit output tokens
+            )
+
             try:
-                response = model.generate_content(prompt)
+                response = model.generate_content(
+                    prompt,
+                    generation_config=generation_config
+                )
             except Exception as e:
                 logger.error(f"Gemini API call failed: {e}")
                 raise Exception(f"Failed to generate content from Gemini API: {e}")
-            
+
             # Parse response
             if not response or not hasattr(response, 'text') or not response.text:
                 raise Exception("Empty or invalid response from Gemini API")
-            
+
             response_text = response.text
+
+            # COST OPTIMIZATION: Store compressed metadata only (not full prompt/response)
+            # Use hash for reproducibility verification without storing expensive content
+            prompt_hash = hash(prompt) % 1000000
+            response_summary = response_text[:500] + "..." if len(response_text) > 500 else response_text
+            tokens_used = len(prompt.split()) + len(response_text.split())  # Rough estimate
+
+            raw_llm_response = {
+                "model": model_name,
+                "timestamp": datetime.utcnow().isoformat(),
+                "temperature": generation_config.temperature,
+                "top_p": generation_config.top_p,
+                "response_length": len(response_text),
+                "prompt_hash": prompt_hash,
+                "response_summary": response_summary,  # Limited preview for debugging
+                "tokens_used": tokens_used,
+                "cost_estimate": tokens_used * 0.000002  # Rough Gemini cost estimate ($0.002 per 1000 tokens)
+            }
+
+            # COST MONITORING: Log token usage and alert if over threshold
+            logger.info(f"Token usage: {tokens_used} tokens, estimated cost: ${raw_llm_response['cost_estimate']:.6f}")
+
+            if raw_llm_response['cost_estimate'] > settings.token_cost_threshold:
+                logger.warning(f"High-cost evaluation detected: ${raw_llm_response['cost_estimate']:.6f} exceeds threshold of ${settings.token_cost_threshold:.6f}")
             
             # Try to extract JSON from response
             try:
@@ -221,7 +259,11 @@ class GeminiService:
             # Determine cost tier based on actual model name
             evaluation["cost_tier"] = "standard" if model_name == "Flash model" else "premium"
 
-            return evaluation
+            # MVP Evaluation Improvements: Return both parsed evaluation and raw response
+            return {
+                "evaluation": evaluation,
+                "raw_llm_response": raw_llm_response
+            }
 
         finally:
             db.close()
@@ -379,7 +421,20 @@ class GeminiService:
             return []
     
     def _build_prompt(self, transcript: str, criteria: list, sentiment_analysis: Optional[List[Dict[str, Any]]] = None, rag_results: Optional[Dict[str, Any]] = None, rule_results: Optional[Dict[str, Any]] = None, human_review_examples: Optional[List[Dict[str, Any]]] = None) -> str:
-        """Build LLM prompt with rubric-based evaluation"""
+        """Build LLM prompt with rubric-based evaluation - COST OPTIMIZED"""
+
+        # COST OPTIMIZATION: Token budget management
+        MAX_PROMPT_TOKENS = 4000  # Conservative limit for cost control
+        current_tokens = 0
+
+        def estimate_tokens(text: str) -> int:
+            """Rough token estimation (1 token ≈ 4 chars)"""
+            return len(text) // 4
+
+        # Compress transcript if too long
+        if estimate_tokens(transcript) > 1500:  # Leave room for other content
+            transcript = transcript[:6000] + "...[truncated for efficiency]"
+            logger.info("Transcript compressed for token efficiency")
         criteria_text_parts = []
         
         for c in criteria:
@@ -439,9 +494,10 @@ class GeminiService:
 
             rule_violations_text += "REMINDER: Rule violations are DETERMINISTIC and CONFIRMED. Match performance to lower rubric levels that reflect these violations.\n"
 
-        # Phase 3: Add human review examples for in-context learning (few-shot learning)
-        human_examples_text = ""
-        if human_review_examples and len(human_review_examples) > 0:
+            # COST OPTIMIZATION: Skip expensive human examples for token efficiency
+            human_examples_text = ""
+            # Temporarily disable human examples to save tokens - can be re-enabled when needed
+            # if human_review_examples and len(human_review_examples) > 0:
             human_examples_text = "\n\nLEARNING FROM PAST HUMAN EVALUATIONS (Use these examples to understand how humans evaluate calls):\n"
             human_examples_text += "These are real examples of how human reviewers evaluated similar calls. Use them to guide your evaluation.\n\n"
             

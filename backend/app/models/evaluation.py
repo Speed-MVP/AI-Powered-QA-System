@@ -29,6 +29,16 @@ class Evaluation(Base):
     llm_analysis = Column(JSONB, nullable=False)
     status = Column(Enum(EvaluationStatus), default=EvaluationStatus.pending)
     created_at = Column(DateTime, default=datetime.utcnow, index=True)
+
+    # MVP Evaluation Improvements: Reproducibility metadata
+    prompt_id = Column(String(100), nullable=True)
+    prompt_version = Column(String(20), nullable=True)
+    model_version = Column(String(50), nullable=True)
+    model_temperature = Column(Float, default=0.0)
+    model_top_p = Column(Float, default=1.0)
+    llm_raw = Column(JSONB, nullable=True)  # Store full LLM response payload
+    rubric_version = Column(String(20), nullable=True)
+    evaluation_seed = Column(String(50), nullable=True)  # Optional trace id
     
     # Phase 1: Agent/Team associations
     agent_id = Column(String(36), ForeignKey("users.id"), nullable=True, index=True)
@@ -43,5 +53,6 @@ class Evaluation(Base):
     category_scores = relationship("CategoryScore", back_populates="evaluation", cascade="all, delete-orphan")
     policy_violations = relationship("PolicyViolation", back_populates="evaluation", cascade="all, delete-orphan")
     human_review = relationship("HumanReview", uselist=False, back_populates="evaluation", cascade="all, delete-orphan")  # Phase 3
+    rule_engine_results = relationship("RuleEngineResults", back_populates="evaluation", cascade="all, delete-orphan")  # MVP Evaluation Improvements
     versions = relationship("EvaluationVersion", back_populates="evaluation", cascade="all, delete-orphan", order_by="EvaluationVersion.version_number")  # Phase 4
 

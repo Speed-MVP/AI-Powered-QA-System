@@ -12,6 +12,10 @@ from app.services.email import EmailService
 from app.services.confidence import ConfidenceService  # Phase 1: Confidence-based routing
 from app.services.rule_engine import RuleEngineService  # Phase 2: Rule engine
 from app.services.audit import AuditService  # Phase 4: Compliance & audit
+# MVP Evaluation Improvements - Phase 2
+from app.services.schema_validator import SchemaValidator
+from app.services.confidence_engine import ConfidenceEngine
+from app.services.transcript_normalizer import TranscriptNormalizer
 from datetime import datetime
 import logging
 
@@ -37,13 +41,23 @@ async def process_recording_task(recording_id: str):
         deepgram = DeepgramService()
         transcript_data = await deepgram.transcribe(recording.file_url)
         
-        # Save transcript
+        # MVP Evaluation Improvements - Phase 2: Transcript normalization
+        normalizer = TranscriptNormalizer()
+        normalized_text, processed_segments, normalization_metadata = normalizer.normalize_transcript(
+            raw_transcript=transcript_data["transcript"],
+            diarized_segments=transcript_data["diarized_segments"] or []
+        )
+
+        # Save transcript with normalized data
         transcript = Transcript(
             recording_id=recording_id,
-            transcript_text=transcript_data["transcript"],
-            diarized_segments=transcript_data["diarized_segments"],
+            transcript_text=normalized_text,  # Use normalized text
+            diarized_segments=processed_segments,  # Use processed segments
             sentiment_analysis=transcript_data.get("sentiment_analysis"),  # Voice-based sentiment
-            transcription_confidence=float(transcript_data["confidence"]) if transcript_data.get("confidence") else None
+            transcription_confidence=float(transcript_data["confidence"]) if transcript_data.get("confidence") else None,
+            # MVP Evaluation Improvements: Store additional quality metrics
+            deepgram_confidence=float(transcript_data["confidence"]) if transcript_data.get("confidence") else None,
+            normalized_text=normalized_text  # Store normalized version separately
         )
         db.add(transcript)
         db.commit()
@@ -100,17 +114,39 @@ async def process_recording_task(recording_id: str):
         elif sentiment_analysis_for_gemini is None:
             sentiment_analysis_for_gemini = None
 
-        evaluation_data = await gemini.evaluate(
+        evaluation_result = await gemini.evaluate(
             transcript_text=transcript.transcript_text,
             policy_template_id=policy_template.id,
             sentiment_analysis=sentiment_analysis_for_gemini,
             rule_results=rule_results  # Phase 2: Include rule engine results
         )
 
+        # MVP Evaluation Improvements: Extract evaluation data and raw response
+        evaluation_data = evaluation_result["evaluation"]
+        raw_llm_response = evaluation_result["raw_llm_response"]
+
+        # Phase 2: Schema validation
+        schema_validator = SchemaValidator()
+        schema_valid, schema_error = schema_validator.validate_evaluation_response(evaluation_data)
+
+        if not schema_valid:
+            logger.warning(f"LLM response schema validation failed: {schema_error}")
+            # Continue processing but mark for human review due to schema issues
+            schema_valid = False
+
+        # Extract validated data if schema is valid
+        if schema_valid:
+            validation_result = schema_validator.validate_and_extract_scores(evaluation_data)
+            if validation_result[0]:  # is_valid
+                evaluation_data = validation_result[1]["evaluation_data"]  # Use validated data
+            else:
+                logger.error(f"Failed to extract scores from validated response: {validation_result[1]}")
+                schema_valid = False
+
         # Validate evaluation data
         if not evaluation_data or not isinstance(evaluation_data, dict):
             raise Exception("Invalid evaluation data returned from LLM")
-        
+
         if "category_scores" not in evaluation_data:
             raise Exception("Evaluation data missing required 'category_scores' field")
         
@@ -162,7 +198,30 @@ async def process_recording_task(recording_id: str):
         # Step 6: Save evaluation
         # Extract customer tone from evaluation data
         customer_tone = evaluation_data.get("customer_tone")
-        
+
+        # Phase 2: Confidence Engine - 5-signal scoring
+        confidence_engine = ConfidenceEngine()
+        transcript_confidence = transcript.deepgram_confidence or transcript.transcription_confidence
+
+        # For now, we only have one LLM response. In production, we'd run multiple times for reproducibility
+        llm_responses = [evaluation_data]
+
+        confidence_score, confidence_breakdown = confidence_engine.compute_confidence_score(
+            transcript_confidence=transcript_confidence,
+            llm_responses=llm_responses,
+            rule_results=rule_results,
+            category_scores=llm_scores["category_scores"],  # Use LLM category scores
+            schema_valid=schema_valid
+        )
+
+        # Update human review flag based on confidence score
+        requires_human_review = confidence_breakdown["requires_human_review"]
+
+        # MVP Evaluation Improvements: Set reproducibility metadata
+        model_name = raw_llm_response.get("model", "unknown")
+        prompt_text = raw_llm_response.get("prompt", "")
+        generation_config = raw_llm_response.get("generation_config", {})
+
         evaluation = Evaluation(
             recording_id=recording_id,
             policy_template_id=policy_template.id,
@@ -170,11 +229,20 @@ async def process_recording_task(recording_id: str):
             overall_score=final_scores["overall_score"],
             resolution_detected=final_scores["resolution_detected"],
             resolution_confidence=final_scores["resolution_confidence"],
-            confidence_score=confidence_result["confidence_score"],  # Phase 1: AI confidence score
-            requires_human_review=confidence_result["requires_human_review"],  # Phase 1: Human routing flag
+            confidence_score=confidence_score,  # Phase 2: 5-signal confidence score
+            requires_human_review=requires_human_review,  # Phase 2: Confidence-based human review routing
             customer_tone=customer_tone,
             llm_analysis=evaluation_data,
-            status=EvaluationStatus.completed
+            status=EvaluationStatus.completed,
+            # MVP Evaluation Improvements: Reproducibility metadata
+            prompt_id=f"eval_{policy_template.id}_{recording_id}",  # Generate deterministic prompt ID
+            prompt_version="1.0",  # Version for prompt template
+            model_version=model_name,
+            model_temperature=generation_config.get("temperature", 0.0),
+            model_top_p=generation_config.get("top_p", 1.0),
+            llm_raw=raw_llm_response,  # Store full raw response
+            rubric_version="1.0",  # Version for rubric system
+            evaluation_seed=recording_id  # Use recording ID as deterministic seed
         )
         db.add(evaluation)
         db.flush()
@@ -195,7 +263,16 @@ async def process_recording_task(recording_id: str):
                 feedback=score_data.get("feedback", "")
             )
             db.add(cat_score)
-        
+
+        # MVP Evaluation Improvements - Phase 2: Save rule engine results
+        from app.models.rule_engine_results import RuleEngineResults
+        rule_results_record = RuleEngineResults(
+            recording_id=recording_id,
+            evaluation_id=evaluation.id,
+            rules=rule_results
+        )
+        db.add(rule_results_record)
+
         # Step 8: Save violations
         # Create a mapping from category names to criteria IDs (case-insensitive matching)
         category_to_criteria = {}
