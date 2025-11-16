@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import { api } from '@/lib/api'
-import { FaPlus, FaTrash, FaEdit, FaSave, FaTimes, FaCheck, FaExclamationCircle, FaSpinner, FaFileAlt, FaChartBar, FaBullseye, FaRuler, FaLightbulb, FaCheckCircle, FaChevronDown, FaChevronRight } from 'react-icons/fa'
+import { FaPlus, FaTrash, FaEdit, FaSave, FaTimes, FaCheck, FaExclamationCircle, FaSpinner, FaLightbulb, FaCheckCircle, FaChevronDown, FaChevronRight } from 'react-icons/fa'
 
 interface RubricLevel {
   id: string
@@ -485,32 +485,24 @@ export function PolicyTemplates() {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-gray-50 via-blue-50/30 to-purple-50/20 dark:from-gray-900 dark:via-gray-900 dark:to-gray-900 py-8">
-      {/* Enhanced background lighting effects */}
-      <div className="fixed inset-0 -z-10 overflow-hidden pointer-events-none">
-        <div className="absolute top-0 -right-40 w-[750px] h-[750px] bg-brand-400/11 dark:bg-brand-500/5.5 rounded-full blur-[110px]"></div>
-        <div className="absolute top-1/2 -left-40 w-[650px] h-[650px] bg-blue-400/9 dark:bg-blue-500/4.5 rounded-full blur-[95px]"></div>
-        <div className="absolute bottom-0 right-1/3 w-[600px] h-[600px] bg-purple-400/8 dark:bg-purple-500/4 rounded-full blur-[90px]"></div>
-      </div>
-      
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12 relative">
-        {/* Header Section with improved styling */}
-        <div className="mb-8 bg-white dark:bg-gray-800 rounded-xl shadow-lg border border-gray-200 dark:border-gray-700 p-6">
-          <div className="flex items-center justify-between flex-wrap gap-4">
-            <div className="flex-1 min-w-0">
-              <h1 className="text-3xl font-bold text-gray-900 dark:text-white mb-2 flex items-center space-x-3">
-                <FaFileAlt className="w-8 h-8 text-brand-500" />
-                <span>Policy Templates</span>
+    <div className="min-h-screen bg-gray-50 dark:bg-gray-900 py-8">
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+        {/* Header Section */}
+        <div className="mb-8">
+          <div className="flex items-center justify-between mb-4">
+            <div>
+              <h1 className="text-2xl font-semibold text-gray-900 dark:text-white mb-1">
+                Policy Templates
               </h1>
-              <p className="text-gray-600 dark:text-gray-400 max-w-2xl">
-                Create and manage evaluation criteria with customizable rubric levels for consistent, objective quality assurance. Define performance levels (Excellent, Good, Average, etc.) for each category.
+              <p className="text-sm text-gray-600 dark:text-gray-400">
+                Manage evaluation criteria and rubric levels for quality assurance
               </p>
             </div>
-            <div className="flex items-center space-x-3 flex-shrink-0">
+            <div className="flex items-center gap-3">
               <button
                 onClick={loadTemplates}
                 disabled={loading}
-                className="px-4 py-2 bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded-lg hover:bg-gray-200 dark:hover:bg-gray-600 flex items-center space-x-2 transition-colors disabled:opacity-50 shadow-sm"
+                className="px-3 py-2 text-sm bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-700 text-gray-700 dark:text-gray-300 rounded-md hover:bg-gray-50 dark:hover:bg-gray-700 flex items-center gap-2 transition-colors disabled:opacity-50"
                 title="Refresh templates"
               >
                 <FaSpinner className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
@@ -519,7 +511,7 @@ export function PolicyTemplates() {
               <button
                 onClick={() => setShowNewTemplate(true)}
                 disabled={saving || showNewTemplate}
-                className="px-4 py-2 bg-brand-500 text-white rounded-lg hover:bg-brand-600 flex items-center space-x-2 shadow-md hover:shadow-lg transition-all disabled:opacity-50 disabled:cursor-not-allowed font-medium"
+                className="px-4 py-2 text-sm bg-brand-500 text-white rounded-md hover:bg-brand-600 flex items-center gap-2 transition-colors disabled:opacity-50 disabled:cursor-not-allowed font-medium"
               >
                 <FaPlus className="w-4 h-4" />
                 <span>New Template</span>
@@ -530,8 +522,8 @@ export function PolicyTemplates() {
 
         {/* Error Message */}
         {error && (
-          <div className="mb-6 p-4 bg-red-50 dark:bg-red-900/20 border-l-4 border-red-500 dark:border-red-400 rounded-lg shadow-sm flex items-center space-x-3 animate-fade-in">
-            <FaExclamationCircle className="w-5 h-5 text-red-600 dark:text-red-400 flex-shrink-0" />
+          <div className="mb-6 p-3 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-md flex items-center gap-3">
+            <FaExclamationCircle className="w-4 h-4 text-red-600 dark:text-red-400 flex-shrink-0" />
             <span className="text-sm text-red-800 dark:text-red-200 flex-1">{error}</span>
             <button
               onClick={() => setError(null)}
@@ -544,11 +536,10 @@ export function PolicyTemplates() {
 
         {/* New Template Form */}
         {showNewTemplate && (
-          <div className="mb-6 bg-white dark:bg-gray-800 rounded-xl border-2 border-brand-200 dark:border-brand-800 shadow-lg p-6 animate-slide-down">
+          <div className="mb-6 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-md p-6">
             <div className="flex items-center justify-between mb-4">
-              <h2 className="text-xl font-semibold text-gray-900 dark:text-white flex items-center space-x-2">
-                <FaPlus className="w-5 h-5 text-brand-500" />
-                <span>Create New Template</span>
+              <h2 className="text-lg font-semibold text-gray-900 dark:text-white">
+                Create New Template
               </h2>
               <button
                 onClick={() => {
@@ -563,7 +554,7 @@ export function PolicyTemplates() {
             </div>
             <div className="space-y-4">
               <div>
-                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">
                   Template Name <span className="text-red-500">*</span>
                 </label>
                 <input
@@ -571,26 +562,26 @@ export function PolicyTemplates() {
                   value={newTemplateName}
                   onChange={(e) => setNewTemplateName(e.target.value)}
                   placeholder="e.g., Customer Service QA, Sales Call Evaluation"
-                  className="w-full px-4 py-2.5 border-2 border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:border-brand-500 focus:ring-2 focus:ring-brand-200 dark:focus:ring-brand-800 transition-colors"
+                  className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-brand-500 focus:border-transparent"
                 />
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">
                   Description
                 </label>
                 <textarea
                   value={newTemplateDesc}
                   onChange={(e) => setNewTemplateDesc(e.target.value)}
-                  placeholder="Describe what this template evaluates (e.g., 'Quality assurance for customer support calls focusing on compliance, empathy, and resolution')"
+                  placeholder="Describe what this template evaluates"
                   rows={3}
-                  className="w-full px-4 py-2.5 border-2 border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:border-brand-500 focus:ring-2 focus:ring-brand-200 dark:focus:ring-brand-800 transition-colors resize-none"
+                  className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-brand-500 focus:border-transparent resize-none"
                 />
               </div>
-              <div className="flex space-x-3 pt-2">
+              <div className="flex gap-3 pt-2">
                 <button
                   onClick={handleCreateTemplate}
                   disabled={saving || !newTemplateName.trim()}
-                  className="px-6 py-2.5 bg-brand-500 text-white rounded-lg hover:bg-brand-600 disabled:opacity-50 disabled:cursor-not-allowed flex items-center space-x-2 shadow-md hover:shadow-lg transition-all font-medium"
+                  className="px-4 py-2 text-sm bg-brand-500 text-white rounded-md hover:bg-brand-600 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2 transition-colors font-medium"
                 >
                   {saving ? <FaSpinner className="w-4 h-4 animate-spin" /> : <FaCheck className="w-4 h-4" />}
                   <span>Create Template</span>
@@ -602,7 +593,7 @@ export function PolicyTemplates() {
                     setNewTemplateDesc('')
                   }}
                   disabled={saving}
-                  className="px-6 py-2.5 bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded-lg hover:bg-gray-300 dark:hover:bg-gray-600 disabled:opacity-50 transition-colors font-medium"
+                  className="px-4 py-2 text-sm bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 rounded-md hover:bg-gray-50 dark:hover:bg-gray-600 disabled:opacity-50 transition-colors"
                 >
                   Cancel
                 </button>
@@ -611,21 +602,21 @@ export function PolicyTemplates() {
           </div>
         )}
 
-        {/* Templates List */}
+        {/* Templates Grid */}
         {templates.length === 0 ? (
-          <div className="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 p-12 text-center">
+          <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-md p-12 text-center">
             <p className="text-gray-600 dark:text-gray-400 mb-4">
               No templates yet. Create your first template to get started.
             </p>
             <button
               onClick={() => setShowNewTemplate(true)}
-              className="px-4 py-2 bg-brand-500 text-white rounded-lg hover:bg-brand-600"
+              className="px-4 py-2 text-sm bg-brand-500 text-white rounded-md hover:bg-brand-600 transition-colors"
             >
               Create Template
             </button>
           </div>
         ) : (
-          <div className="space-y-6">
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
             {templates.map((template) => {
               const isActive = activeTemplate?.id === template.id
               const weightsValid = validateWeight(template.criteria)
@@ -634,25 +625,25 @@ export function PolicyTemplates() {
               return (
                 <div
                   key={template.id}
-                  className={`bg-white dark:bg-gray-800 rounded-xl border-2 shadow-md hover:shadow-lg transition-all ${
+                  className={`bg-white dark:bg-gray-800 border rounded-md transition-all ${
                     isActive
-                      ? 'border-brand-500 dark:border-brand-500 ring-2 ring-brand-200 dark:ring-brand-800'
-                      : 'border-gray-200 dark:border-gray-700 hover:border-gray-300 dark:hover:border-gray-600'
+                      ? 'border-brand-500 dark:border-brand-500'
+                      : 'border-gray-200 dark:border-gray-700'
                   }`}
                 >
                   {/* Template Header */}
-                  <div className="p-6 border-b border-gray-200 dark:border-gray-700 bg-gradient-to-r from-gray-50 to-transparent dark:from-gray-800/50">
-                    <div className="flex items-start justify-between">
-                      <div className="flex-1">
+                  <div className="p-5 border-b border-gray-200 dark:border-gray-700">
+                    <div className="flex items-start justify-between gap-4 mb-3">
+                      <div className="flex-1 min-w-0">
                         {isEditing ? (
-                          <div className="space-y-4">
+                          <div className="space-y-3">
                             <input
                               type="text"
                               value={template.template_name}
                               onChange={(e) =>
                                 handleUpdateTemplate(template.id, { template_name: e.target.value })
                               }
-                              className="text-xl font-semibold px-3 py-1 border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-700 text-gray-900 dark:text-white w-full"
+                              className="text-lg font-semibold px-2 py-1 border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-700 text-gray-900 dark:text-white w-full focus:outline-none focus:ring-2 focus:ring-brand-500"
                             />
                             <textarea
                               value={template.description || ''}
@@ -660,38 +651,38 @@ export function PolicyTemplates() {
                                 handleUpdateTemplate(template.id, { description: e.target.value })
                               }
                               rows={2}
-                              className="px-3 py-1 border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-700 text-gray-900 dark:text-white w-full"
+                              className="text-sm px-2 py-1 border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-700 text-gray-900 dark:text-white w-full focus:outline-none focus:ring-2 focus:ring-brand-500 resize-none"
                             />
                           </div>
                         ) : (
                           <div>
-                            <div className="flex items-center space-x-3 mb-2">
-                              <h2 className="text-xl font-bold text-gray-900 dark:text-white">
+                            <div className="flex items-center gap-2 mb-1.5 flex-wrap">
+                              <h2 className="text-lg font-semibold text-gray-900 dark:text-white">
                                 {template.template_name}
                               </h2>
                               {isActive && (
-                                <span className="px-3 py-1 bg-brand-500 text-white text-xs font-semibold rounded-full shadow-sm flex items-center space-x-1">
+                                <span className="px-2 py-0.5 bg-brand-500 text-white text-xs font-medium rounded flex items-center gap-1">
                                   <FaCheckCircle className="w-3 h-3" />
                                   <span>Active</span>
                                 </span>
                               )}
                             </div>
-                            <p className="text-gray-600 dark:text-gray-400">
+                            <p className="text-sm text-gray-600 dark:text-gray-400">
                               {template.description || 'No description'}
                             </p>
                           </div>
                         )}
                       </div>
-                      <div className="flex items-center space-x-2 ml-4">
+                      <div className="flex items-center gap-1 flex-shrink-0">
                         {!isEditing && (
                           <>
                             <button
                               onClick={() => handleSetActive(template.id)}
                               disabled={saving}
-                              className={`px-3 py-1.5 rounded-lg text-sm disabled:opacity-50 ${
+                              className={`px-2.5 py-1.5 text-xs rounded-md disabled:opacity-50 transition-colors ${
                                 isActive
                                   ? 'bg-brand-500 text-white'
-                                  : 'bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-300 dark:hover:bg-gray-600'
+                                  : 'bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600'
                               }`}
                             >
                               {isActive ? 'Active' : 'Set Active'}
@@ -699,9 +690,10 @@ export function PolicyTemplates() {
                             <button
                               onClick={() => setEditingTemplate(template.id)}
                               disabled={saving}
-                              className="p-2 text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white disabled:opacity-50"
+                              className="p-1.5 text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white hover:bg-gray-100 dark:hover:bg-gray-700 rounded disabled:opacity-50 transition-colors"
+                              title="Edit template"
                             >
-                              <FaEdit className="w-4 h-4" />
+                              <FaEdit className="w-3.5 h-3.5" />
                             </button>
                           </>
                         )}
@@ -709,40 +701,37 @@ export function PolicyTemplates() {
                           <button
                             onClick={() => setEditingTemplate(null)}
                             disabled={saving}
-                            className="p-2 text-green-600 dark:text-green-400 disabled:opacity-50"
+                            className="p-1.5 text-green-600 dark:text-green-400 hover:bg-green-50 dark:hover:bg-green-900/20 rounded disabled:opacity-50 transition-colors"
+                            title="Save changes"
                           >
-                            <FaSave className="w-4 h-4" />
+                            <FaSave className="w-3.5 h-3.5" />
                           </button>
                         )}
                         <button
                           onClick={() => handleDeleteTemplate(template.id)}
                           disabled={saving}
-                          className="p-2 text-red-600 dark:text-red-400 hover:text-red-700 dark:hover:text-red-300 disabled:opacity-50"
+                          className="p-1.5 text-red-600 dark:text-red-400 hover:text-red-700 dark:hover:text-red-300 hover:bg-red-50 dark:hover:bg-red-900/20 rounded disabled:opacity-50 transition-colors"
+                          title="Delete template"
                         >
-                          <FaTrash className="w-4 h-4" />
+                          <FaTrash className="w-3.5 h-3.5" />
                         </button>
                       </div>
                     </div>
                   </div>
 
-                  {/* Criteria List */}
-                  <div className="p-6 bg-gray-50/50 dark:bg-gray-900/30">
-                    <div className="flex items-center justify-between mb-6">
-                      <div className="flex-1">
-                        <h3 className="text-lg font-bold text-gray-900 dark:text-white mb-2 flex items-center space-x-2">
-                          <FaChartBar className="w-5 h-5 text-brand-500" />
-                          <span>Evaluation Criteria</span>
-                          <span className="text-sm font-normal text-gray-500 dark:text-gray-400">
-                            ({template.criteria.length} {template.criteria.length === 1 ? 'category' : 'categories'})
-                          </span>
+                  {/* Criteria Section */}
+                  <div className="p-5">
+                    <div className="flex items-center justify-between mb-4">
+                      <div>
+                        <h3 className="text-sm font-semibold text-gray-900 dark:text-white mb-1">
+                          Evaluation Criteria
                         </h3>
-                        <p className="text-sm text-gray-600 dark:text-gray-400">
-                          Define evaluation categories with customizable rubric levels. Each category can have multiple performance levels (Excellent, Good, Average, etc.) with specific score ranges and descriptions.
+                        <p className="text-xs text-gray-500 dark:text-gray-400">
+                          {template.criteria.length} {template.criteria.length === 1 ? 'category' : 'categories'}
                         </p>
                       </div>
                       <button
                         onClick={() => {
-                          // Calculate remaining weight for new category
                           const currentWeight = totalWeight(template.criteria)
                           const remainingWeight = 100 - currentWeight
                           const defaultWeight = Math.max(0, Math.min(remainingWeight, 33.33))
@@ -755,24 +744,24 @@ export function PolicyTemplates() {
                           })
                         }}
                         disabled={saving || totalWeight(template.criteria) >= 100}
-                        className="px-4 py-2 bg-brand-500 text-white rounded-lg hover:bg-brand-600 flex items-center space-x-2 text-sm font-medium shadow-md hover:shadow-lg transition-all disabled:opacity-50 disabled:cursor-not-allowed disabled:shadow-none"
+                        className="px-3 py-1.5 text-xs bg-brand-500 text-white rounded-md hover:bg-brand-600 flex items-center gap-1.5 transition-colors disabled:opacity-50 disabled:cursor-not-allowed font-medium"
                         title={totalWeight(template.criteria) >= 100 ? "Total weight already equals 100%" : "Add a new evaluation criteria"}
                       >
-                        <FaPlus className="w-4 h-4" />
+                        <FaPlus className="w-3 h-3" />
                         <span>Add Criteria</span>
                       </button>
                     </div>
 
                     {/* Weight Validation */}
                     {!weightsValid && template.criteria.length > 0 && (
-                      <div className="mb-4 p-4 bg-yellow-50 dark:bg-yellow-900/20 border-l-4 border-yellow-500 dark:border-yellow-400 rounded-lg flex items-center space-x-3 shadow-sm">
-                        <FaExclamationCircle className="w-5 h-5 text-yellow-600 dark:text-yellow-400 flex-shrink-0" />
-                        <div>
-                          <p className="text-sm font-medium text-yellow-800 dark:text-yellow-200">
+                      <div className="mb-3 p-2.5 bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800 rounded-md flex items-start gap-2">
+                        <FaExclamationCircle className="w-4 h-4 text-yellow-600 dark:text-yellow-400 flex-shrink-0 mt-0.5" />
+                        <div className="flex-1">
+                          <p className="text-xs font-medium text-yellow-800 dark:text-yellow-200">
                             Weight Total Invalid
                           </p>
-                          <p className="text-sm text-yellow-700 dark:text-yellow-300">
-                            Total weight must equal 100%. Current: <span className="font-bold">{Number(totalWeight(template.criteria)).toFixed(1)}%</span>
+                          <p className="text-xs text-yellow-700 dark:text-yellow-300">
+                            Total must equal 100%. Current: <span className="font-semibold">{Number(totalWeight(template.criteria)).toFixed(1)}%</span>
                           </p>
                         </div>
                       </div>
@@ -780,31 +769,28 @@ export function PolicyTemplates() {
                     
                     {/* Weight Summary */}
                     {weightsValid && template.criteria.length > 0 && (
-                      <div className="mb-4 p-3 bg-green-50 dark:bg-green-900/20 border-l-4 border-green-500 dark:border-green-400 rounded-lg flex items-center space-x-2">
-                        <FaCheckCircle className="w-4 h-4 text-green-600 dark:text-green-400" />
-                        <span className="text-sm text-green-800 dark:text-green-200 font-medium">
+                      <div className="mb-3 p-2 bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded-md flex items-center gap-2">
+                        <FaCheckCircle className="w-3.5 h-3.5 text-green-600 dark:text-green-400" />
+                        <span className="text-xs text-green-800 dark:text-green-200 font-medium">
                           Total weight: {Number(totalWeight(template.criteria)).toFixed(1)}%
                         </span>
                       </div>
                     )}
 
                     {template.criteria.length === 0 ? (
-                      <div className="text-center py-8 text-gray-500 dark:text-gray-400">
-                        <p className="mb-2">No criteria added yet.</p>
-                        <p className="text-sm">Click "Add Criteria" to create evaluation categories like Compliance, Empathy, Resolution, etc.</p>
-                        <p className="text-xs mt-2 text-gray-400 dark:text-gray-500">
-                          If you ran the test setup script, criteria should appear here. Try refreshing if they don't show up.
-                        </p>
+                      <div className="text-center py-6 text-gray-500 dark:text-gray-400">
+                        <p className="text-sm mb-1">No criteria added yet.</p>
+                        <p className="text-xs">Click "Add Criteria" to create evaluation categories.</p>
                       </div>
                     ) : (
-                      <div className="space-y-4">
+                      <div className="space-y-3">
                         {template.criteria.map((criteria) => {
                           const isEditingCriteria = editingCriteria === criteria.id
 
                           return (
                             <div
                               key={criteria.id}
-                              className="border-2 border-gray-200 dark:border-gray-700 rounded-xl p-5 bg-white dark:bg-gray-800 shadow-sm hover:shadow-md transition-all hover:border-brand-300 dark:hover:border-brand-700"
+                              className="border border-gray-200 dark:border-gray-700 rounded-md p-4 bg-gray-50 dark:bg-gray-900/50 hover:border-gray-300 dark:hover:border-gray-600 transition-colors"
                             >
                               {isEditingCriteria ? (
                                 <CriteriaEditor
@@ -816,57 +802,55 @@ export function PolicyTemplates() {
                                 />
                               ) : (
                                 <div>
-                                  <div className="flex items-start justify-between mb-3">
-                                    <div className="flex-1">
-                                      <div className="flex items-center flex-wrap gap-2 mb-3">
-                                        <h4 className="font-bold text-gray-900 dark:text-white text-lg flex items-center space-x-2">
-                                          <FaBullseye className="w-5 h-5 text-brand-500" />
-                                          <span>{criteria.category_name}</span>
+                                  <div className="flex items-start justify-between gap-3 mb-3">
+                                    <div className="flex-1 min-w-0">
+                                      <div className="flex items-center gap-2 mb-2 flex-wrap">
+                                        <h4 className="font-semibold text-gray-900 dark:text-white text-sm">
+                                          {criteria.category_name}
                                         </h4>
-                                        <span className="text-xs px-3 py-1.5 bg-gradient-to-r from-purple-100 to-purple-50 dark:from-purple-900/30 dark:to-purple-800/20 text-purple-700 dark:text-purple-300 rounded-full font-medium shadow-sm">
-                                          Weight: {criteria.weight}%
+                                        <span className="text-xs px-2 py-0.5 bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded font-medium">
+                                          {criteria.weight}%
                                         </span>
-                                        <span className="text-xs px-3 py-1.5 bg-gradient-to-r from-blue-100 to-blue-50 dark:from-blue-900/30 dark:to-blue-800/20 text-blue-700 dark:text-blue-300 rounded-full font-medium shadow-sm">
-                                          Passing: {criteria.passing_score}%
+                                        <span className="text-xs px-2 py-0.5 bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded font-medium">
+                                          Pass: {criteria.passing_score}%
                                         </span>
                                         {criteria.rubric_levels && criteria.rubric_levels.length > 0 && (
-                                          <span className="text-xs px-3 py-1.5 bg-gradient-to-r from-green-100 to-green-50 dark:from-green-900/30 dark:to-green-800/20 text-green-700 dark:text-green-300 rounded-full font-medium shadow-sm">
-                                            {criteria.rubric_levels.length} Rubric {criteria.rubric_levels.length === 1 ? 'Level' : 'Levels'}
+                                          <span className="text-xs px-2 py-0.5 bg-brand-100 dark:bg-brand-900/30 text-brand-700 dark:text-brand-300 rounded font-medium">
+                                            {criteria.rubric_levels.length} {criteria.rubric_levels.length === 1 ? 'Level' : 'Levels'}
                                           </span>
                                         )}
                                       </div>
-                                      <div className="mt-3 mb-4">
-                                        <p className="text-xs font-semibold text-gray-600 dark:text-gray-400 mb-2 uppercase tracking-wide">Evaluation Prompt:</p>
-                                        <div className="bg-gradient-to-r from-gray-50 to-gray-100/50 dark:from-gray-900/50 dark:to-gray-800/30 p-3 rounded-lg border-l-4 border-brand-400 dark:border-brand-600">
-                                          <p className="text-sm text-gray-700 dark:text-gray-300 leading-relaxed">
+                                      <div className="mb-3">
+                                        <p className="text-xs font-medium text-gray-600 dark:text-gray-400 mb-1.5">Evaluation Prompt:</p>
+                                        <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded p-2.5">
+                                          <p className="text-xs text-gray-700 dark:text-gray-300 leading-relaxed">
                                             {criteria.evaluation_prompt}
                                           </p>
                                         </div>
                                       </div>
                                       
                                       {/* Rubric Levels Section */}
-                                      <div className="mt-4 border-t border-gray-200 dark:border-gray-700 pt-4">
-                                        <div className="flex items-center justify-between mb-3">
-                                          <div className="flex items-center space-x-2">
-                                            <FaRuler className="w-4 h-4 text-brand-500" />
-                                            <span className="text-sm font-bold text-gray-700 dark:text-gray-300">Rubric Levels</span>
+                                      <div className="mt-3 pt-3 border-t border-gray-200 dark:border-gray-700">
+                                        <div className="flex items-center justify-between mb-2">
+                                          <div className="flex items-center gap-2">
+                                            <span className="text-xs font-medium text-gray-700 dark:text-gray-300">Rubric Levels</span>
                                             <span className="text-xs text-gray-500 dark:text-gray-400">
-                                              ({criteria.rubric_levels?.length || 0} {criteria.rubric_levels?.length === 1 ? 'level' : 'levels'})
+                                              ({criteria.rubric_levels?.length || 0})
                                             </span>
                                           </div>
                                           <button
                                             onClick={() => toggleCriteriaExpanded(criteria.id)}
-                                            className="px-3 py-1.5 text-xs font-medium bg-brand-100 dark:bg-brand-900/30 text-brand-700 dark:text-brand-300 rounded-lg hover:bg-brand-200 dark:hover:bg-brand-900/50 transition-colors flex items-center space-x-1"
+                                            className="px-2 py-1 text-xs font-medium bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded hover:bg-gray-200 dark:hover:bg-gray-600 transition-colors flex items-center gap-1"
                                           >
                                             {expandedCriteria.has(criteria.id) ? (
                                               <>
                                                 <FaChevronDown className="w-3 h-3" />
-                                                <span>Hide Levels</span>
+                                                <span>Hide</span>
                                               </>
                                             ) : (
                                               <>
                                                 <FaChevronRight className="w-3 h-3" />
-                                                <span>Show Levels</span>
+                                                <span>Show</span>
                                               </>
                                             )}
                                           </button>
@@ -881,7 +865,7 @@ export function PolicyTemplates() {
                                                   return (
                                                     <div
                                                       key={level.id}
-                                                      className="p-4 bg-gradient-to-r from-gray-50 to-white dark:from-gray-900/40 dark:to-gray-800/20 rounded-lg border-2 border-gray-200 dark:border-gray-700 hover:border-brand-300 dark:hover:border-brand-700 transition-all shadow-sm"
+                                                      className="p-3 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-md hover:border-gray-300 dark:hover:border-gray-600 transition-colors"
                                                     >
                                                       {isEditing ? (
                                                         <RubricLevelEditor
@@ -890,27 +874,27 @@ export function PolicyTemplates() {
                                                           onCancel={() => setEditingRubricLevel(null)}
                                                         />
                                                       ) : (
-                                                        <div className="flex items-start justify-between">
-                                                          <div className="flex-1">
-                                                            <div className="flex items-center flex-wrap gap-2 mb-2">
-                                                              <span className="font-bold text-base text-gray-900 dark:text-white">
+                                                        <div className="flex items-start justify-between gap-2">
+                                                          <div className="flex-1 min-w-0">
+                                                            <div className="flex items-center gap-2 mb-1.5 flex-wrap">
+                                                              <span className="font-medium text-sm text-gray-900 dark:text-white">
                                                                 {level.level_name}
                                                               </span>
-                                                              <span className="text-xs px-2.5 py-1 bg-gradient-to-r from-purple-500 to-purple-600 text-white rounded-full font-semibold shadow-sm">
+                                                              <span className="text-xs px-1.5 py-0.5 bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded font-medium">
                                                                 {level.min_score}-{level.max_score}
                                                               </span>
-                                                              <span className="text-xs px-2.5 py-1 bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded-full font-medium">
+                                                              <span className="text-xs px-1.5 py-0.5 bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded font-medium">
                                                                 #{level.level_order}
                                                               </span>
                                                             </div>
-                                                            <div className="mb-2">
-                                                              <p className="text-sm text-gray-700 dark:text-gray-300 leading-relaxed">
+                                                            <div className="mb-1.5">
+                                                              <p className="text-xs text-gray-700 dark:text-gray-300 leading-relaxed">
                                                                 {level.description}
                                                               </p>
                                                             </div>
                                                             {level.examples && (
-                                                              <div className="mt-2 pt-2 border-t border-gray-200 dark:border-gray-700">
-                                                                <p className="text-xs font-semibold text-gray-600 dark:text-gray-400 mb-1 flex items-center space-x-1">
+                                                              <div className="mt-1.5 pt-1.5 border-t border-gray-200 dark:border-gray-700">
+                                                                <p className="text-xs font-medium text-gray-600 dark:text-gray-400 mb-0.5 flex items-center gap-1">
                                                                   <FaLightbulb className="w-3 h-3" />
                                                                   <span>Examples:</span>
                                                                 </p>
@@ -920,11 +904,11 @@ export function PolicyTemplates() {
                                                               </div>
                                                             )}
                                                           </div>
-                                                          <div className="flex items-center space-x-1 ml-2">
+                                                          <div className="flex items-center gap-0.5 flex-shrink-0">
                                                             <button
                                                               onClick={() => setEditingRubricLevel(level.id)}
                                                               disabled={saving}
-                                                              className="p-1.5 text-blue-600 dark:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-900/20 rounded disabled:opacity-50"
+                                                              className="p-1 text-blue-600 dark:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-900/20 rounded disabled:opacity-50 transition-colors"
                                                               title="Edit rubric level"
                                                             >
                                                               <FaEdit className="w-3 h-3" />
@@ -932,7 +916,7 @@ export function PolicyTemplates() {
                                                             <button
                                                               onClick={() => handleDeleteRubricLevel(template.id, criteria.id, level.id)}
                                                               disabled={saving}
-                                                              className="p-1.5 text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 rounded disabled:opacity-50"
+                                                              className="p-1 text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 rounded disabled:opacity-50 transition-colors"
                                                               title="Delete rubric level"
                                                             >
                                                               <FaTrash className="w-3 h-3" />
@@ -945,20 +929,16 @@ export function PolicyTemplates() {
                                                 })}
                                                 <button
                                                   onClick={() => {
-                                                    // Add new rubric level with default values
                                                     const existingLevels = criteria.rubric_levels || []
                                                     const maxOrder = existingLevels.length > 0 
                                                       ? Math.max(...existingLevels.map(l => l.level_order))
                                                       : 0
                                                     
-                                                    // Find a non-overlapping score range
-                                                    // Sort existing levels by min_score to find gaps
                                                     const sortedLevels = [...existingLevels].sort((a, b) => a.min_score - b.min_score)
                                                     
                                                     let newMinScore = 0
                                                     let newMaxScore = 20
                                                     
-                                                    // Helper function to check if a range overlaps with any existing level
                                                     const overlapsWithExisting = (min: number, max: number) => {
                                                       return existingLevels.some(level => 
                                                         !(max < level.min_score || min > level.max_score)
@@ -966,18 +946,14 @@ export function PolicyTemplates() {
                                                     }
                                                     
                                                     if (sortedLevels.length === 0) {
-                                                      // No existing levels, use default range
                                                       newMinScore = 0
                                                       newMaxScore = 20
                                                     } else {
-                                                      // Try to find a non-overlapping range
-                                                      // First, try below the lowest level
                                                       const lowestMin = sortedLevels[0].min_score
                                                       if (lowestMin >= 20) {
                                                         newMinScore = Math.max(0, lowestMin - 20)
                                                         newMaxScore = lowestMin - 1
                                                       } else {
-                                                        // Check for gaps between levels
                                                         let foundGap = false
                                                         for (let i = 0; i < sortedLevels.length - 1; i++) {
                                                           const currentMax = sortedLevels[i].max_score
@@ -985,7 +961,6 @@ export function PolicyTemplates() {
                                                           const gapSize = nextMin - currentMax - 1
                                                           
                                                           if (gapSize >= 10) {
-                                                            // Found a gap of at least 10 points
                                                             newMinScore = currentMax + 1
                                                             newMaxScore = Math.min(100, currentMax + Math.min(20, gapSize))
                                                             foundGap = true
@@ -994,18 +969,15 @@ export function PolicyTemplates() {
                                                         }
                                                         
                                                         if (!foundGap) {
-                                                          // No gap found, try above the highest level
                                                           const highestMax = Math.max(...sortedLevels.map(l => l.max_score))
                                                           if (highestMax < 80) {
                                                             newMinScore = highestMax + 1
                                                             newMaxScore = Math.min(100, highestMax + 20)
                                                           } else {
-                                                            // Try below the lowest level (even if small)
                                                             if (lowestMin > 0) {
                                                               newMinScore = Math.max(0, lowestMin - 10)
                                                               newMaxScore = Math.max(0, lowestMin - 1)
                                                             } else {
-                                                              // Fallback: use a small range that might need manual adjustment
                                                               newMinScore = 0
                                                               newMaxScore = 10
                                                             }
@@ -1013,9 +985,7 @@ export function PolicyTemplates() {
                                                         }
                                                       }
                                                       
-                                                      // Final check: if the calculated range overlaps, try a different approach
                                                       if (overlapsWithExisting(newMinScore, newMaxScore)) {
-                                                        // Find the first available non-overlapping range
                                                         for (let testMin = 0; testMin <= 90; testMin += 10) {
                                                           const testMax = Math.min(100, testMin + 10)
                                                           if (!overlapsWithExisting(testMin, testMax)) {
@@ -1037,19 +1007,16 @@ export function PolicyTemplates() {
                                                     })
                                                   }}
                                                   disabled={saving}
-                                                  className="w-full px-4 py-2.5 text-sm font-medium bg-gradient-to-r from-purple-500 to-purple-600 text-white rounded-lg hover:from-purple-600 hover:to-purple-700 flex items-center justify-center space-x-2 disabled:opacity-50 shadow-md hover:shadow-lg transition-all"
+                                                  className="w-full px-3 py-2 text-xs font-medium bg-brand-500 text-white rounded-md hover:bg-brand-600 flex items-center justify-center gap-1.5 disabled:opacity-50 transition-colors"
                                                 >
-                                                  <FaPlus className="w-4 h-4" />
+                                                  <FaPlus className="w-3 h-3" />
                                                   <span>Add Rubric Level</span>
                                                 </button>
                                               </div>
                                             ) : (
-                                              <div className="text-center py-6 border-2 border-dashed border-gray-300 dark:border-gray-600 rounded-lg bg-gray-50/50 dark:bg-gray-900/20">
-                                                <p className="text-sm text-gray-600 dark:text-gray-400 mb-3 font-medium">
+                                              <div className="text-center py-4 border border-dashed border-gray-300 dark:border-gray-600 rounded-md bg-gray-50 dark:bg-gray-900/30">
+                                                <p className="text-xs text-gray-600 dark:text-gray-400 mb-2 font-medium">
                                                   No rubric levels defined yet
-                                                </p>
-                                                <p className="text-xs text-gray-500 dark:text-gray-500 mb-4">
-                                                  Add performance levels to define scoring criteria (e.g., Excellent, Good, Average, Poor, Unacceptable)
                                                 </p>
                                                 <button
                                                   onClick={() => {
@@ -1063,9 +1030,9 @@ export function PolicyTemplates() {
                                                     })
                                                   }}
                                                   disabled={saving}
-                                                  className="px-4 py-2 text-sm font-medium bg-gradient-to-r from-purple-500 to-purple-600 text-white rounded-lg hover:from-purple-600 hover:to-purple-700 disabled:opacity-50 shadow-md hover:shadow-lg transition-all"
+                                                  className="px-3 py-1.5 text-xs font-medium bg-brand-500 text-white rounded-md hover:bg-brand-600 disabled:opacity-50 transition-colors"
                                                 >
-                                                  <FaPlus className="w-4 h-4 inline mr-2" />
+                                                  <FaPlus className="w-3 h-3 inline mr-1" />
                                                   Add First Level
                                                 </button>
                                               </div>
@@ -1074,22 +1041,22 @@ export function PolicyTemplates() {
                                         )}
                                       </div>
                                     </div>
-                                    <div className="flex items-center space-x-2 ml-4">
+                                    <div className="flex items-center gap-1 flex-shrink-0">
                                       <button
                                         onClick={() => setEditingCriteria(criteria.id)}
                                         disabled={saving}
-                                        className="p-2 text-blue-600 dark:text-blue-400 hover:text-blue-700 dark:hover:text-blue-300 hover:bg-blue-50 dark:hover:bg-blue-900/20 rounded disabled:opacity-50"
+                                        className="p-1.5 text-blue-600 dark:text-blue-400 hover:text-blue-700 dark:hover:text-blue-300 hover:bg-blue-50 dark:hover:bg-blue-900/20 rounded disabled:opacity-50 transition-colors"
                                         title="Edit this criteria"
                                       >
-                                        <FaEdit className="w-4 h-4" />
+                                        <FaEdit className="w-3.5 h-3.5" />
                                       </button>
                                       <button
                                         onClick={() => handleDeleteCriteria(template.id, criteria.id)}
                                         disabled={saving}
-                                        className="p-2 text-red-600 dark:text-red-400 hover:text-red-700 dark:hover:text-red-300 hover:bg-red-50 dark:hover:bg-red-900/20 rounded disabled:opacity-50"
+                                        className="p-1.5 text-red-600 dark:text-red-400 hover:text-red-700 dark:hover:text-red-300 hover:bg-red-50 dark:hover:bg-red-900/20 rounded disabled:opacity-50 transition-colors"
                                         title="Delete this criteria"
                                       >
-                                        <FaTrash className="w-4 h-4" />
+                                        <FaTrash className="w-3.5 h-3.5" />
                                       </button>
                                     </div>
                                   </div>
@@ -1140,7 +1107,7 @@ function RubricLevelEditor({
 
   return (
     <div className="space-y-3">
-      <div className="grid grid-cols-2 gap-3">
+      <div className="grid grid-cols-2 gap-2">
         <div>
           <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">
             Level Name
@@ -1149,8 +1116,8 @@ function RubricLevelEditor({
             type="text"
             value={levelName}
             onChange={(e) => setLevelName(e.target.value)}
-            className="w-full px-2 py-1.5 text-sm border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
-            placeholder="e.g., Excellent, Good, Average"
+            className="w-full px-2 py-1 text-xs border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-brand-500"
+            placeholder="e.g., Excellent, Good"
           />
         </div>
         <div>
@@ -1163,11 +1130,11 @@ function RubricLevelEditor({
             onChange={(e) => setLevelOrder(e.target.value)}
             min="1"
             max="10"
-            className="w-full px-2 py-1.5 text-sm border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+            className="w-full px-2 py-1 text-xs border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-brand-500"
           />
         </div>
       </div>
-      <div className="grid grid-cols-2 gap-3">
+      <div className="grid grid-cols-2 gap-2">
         <div>
           <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">
             Min Score
@@ -1178,7 +1145,7 @@ function RubricLevelEditor({
             onChange={(e) => setMinScore(e.target.value)}
             min="0"
             max="100"
-            className="w-full px-2 py-1.5 text-sm border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+            className="w-full px-2 py-1 text-xs border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-brand-500"
           />
         </div>
         <div>
@@ -1191,19 +1158,19 @@ function RubricLevelEditor({
             onChange={(e) => setMaxScore(e.target.value)}
             min="0"
             max="100"
-            className="w-full px-2 py-1.5 text-sm border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+            className="w-full px-2 py-1 text-xs border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-brand-500"
           />
         </div>
       </div>
       <div>
         <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">
-          Description (What constitutes this level?)
+          Description
         </label>
         <textarea
           value={description}
           onChange={(e) => setDescription(e.target.value)}
-          rows={3}
-          className="w-full px-2 py-1.5 text-sm border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+          rows={2}
+          className="w-full px-2 py-1 text-xs border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-brand-500 resize-none"
           placeholder="Describe what performance looks like at this level..."
         />
       </div>
@@ -1215,21 +1182,21 @@ function RubricLevelEditor({
           value={examples}
           onChange={(e) => setExamples(e.target.value)}
           rows={2}
-          className="w-full px-2 py-1.5 text-sm border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
-          placeholder="Examples of behaviors or actions that match this level..."
+          className="w-full px-2 py-1 text-xs border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-brand-500 resize-none"
+          placeholder="Examples of behaviors or actions..."
         />
       </div>
-      <div className="flex items-center space-x-2">
+      <div className="flex items-center gap-2 pt-1">
         <button
           onClick={handleSave}
-          className="px-3 py-1.5 text-sm bg-green-600 text-white rounded hover:bg-green-700 flex items-center space-x-1"
+          className="px-3 py-1.5 text-xs bg-brand-500 text-white rounded-md hover:bg-brand-600 flex items-center gap-1.5 transition-colors font-medium"
         >
           <FaCheck className="w-3 h-3" />
           <span>Save</span>
         </button>
         <button
           onClick={onCancel}
-          className="px-3 py-1.5 text-sm bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded hover:bg-gray-300 dark:hover:bg-gray-600 flex items-center space-x-1"
+          className="px-3 py-1.5 text-xs bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 rounded-md hover:bg-gray-50 dark:hover:bg-gray-600 flex items-center gap-1.5 transition-colors"
         >
           <FaTimes className="w-3 h-3" />
           <span>Cancel</span>
@@ -1263,22 +1230,22 @@ function CriteriaEditor({
   }
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-3">
       <div>
-        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+        <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1.5">
           Category Name
         </label>
         <input
           type="text"
           value={categoryName}
           onChange={(e) => setCategoryName(e.target.value)}
-          className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+          className="w-full px-2.5 py-1.5 text-sm border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-brand-500"
           placeholder="e.g., Compliance, Empathy, Resolution"
         />
       </div>
-      <div className="grid grid-cols-2 gap-4">
+      <div className="grid grid-cols-2 gap-3">
         <div>
-          <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+          <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1.5">
             Weight (%)
           </label>
           <input
@@ -1288,11 +1255,11 @@ function CriteriaEditor({
             min="0"
             max="100"
             step="0.1"
-            className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+            className="w-full px-2.5 py-1.5 text-sm border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-brand-500"
           />
         </div>
         <div>
-          <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+          <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1.5">
             Passing Score (0-100)
           </label>
           <input
@@ -1301,38 +1268,38 @@ function CriteriaEditor({
             onChange={(e) => setPassingScore(e.target.value)}
             min="0"
             max="100"
-            className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+            className="w-full px-2.5 py-1.5 text-sm border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-brand-500"
           />
         </div>
       </div>
       <div>
-        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+        <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1.5">
           LLM Evaluation Prompt
         </label>
         <textarea
           value={evaluationPrompt}
           onChange={(e) => setEvaluationPrompt(e.target.value)}
-          rows={4}
-          className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+          rows={3}
+          className="w-full px-2.5 py-1.5 text-sm border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-brand-500 resize-none"
           placeholder="Instructions for the LLM on how to evaluate this category..."
         />
         <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
-          This prompt will be sent to the LLM to evaluate this category. Be specific about what to look for.
+          This prompt will be sent to the LLM to evaluate this category.
         </p>
       </div>
-      <div className="flex space-x-2">
+      <div className="flex gap-2 pt-1">
         <button
           onClick={handleSave}
-          className="px-4 py-2 bg-brand-500 text-white rounded-lg hover:bg-brand-600 flex items-center space-x-1"
+          className="px-3 py-1.5 text-xs bg-brand-500 text-white rounded-md hover:bg-brand-600 flex items-center gap-1.5 transition-colors font-medium"
         >
-          <FaCheck className="w-4 h-4" />
+          <FaCheck className="w-3 h-3" />
           <span>Save</span>
         </button>
         <button
           onClick={onCancel}
-          className="px-4 py-2 bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded-lg hover:bg-gray-300 dark:hover:bg-gray-600 flex items-center space-x-1"
+          className="px-3 py-1.5 text-xs bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 rounded-md hover:bg-gray-50 dark:hover:bg-gray-600 flex items-center gap-1.5 transition-colors"
         >
-          <FaTimes className="w-4 h-4" />
+          <FaTimes className="w-3 h-3" />
           <span>Cancel</span>
         </button>
       </div>
