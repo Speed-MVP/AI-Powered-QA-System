@@ -43,25 +43,26 @@ class GeminiService:
             except Exception as e:
                 logger.debug(f"Could not list available models (non-critical): {e}")
 
-            # Use the latest stable models that are confirmed to work
+            # Use gemini-2.5-flash-lite for cost efficiency (cheaper than 2.5-pro)
             try:
-                self.pro_model = genai.GenerativeModel('gemini-pro-latest')
-                logger.info("Gemini Pro model initialized successfully with gemini-pro-latest")
+                self.pro_model = genai.GenerativeModel('gemini-2.5-flash-lite')
+                logger.info("Gemini model initialized successfully with gemini-2.5-flash-lite")
             except Exception as e:
-                logger.warning(f"Failed to initialize gemini-pro-latest: {e}, trying gemini-2.5-pro")
+                logger.warning(f"Failed to initialize gemini-2.5-flash-lite: {e}, trying gemini-2.5-flash")
                 try:
-                    self.pro_model = genai.GenerativeModel('gemini-2.5-pro')
-                    logger.info("Gemini Pro model initialized successfully with gemini-2.5-pro")
+                    self.pro_model = genai.GenerativeModel('gemini-2.5-flash')
+                    logger.info("Gemini model initialized successfully with gemini-2.5-flash")
                 except Exception as e2:
-                    raise Exception(f"No Gemini Pro model available: {e2}")
+                    logger.warning(f"Failed to initialize gemini-2.5-flash: {e2}, trying gemini-flash-latest")
+                    try:
+                        self.pro_model = genai.GenerativeModel('gemini-flash-latest')
+                        logger.info("Gemini model initialized successfully with gemini-flash-latest")
+                    except Exception as e3:
+                        raise Exception(f"No Gemini model available: {e3}")
 
-            # Try Flash model
-            try:
-                self.flash_model = genai.GenerativeModel('gemini-flash-latest')
-                logger.info("Gemini Flash model initialized successfully with gemini-flash-latest")
-            except Exception as e:
-                logger.warning(f"Gemini Flash model not available ({e}), using Pro model for all evaluations")
-                self.flash_model = self.pro_model
+            # Use same model for Flash (cost-optimized Flash model)
+            self.flash_model = self.pro_model
+            logger.info("Using cost-optimized Flash model for all evaluations")
 
             self.api_key = settings.gemini_api_key
         else:
@@ -96,24 +97,23 @@ class GeminiService:
         # Always calculate complexity score (needed for metadata even if forcing Pro)
         complexity_score = self._assess_call_complexity(transcript_text, sentiment_analysis, rule_results)
 
-        # Force Pro model if configured (for reliability)
+        # Use Flash model for cost efficiency
         if settings.gemini_force_pro:
             model = self.pro_model
-            model_name = "Pro model"
-            logger.info(f"Using Gemini Pro (forced by configuration, complexity: {complexity_score:.2f})")
+            model_name = "Flash model (cost-optimized)"
+            logger.info(f"Using Gemini Flash (forced by configuration, complexity: {complexity_score:.2f})")
         else:
             # Phase 4: Choose model based on complexity
             if use_hybrid and complexity_score <= 0.7 and self.flash_model != self.pro_model:
                 # Use Flash for simple/routine cases (~70% of calls) - only if Flash is available
                 model = self.flash_model
-                model_name = "Flash model"
+                model_name = "Flash model (cost-optimized)"
                 logger.info(f"Using Gemini Flash for evaluation (complexity: {complexity_score:.2f})")
             else:
-                # Use Pro for complex cases, when hybrid is disabled, or when Flash is not available
+                # Use Flash for all cases (cost-optimized)
                 model = self.pro_model
-                model_name = "Pro model"
-                reason = "Flash not available" if self.flash_model == self.pro_model else f"complexity {complexity_score:.2f}"
-                logger.info(f"Using Gemini Pro for evaluation ({reason})")
+                model_name = "Flash model (cost-optimized)"
+                logger.info(f"Using Gemini Flash for evaluation (complexity: {complexity_score:.2f})")
 
         db = SessionLocal()
         try:
@@ -256,8 +256,8 @@ class GeminiService:
             # Phase 4: Add hybrid deployment metadata
             evaluation["model_used"] = model_name
             evaluation["complexity_score"] = complexity_score
-            # Determine cost tier based on actual model name
-            evaluation["cost_tier"] = "standard" if model_name == "Flash model" else "premium"
+            # Determine cost tier based on actual model name (Flash model is standard/cost-efficient)
+            evaluation["cost_tier"] = "standard"  # Flash model is cost-optimized
 
             # MVP Evaluation Improvements: Return both parsed evaluation and raw response
             return {

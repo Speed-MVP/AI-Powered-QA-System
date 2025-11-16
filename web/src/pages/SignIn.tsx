@@ -4,8 +4,8 @@ import { useAuth } from '@/contexts/AuthContext'
 import { FaSpinner, FaExclamationCircle } from 'react-icons/fa'
 
 export function SignIn() {
-  const [email, setEmail] = useState('test@example.com')
-  const [password, setPassword] = useState('test123')
+  const [email, setEmail] = useState('')
+  const [password, setPassword] = useState('')
   const [error, setError] = useState<string | null>(null)
   const [loading, setLoading] = useState(false)
   const { login, isAuthenticated } = useAuth()
@@ -65,20 +65,6 @@ export function SignIn() {
             </div>
           )}
 
-          {/* Test Credentials Info */}
-          <div className="mb-6 p-4 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg">
-            <p className="text-sm font-medium text-blue-900 dark:text-blue-200 mb-2">
-              🧪 Test Credentials (Pre-filled)
-            </p>
-            <p className="text-xs text-blue-700 dark:text-blue-300">
-              Email: test@example.com<br />
-              Password: test123
-            </p>
-            <p className="text-xs text-blue-600 dark:text-blue-400 mt-2">
-              Run <code className="bg-blue-100 dark:bg-blue-900 px-1 rounded">python backend/quick_test_setup.py</code> to create these credentials.
-            </p>
-          </div>
-
           <form onSubmit={handleSubmit} className="space-y-6">
             <div>
               <label htmlFor="email" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
@@ -91,7 +77,7 @@ export function SignIn() {
                 onChange={(e) => setEmail(e.target.value)}
                 required
                 className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-brand-500 focus:border-transparent"
-                placeholder="test@example.com"
+                placeholder="Enter your email"
               />
             </div>
 
@@ -126,11 +112,6 @@ export function SignIn() {
             </button>
           </form>
 
-          <div className="mt-6 text-center">
-            <p className="text-xs text-gray-500 dark:text-gray-400">
-              Don't have an account? Run the test setup script to create one.
-            </p>
-          </div>
         </div>
       </div>
     </div>
