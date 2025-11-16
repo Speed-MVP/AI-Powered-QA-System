@@ -42,8 +42,8 @@ class Settings(BaseSettings):
     # Alignment removed
 
     # Gemini Service (Phase 3-4)
-    gemini_use_hybrid: bool = False  # Default to Pro only for reliability
-    gemini_force_pro: bool = True    # Always use Pro model (more reliable)
+    gemini_use_hybrid: bool = False  # Default to Flash only for cost efficiency
+    gemini_force_pro: bool = False   # Use Flash model (gemini-2.5-flash-lite) for cost savings
 
     # Cost Optimization Settings
     enable_expensive_features: bool = False  # Enable RAG, human examples, advanced sentiment analysis
