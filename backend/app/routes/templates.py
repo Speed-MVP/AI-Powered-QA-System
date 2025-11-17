@@ -1057,6 +1057,90 @@ async def update_rubric_level(
     )
 
 
+@router.put("/{template_id}/rules")
+async def update_policy_rules(
+    template_id: str,
+    rules_data: dict,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Update policy rules for a template (admin or qa_manager only)"""
+    if current_user.role not in [UserRole.admin, UserRole.qa_manager]:
+        raise HTTPException(status_code=403, detail="Insufficient permissions")
+    
+    template = db.query(PolicyTemplate).filter(
+        PolicyTemplate.id == template_id,
+        PolicyTemplate.company_id == current_user.company_id
+    ).first()
+    
+    if not template:
+        raise HTTPException(status_code=404, detail="Template not found")
+    
+    # Validate rules structure
+    if "rules" not in rules_data:
+        raise HTTPException(status_code=400, detail="'rules' field is required")
+    
+    # Validate using PolicyRulesSchema
+    try:
+        from app.schemas.policy_rules import PolicyRulesSchema
+        rules_dict = {
+            "version": rules_data.get("version", template.policy_rules_version or 1),
+            "rules": rules_data["rules"],
+            "metadata": rules_data.get("metadata", {})
+        }
+        validated_rules = PolicyRulesSchema(**rules_dict)
+        
+        # Convert back to dict for storage
+        rules_to_store = {
+            "version": validated_rules.version,
+            "rules": {
+                category: [rule.dict() for rule in rules]
+                for category, rules in validated_rules.rules.items()
+            },
+            "metadata": validated_rules.metadata
+        }
+        
+        # Update template
+        template.policy_rules = rules_to_store
+        template.policy_rules_version = (template.policy_rules_version or 0) + 1
+        template.rules_generated_at = datetime.utcnow()
+        template.rules_approved_by_user_id = current_user.id
+        
+        db.commit()
+        db.refresh(template)
+        
+        # Reload with criteria
+        from sqlalchemy.orm import joinedload
+        template_with_criteria = db.query(PolicyTemplate).options(
+            joinedload(PolicyTemplate.evaluation_criteria).joinedload(EvaluationCriteria.rubric_levels)
+        ).filter(PolicyTemplate.id == template.id).first()
+        
+        return PolicyTemplateResponse(
+            id=template_with_criteria.id,
+            company_id=template_with_criteria.company_id,
+            template_name=template_with_criteria.template_name,
+            description=template_with_criteria.description,
+            is_active=template_with_criteria.is_active,
+            created_at=template_with_criteria.created_at,
+            criteria=[
+                EvaluationCriteriaResponse(
+                    id=c.id,
+                    category_name=c.category_name,
+                    weight=c.weight,
+                    passing_score=c.passing_score,
+                    evaluation_prompt=c.evaluation_prompt,
+                    created_at=c.created_at
+                ) for c in template_with_criteria.evaluation_criteria
+            ],
+            policy_rules=template_with_criteria.policy_rules,
+            policy_rules_version=template_with_criteria.policy_rules_version,
+            enable_structured_rules=template_with_criteria.enable_structured_rules
+        )
+    except Exception as e:
+        logger.error(f"Failed to update policy rules: {e}", exc_info=True)
+        raise HTTPException(status_code=400, detail=f"Invalid rules: {str(e)}")
+
+
 @router.delete("/{template_id}/criteria/{criteria_id}/rubric-levels/{level_id}")
 async def delete_rubric_level(
     template_id: str,

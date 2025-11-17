@@ -52,6 +52,7 @@ export function PolicyTemplates() {
   const [showNewTemplate, setShowNewTemplate] = useState(false)
   const [showTemplateDropdown, setShowTemplateDropdown] = useState(false)
   const [saving, setSaving] = useState(false)
+  const [editingRulesForCategory, setEditingRulesForCategory] = useState<{templateId: string, categoryName: string} | null>(null)
 
   // Fetch templates from backend
   useEffect(() => {
@@ -1185,25 +1186,10 @@ export function PolicyTemplates() {
                                     <div className="flex items-center gap-1 flex-shrink-0">
                                       {template.policy_rules?.rules?.[criteria.category_name] && (
                                         <button
-                                          onClick={() => {
-                                            const rules = template.policy_rules?.rules?.[criteria.category_name] || []
-                                            const rulesText = JSON.stringify(rules, null, 2)
-                                            const newWindow = window.open('', '_blank')
-                                            if (newWindow) {
-                                              newWindow.document.write(`
-                                                <html>
-                                                  <head><title>Rules for ${criteria.category_name}</title></head>
-                                                  <body style="font-family: monospace; padding: 20px; background: #f5f5f5;">
-                                                    <h2>Policy Rules: ${criteria.category_name}</h2>
-                                                    <pre style="background: white; padding: 15px; border-radius: 5px; overflow-x: auto;">${rulesText}</pre>
-                                                  </body>
-                                                </html>
-                                              `)
-                                            }
-                                          }}
+                                          onClick={() => setEditingRulesForCategory({templateId: template.id, categoryName: criteria.category_name})}
                                           disabled={saving}
                                           className="p-1.5 text-purple-600 dark:text-purple-400 hover:text-purple-700 dark:hover:text-purple-300 hover:bg-purple-50 dark:hover:bg-purple-900/20 rounded disabled:opacity-50 transition-colors"
-                                          title="View policy rules for this category"
+                                          title="Edit policy rules for this category"
                                         >
                                           <FaList className="w-3.5 h-3.5" />
                                         </button>
@@ -1239,6 +1225,212 @@ export function PolicyTemplates() {
             })}
           </div>
         )}
+
+        {/* Rule Editor Modal */}
+        {editingRulesForCategory && (() => {
+          const template = templates.find(t => t.id === editingRulesForCategory.templateId)
+          const rules = template?.policy_rules?.rules?.[editingRulesForCategory.categoryName] || []
+          
+          return (
+            <RuleEditorModal
+              templateId={editingRulesForCategory.templateId}
+              categoryName={editingRulesForCategory.categoryName}
+              rules={rules}
+              onClose={() => setEditingRulesForCategory(null)}
+              onSave={async (updatedRules) => {
+                try {
+                  setSaving(true)
+                  setError(null)
+                  
+                  const template = templates.find(t => t.id === editingRulesForCategory.templateId)
+                  if (!template || !template.policy_rules) return
+                  
+                  const updatedPolicyRules = {
+                    ...template.policy_rules,
+                    rules: {
+                      ...template.policy_rules.rules,
+                      [editingRulesForCategory.categoryName]: updatedRules
+                    }
+                  }
+                  
+                  const updated = await api.updatePolicyRules(editingRulesForCategory.templateId, updatedPolicyRules)
+                  
+                  setTemplates(prev => prev.map(t => t.id === editingRulesForCategory.templateId ? updated : t))
+                  if (activeTemplate?.id === editingRulesForCategory.templateId) {
+                    setActiveTemplate(updated)
+                  }
+                  
+                  setEditingRulesForCategory(null)
+                } catch (err: any) {
+                  setError(err.message || 'Failed to update rules')
+                } finally {
+                  setSaving(false)
+                }
+              }}
+            />
+          )
+        })()}
+      </div>
+    </div>
+  )
+}
+
+function RuleEditorModal({
+  templateId,
+  categoryName,
+  rules,
+  onClose,
+  onSave
+}: {
+  templateId: string
+  categoryName: string
+  rules: any[]
+  onClose: () => void
+  onSave: (updatedRules: any[]) => void
+}) {
+  const [editedRules, setEditedRules] = useState<any[]>(rules.map(r => ({ ...r })))
+  const [saving, setSaving] = useState(false)
+
+  const handleSave = async () => {
+    setSaving(true)
+    try {
+      await onSave(editedRules)
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  const updateRule = (index: number, field: string, value: any) => {
+    setEditedRules(prev => prev.map((r, i) => 
+      i === index ? { ...r, [field]: value } : r
+    ))
+  }
+
+  return (
+    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+      <div className="bg-white dark:bg-gray-800 rounded-lg shadow-xl max-w-4xl w-full max-h-[90vh] overflow-hidden flex flex-col">
+        <div className="p-6 border-b border-gray-200 dark:border-gray-700 flex items-center justify-between">
+          <div>
+            <h2 className="text-xl font-semibold text-gray-900 dark:text-white">
+              Edit Rules: {categoryName}
+            </h2>
+            <p className="text-sm text-gray-600 dark:text-gray-400 mt-1">
+              {rules.length} {rules.length === 1 ? 'rule' : 'rules'}
+            </p>
+          </div>
+          <button
+            onClick={onClose}
+            className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300"
+          >
+            <FaTimes className="w-5 h-5" />
+          </button>
+        </div>
+        
+        <div className="flex-1 overflow-y-auto p-6">
+          <div className="space-y-4">
+            {editedRules.map((rule, index) => (
+              <div
+                key={rule.id || index}
+                className="border border-gray-200 dark:border-gray-700 rounded-lg p-4 bg-gray-50 dark:bg-gray-900/50"
+              >
+                <div className="flex items-start justify-between gap-4 mb-3">
+                  <div className="flex-1">
+                    <h3 className="font-semibold text-gray-900 dark:text-white text-sm mb-1">
+                      {rule.description || `Rule ${index + 1}`}
+                    </h3>
+                    <p className="text-xs text-gray-600 dark:text-gray-400">
+                      Type: <span className="font-mono">{rule.type}</span> | ID: <span className="font-mono">{rule.id}</span>
+                    </p>
+                  </div>
+                </div>
+                
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mt-4">
+                  <div className="flex items-center gap-2">
+                    <input
+                      type="checkbox"
+                      id={`critical-${index}`}
+                      checked={rule.critical || false}
+                      onChange={(e) => updateRule(index, 'critical', e.target.checked)}
+                      className="w-4 h-4 text-red-600 bg-gray-100 border-gray-300 rounded focus:ring-red-500 dark:focus:ring-red-600 dark:ring-offset-gray-800 focus:ring-2 dark:bg-gray-700 dark:border-gray-600"
+                    />
+                    <label
+                      htmlFor={`critical-${index}`}
+                      className="text-sm font-medium text-gray-700 dark:text-gray-300 flex items-center gap-1"
+                    >
+                      <FaExclamationCircle className="w-3.5 h-3.5 text-red-600 dark:text-red-400" />
+                      Critical Rule
+                    </label>
+                  </div>
+                  
+                  <div className="flex items-center gap-2">
+                    <input
+                      type="checkbox"
+                      id={`enabled-${index}`}
+                      checked={rule.enabled !== false}
+                      onChange={(e) => updateRule(index, 'enabled', e.target.checked)}
+                      className="w-4 h-4 text-brand-600 bg-gray-100 border-gray-300 rounded focus:ring-brand-500 dark:focus:ring-brand-600 dark:ring-offset-gray-800 focus:ring-2 dark:bg-gray-700 dark:border-gray-600"
+                    />
+                    <label
+                      htmlFor={`enabled-${index}`}
+                      className="text-sm font-medium text-gray-700 dark:text-gray-300"
+                    >
+                      Enabled
+                    </label>
+                  </div>
+                  
+                  <div>
+                    <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">
+                      Severity
+                    </label>
+                    <select
+                      value={rule.severity || 'minor'}
+                      onChange={(e) => updateRule(index, 'severity', e.target.value)}
+                      className="w-full px-2 py-1.5 text-xs border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-brand-500"
+                    >
+                      <option value="minor">Minor</option>
+                      <option value="moderate">Moderate</option>
+                      <option value="major">Major</option>
+                      <option value="critical">Critical</option>
+                    </select>
+                  </div>
+                </div>
+              </div>
+            ))}
+            
+            {editedRules.length === 0 && (
+              <div className="text-center py-8 text-gray-500 dark:text-gray-400">
+                <p>No rules found for this category</p>
+              </div>
+            )}
+          </div>
+        </div>
+        
+        <div className="p-6 border-t border-gray-200 dark:border-gray-700 flex items-center justify-end gap-3">
+          <button
+            onClick={onClose}
+            disabled={saving}
+            className="px-4 py-2 text-sm bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 rounded-md hover:bg-gray-50 dark:hover:bg-gray-600 disabled:opacity-50 transition-colors"
+          >
+            Cancel
+          </button>
+          <button
+            onClick={handleSave}
+            disabled={saving}
+            className="px-4 py-2 text-sm bg-brand-500 text-white rounded-md hover:bg-brand-600 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2 transition-colors font-medium"
+          >
+            {saving ? (
+              <>
+                <FaSpinner className="w-4 h-4 animate-spin" />
+                <span>Saving...</span>
+              </>
+            ) : (
+              <>
+                <FaSave className="w-4 h-4" />
+                <span>Save Changes</span>
+              </>
+            )}
+          </button>
+        </div>
       </div>
     </div>
   )

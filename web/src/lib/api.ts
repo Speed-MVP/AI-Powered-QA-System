@@ -453,6 +453,13 @@ class ApiClient {
     }>(`/api/templates/${templateId}/generate-rules`, { method: 'POST' })
   }
 
+  async updatePolicyRules(templateId: string, rulesData: { version?: number; rules: any; metadata?: any }) {
+    return this.request<PolicyTemplate>(`/api/templates/${templateId}/rules`, {
+      method: 'PUT',
+      body: JSON.stringify(rulesData),
+    })
+  }
+
   async addCriteria(templateId: string, data: {
     category_name: string
     weight: number
