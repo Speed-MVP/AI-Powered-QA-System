@@ -36,6 +36,11 @@ class Settings(BaseSettings):
     environment: str = "development"
     log_level: str = "INFO"
 
+    # Cloud Tasks
+    gcp_cloud_tasks_queue_name: Optional[str] = None
+    gcp_cloud_tasks_location: Optional[str] = None
+    gcp_cloud_run_service_url: Optional[str] = None
+
     # CORS
     cors_origins: str = "http://localhost:5173,https://ai-powered-qa-system.vercel.app,https://qualitidex.com,https://www.qualitidex.com,https://api.qualitidex.com"
 
@@ -49,6 +54,14 @@ class Settings(BaseSettings):
     enable_expensive_features: bool = False  # Enable RAG, human examples, advanced sentiment analysis
     max_tokens_per_evaluation: int = 4000   # Token budget per evaluation
     token_cost_threshold: float = 0.01     # Alert if evaluation costs more than $0.01
+
+    # Developer productivity helpers
+    use_mock_transcription: bool = False
+    use_mock_llm: bool = False
+    mock_processing_latency_seconds: int = 1
+    
+    # Phase 1: Structured Rules Foundation
+    enable_structured_rules: bool = False  # Feature flag for structured rules system
     
     class Config:
         env_file = ".env"

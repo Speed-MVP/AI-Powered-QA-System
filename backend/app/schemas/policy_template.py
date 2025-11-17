@@ -40,6 +40,9 @@ class PolicyTemplateResponse(BaseModel):
     is_active: bool
     created_at: datetime
     criteria: List[EvaluationCriteriaResponse] = []
+    policy_rules: Optional[dict] = None
+    policy_rules_version: Optional[int] = None
+    enable_structured_rules: bool = False
     
     class Config:
         from_attributes = True

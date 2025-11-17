@@ -12,6 +12,7 @@ from app.database import SessionLocal
 from app.models.user import User, UserRole
 from app.models.company import Company
 from app.routes.auth import get_password_hash
+from app.services.template_seeder import seed_default_template
 import uuid
 
 
@@ -71,8 +72,17 @@ def create_admin():
         )
         db.add(admin_user)
         db.commit()
+        db.refresh(admin_user)
         
-        print(f"Admin user created successfully!")
+        # Seed default Standard QA Template for the company
+        try:
+            seed_default_template(company.id, admin_user.id, db)
+            print(f"✓ Default Standard QA Template created successfully with 5 pre-configured criteria!")
+        except Exception as e:
+            print(f"Warning: Failed to create default template: {e}")
+            # Don't fail the entire process if template creation fails
+        
+        print(f"\nAdmin user created successfully!")
         print(f"Email: {email}")
         print(f"Company: {company.company_name}")
         print(f"Role: {admin_user.role.value}")

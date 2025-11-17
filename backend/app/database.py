@@ -35,6 +35,36 @@ def get_db() -> Session:
 def init_db():
     try:
         logger.info("Creating database tables...")
+        
+        # Ensure ENUM types exist before creating tables
+        with engine.connect() as conn:
+            from sqlalchemy import text
+            
+            # Create all required ENUM types if they don't exist
+            enums = [
+                ("reviewstatus", ['pending', 'in_review', 'completed', 'disputed']),
+                ("userrole", ['admin', 'qa_manager', 'reviewer']),
+                ("evaluationstatus", ['pending', 'completed', 'reviewed']),
+                ("recordingstatus", ['queued', 'processing', 'completed', 'failed']),
+                ("violationseverity", ['critical', 'major', 'minor']),
+                ("auditeventtype", [
+                    'evaluation_created', 'evaluation_updated', 'evaluation_reviewed',
+                    'evaluation_overridden', 'model_changed', 'policy_updated', 'batch_processed'
+                ]),
+            ]
+            
+            for enum_name, enum_values in enums:
+                values_str = ', '.join([f"'{v}'" for v in enum_values])
+                conn.execute(text(f"""
+                    DO $$ BEGIN
+                        CREATE TYPE {enum_name} AS ENUM ({values_str});
+                    EXCEPTION
+                        WHEN duplicate_object THEN null;
+                    END $$;
+                """))
+            conn.commit()
+        
+        # Create all tables based on models
         Base.metadata.create_all(bind=engine)
         logger.info("Database tables created successfully")
     except Exception as e:

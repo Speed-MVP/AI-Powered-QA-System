@@ -101,11 +101,6 @@ gcloud builds submit --tag gcr.io/PROJECT_ID/api:latest
 gcloud run deploy api --image gcr.io/PROJECT_ID/api:latest
 ```
 
-## Testing
-```bash
-pytest
-```
-
 ## Environment Variables
 
 See `.env.example` for all required environment variables.

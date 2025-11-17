@@ -38,18 +38,14 @@ export function Layout() {
             <div className="hidden md:flex items-center justify-center flex-1 space-x-8">
               {isAuthenticated ? (
                 <>
-                  <Link
-                    to="/dashboard"
-                    className="text-gray-600 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white text-sm font-medium"
-                  >
-                    Dashboard
-                  </Link>
-                  <Link
-                    to="/supervisor"
-                    className="text-gray-600 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white text-sm font-medium"
-                  >
-                    Supervisor
-                  </Link>
+                  {/* MVP: Only showing Demo, Templates, and Human Review for MVP
+                      TODO: Add back the following navbar items when ready:
+                      - Dashboard (/dashboard)
+                      - Supervisor (/supervisor)
+                      - Teams (/teams)
+                      - Agents (/agents)
+                      - Audit (/audit-log)
+                  */}
                   <Link
                     to="/human-review"
                     className="text-gray-600 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white text-sm font-medium"
@@ -61,24 +57,6 @@ export function Layout() {
                     className="text-gray-600 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white text-sm font-medium"
                   >
                     Templates
-                  </Link>
-                  <Link
-                    to="/teams"
-                    className="text-gray-600 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white text-sm font-medium"
-                  >
-                    Teams
-                  </Link>
-                  <Link
-                    to="/agents"
-                    className="text-gray-600 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white text-sm font-medium"
-                  >
-                    Agents
-                  </Link>
-                  <Link
-                    to="/audit-log"
-                    className="text-gray-600 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white text-sm font-medium"
-                  >
-                    Audit
                   </Link>
                   <Link
                     to="/demo"
@@ -167,18 +145,14 @@ export function Layout() {
           <div className="md:hidden flex justify-center items-center space-x-6 pb-4">
             {isAuthenticated ? (
               <>
-                <Link
-                  to="/dashboard"
-                  className="text-gray-600 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white text-sm font-medium"
-                >
-                  Dashboard
-                </Link>
-                <Link
-                  to="/supervisor"
-                  className="text-gray-600 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white text-sm font-medium"
-                >
-                  Supervisor
-                </Link>
+                {/* MVP: Only showing Demo, Templates, and Human Review for MVP
+                    TODO: Add back the following navbar items when ready:
+                    - Dashboard (/dashboard)
+                    - Supervisor (/supervisor)
+                    - Teams (/teams)
+                    - Agents (/agents)
+                    - Audit (/audit-log)
+                */}
                 <Link
                   to="/human-review"
                   className="text-gray-600 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white text-sm font-medium"
@@ -190,24 +164,6 @@ export function Layout() {
                   className="text-gray-600 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white text-sm font-medium"
                 >
                   Templates
-                </Link>
-                <Link
-                  to="/teams"
-                  className="text-gray-600 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white text-sm font-medium"
-                >
-                  Teams
-                </Link>
-                <Link
-                  to="/agents"
-                  className="text-gray-600 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white text-sm font-medium"
-                >
-                  Agents
-                </Link>
-                <Link
-                  to="/audit-log"
-                  className="text-gray-600 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white text-sm font-medium"
-                >
-                  Audit
                 </Link>
                 <Link
                   to="/demo"

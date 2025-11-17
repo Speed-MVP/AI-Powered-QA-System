@@ -16,10 +16,53 @@ from app.schemas.rubric_level import RubricLevelCreate, RubricLevelResponse
 from app.models.evaluation_rubric_level import EvaluationRubricLevel
 from app.utils.validators import validate_weight_sum
 from decimal import Decimal
+from datetime import datetime
 import logging
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
+
+
+@router.post("/prebuilt", response_model=PolicyTemplateResponse)
+async def create_prebuilt_template(
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Create pre-built Standard QA Template with 5 criteria (admin or qa_manager only)"""
+    if current_user.role not in [UserRole.admin, UserRole.qa_manager]:
+        raise HTTPException(status_code=403, detail="Insufficient permissions")
+    
+    try:
+        from app.services.template_seeder import seed_default_template
+        
+        # Check if template already exists
+        existing_template = db.query(PolicyTemplate).filter(
+            PolicyTemplate.company_id == current_user.company_id,
+            PolicyTemplate.template_name == "Standard QA Template"
+        ).first()
+        
+        if existing_template:
+            raise HTTPException(
+                status_code=400,
+                detail="Standard QA Template already exists for this company"
+            )
+        
+        # Create the pre-built template
+        template = seed_default_template(current_user.company_id, current_user.id, db)
+        
+        # Reload with criteria using joinedload
+        from sqlalchemy.orm import joinedload
+        template_with_criteria = db.query(PolicyTemplate).options(
+            joinedload(PolicyTemplate.evaluation_criteria).joinedload(EvaluationCriteria.rubric_levels)
+        ).filter(PolicyTemplate.id == template.id).first()
+        
+        return PolicyTemplateResponse.from_orm(template_with_criteria)
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Failed to create pre-built template: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=f"Failed to create pre-built template: {str(e)}")
 
 
 @router.post("", response_model=PolicyTemplateResponse)
@@ -46,7 +89,8 @@ async def create_template(
         company_id=current_user.company_id,
         template_name=template_data.template_name,
         description=template_data.description,
-        is_active=template_data.is_active
+        is_active=template_data.is_active,
+        enable_structured_rules=True  # Always enable structured rules for new templates
     )
     db.add(template)
     db.flush()
@@ -63,6 +107,75 @@ async def create_template(
         db.add(criterion)
     
     db.commit()
+    db.refresh(template)
+    
+    # Auto-generate rules if template is created as active and has no rules
+    if template.is_active and template.policy_rules is None:
+        try:
+            from app.services.policy_rule_builder import PolicyRuleBuilder
+            from sqlalchemy.orm import joinedload
+            
+            # Reload template with criteria and rubric levels
+            template_with_data = db.query(PolicyTemplate).options(
+                joinedload(PolicyTemplate.evaluation_criteria).joinedload(EvaluationCriteria.rubric_levels)
+            ).filter(PolicyTemplate.id == template.id).first()
+            
+            if template_with_data:
+                # Extract policy text
+                policy_parts = []
+                if template_with_data.description:
+                    policy_parts.append(template_with_data.description)
+                for criterion in template_with_data.evaluation_criteria:
+                    if criterion.evaluation_prompt:
+                        policy_parts.append(f"{criterion.category_name}: {criterion.evaluation_prompt}")
+                policy_text = "\n\n".join(policy_parts)
+                
+                # Extract rubric levels
+                rubric_levels = {}
+                for criterion in template_with_data.evaluation_criteria:
+                    rubric_levels[criterion.category_name] = []
+                    for level in criterion.rubric_levels:
+                        rubric_levels[criterion.category_name].append({
+                            "level_name": level.level_name,
+                            "min_score": level.min_score,
+                            "max_score": level.max_score,
+                            "description": level.description
+                        })
+                
+                if policy_text:
+                    # Generate rules automatically (skip clarification step)
+                    builder = PolicyRuleBuilder()
+                    validated_rules, metadata = builder.generate_structured_rules(
+                        policy_text=policy_text,
+                        clarification_answers={},  # Empty - auto-generate without clarifications
+                        rubric_levels=rubric_levels
+                    )
+                    
+                    # Convert to dict for storage
+                    rules_dict = {
+                        "version": 1,
+                        "rules": {
+                            category: [rule.dict() for rule in rules]
+                            for category, rules in validated_rules.rules.items()
+                        },
+                        "metadata": validated_rules.metadata
+                    }
+                    
+                    # Save rules to template
+                    template.policy_rules = rules_dict
+                    template.policy_rules_version = 1
+                    template.rules_generated_at = datetime.utcnow()
+                    template.rules_approved_by_user_id = current_user.id
+                    template.rules_generation_method = "ai"
+                    template.enable_structured_rules = True
+                    
+                    db.commit()
+                    logger.info(f"Auto-generated rules for template {template.id} when created as active")
+        except Exception as e:
+            logger.error(f"Failed to auto-generate rules for template {template.id}: {e}")
+            # Don't fail template creation if rule generation fails
+            # Template will still be created, just without structured rules
+            # No rollback needed - template is already saved
     
     # Reload with criteria using joinedload
     from sqlalchemy.orm import joinedload
@@ -86,7 +199,10 @@ async def create_template(
                 evaluation_prompt=c.evaluation_prompt,
                 created_at=c.created_at
             ) for c in template_with_criteria.evaluation_criteria
-        ]
+        ],
+        policy_rules=template_with_criteria.policy_rules,
+        policy_rules_version=template_with_criteria.policy_rules_version,
+        enable_structured_rules=template_with_criteria.enable_structured_rules
     )
 
 
@@ -133,7 +249,10 @@ async def list_templates(
                         ) for rl in c.rubric_levels
                     ]
                 ) for c in t.evaluation_criteria
-            ]
+            ],
+            policy_rules=t.policy_rules,
+            policy_rules_version=t.policy_rules_version,
+            enable_structured_rules=t.enable_structured_rules
         ) for t in templates
     ]
 
@@ -172,7 +291,10 @@ async def get_template(
                 evaluation_prompt=c.evaluation_prompt,
                 created_at=c.created_at
             ) for c in template.evaluation_criteria
-        ]
+        ],
+        policy_rules=template.policy_rules,
+        policy_rules_version=template.policy_rules_version,
+        enable_structured_rules=template.enable_structured_rules
     )
 
 
@@ -204,28 +326,213 @@ async def update_template(
                 detail="Criteria weights must sum to 100"
             )
     
-    # Update template
+    # Get existing criteria with rubric levels for content comparison
+    existing_criteria = db.query(EvaluationCriteria).filter(
+        EvaluationCriteria.policy_template_id == template_id
+    ).all()
+    existing_criteria_count = len(existing_criteria)
+    
+    # Load rubric levels for existing criteria
+    from sqlalchemy.orm import joinedload
+    existing_criteria_with_levels = db.query(EvaluationCriteria).options(
+        joinedload(EvaluationCriteria.rubric_levels)
+    ).filter(EvaluationCriteria.policy_template_id == template_id).all()
+    
+    # Detect if template CONTENT has changed (not just metadata like name or is_active)
+    # Content includes: description, criteria (count, names, prompts, weights, scores), rubric levels
+    content_changed = False
+    
+    # Check description change
+    if (template.description or "") != (template_data.description or ""):
+        content_changed = True
+    
+    # Check if criteria list changed (count, content)
+    if template_data.criteria is not None:
+        new_criteria_list = template_data.criteria
+        
+        # Check if count changed
+        if len(existing_criteria) != len(new_criteria_list):
+            content_changed = True
+        else:
+            # Check if any criterion content changed
+            for i, new_criteria in enumerate(new_criteria_list):
+                if i < len(existing_criteria):
+                    existing = existing_criteria[i]
+                    if (existing.category_name != new_criteria.category_name or
+                        existing.weight != Decimal(str(new_criteria.weight)) or
+                        existing.passing_score != new_criteria.passing_score or
+                        (existing.evaluation_prompt or "") != (new_criteria.evaluation_prompt or "")):
+                        content_changed = True
+                        break
+                else:
+                    content_changed = True
+                    break
+    
+    # If content changed, clear existing rules (they're now stale)
+    if content_changed and template.policy_rules is not None:
+        template.policy_rules = None
+        template.policy_rules_version = None
+        template.rules_generated_at = None
+        template.rules_approved_by_user_id = None
+        template.rules_generation_method = None
+    
+    # After clearing rules if content changed, check if we need to generate new rules
+    # Check if template is being activated and doesn't have rules yet
+    # Also check if template is already active but has no rules (for cases where switching back)
+    # Note: template.policy_rules might be None now if content_changed cleared it
+    is_being_activated = template_data.is_active and not template.is_active
+    is_already_active_without_rules = template_data.is_active and template.is_active and template.policy_rules is None
+    has_existing_rules = template.policy_rules is not None
+    needs_rule_generation = (is_being_activated or is_already_active_without_rules) and not has_existing_rules
+    
+    # Check if only is_active is changing (simple template switch)
+    # If name/description unchanged, treat as switch and skip criteria updates
+    # This prevents foreign key violations when user just wants to switch active template
+    only_switching_active = (
+        template.template_name == template_data.template_name and
+        (template.description or "") == (template_data.description or "") and
+        not content_changed
+    )
+    
+    # If it's just a switch, we'll skip criteria updates entirely
+    # User can update criteria separately if needed
+    
+    # Update template basic fields
     template.template_name = template_data.template_name
     template.description = template_data.description
     template.is_active = template_data.is_active
     
-    # Delete existing criteria
-    db.query(EvaluationCriteria).filter(
-        EvaluationCriteria.policy_template_id == template_id
-    ).delete()
-    
-    # Create new criteria
-    for criteria_data in template_data.criteria:
-        criterion = EvaluationCriteria(
-            policy_template_id=template.id,
-            category_name=criteria_data.category_name,
-            weight=Decimal(str(criteria_data.weight)),
-            passing_score=criteria_data.passing_score,
-            evaluation_prompt=criteria_data.evaluation_prompt
-        )
-        db.add(criterion)
+    # Only update criteria if we're NOT just switching active status
+    # When switching templates, skip criteria updates to avoid foreign key violations
+    if not only_switching_active and template_data.criteria is not None:
+        new_criteria_list = template_data.criteria
+        
+        # Update existing criteria up to the minimum of existing and new counts
+        for i, criteria_data in enumerate(new_criteria_list):
+            if i < len(existing_criteria):
+                # Update existing criterion
+                existing_criteria[i].category_name = criteria_data.category_name
+                existing_criteria[i].weight = Decimal(str(criteria_data.weight))
+                existing_criteria[i].passing_score = criteria_data.passing_score
+                existing_criteria[i].evaluation_prompt = criteria_data.evaluation_prompt
+            else:
+                # Create new criterion
+                criterion = EvaluationCriteria(
+                    policy_template_id=template.id,
+                    category_name=criteria_data.category_name,
+                    weight=Decimal(str(criteria_data.weight)),
+                    passing_score=criteria_data.passing_score,
+                    evaluation_prompt=criteria_data.evaluation_prompt
+                )
+                db.add(criterion)
+        
+        # Handle excess criteria (when new list is shorter than existing)
+        # Only delete criteria that are not referenced by policy_violations
+        if len(existing_criteria) > len(new_criteria_list):
+            from app.models.policy_violation import PolicyViolation
+            
+            for i in range(len(new_criteria_list), len(existing_criteria)):
+                criterion_to_delete = existing_criteria[i]
+                # Check if criterion is referenced by policy_violations
+                has_violations = db.query(PolicyViolation).filter(
+                    PolicyViolation.criteria_id == criterion_to_delete.id
+                ).first() is not None
+                
+                if not has_violations:
+                    # Safe to delete - not referenced
+                    db.delete(criterion_to_delete)
+                else:
+                    # Can't delete due to foreign key constraint
+                    # If we have new criteria, update this one to match the last new criterion
+                    if new_criteria_list:
+                        last_criteria = new_criteria_list[-1]
+                        criterion_to_delete.category_name = last_criteria.category_name
+                        criterion_to_delete.weight = Decimal(str(last_criteria.weight))
+                        criterion_to_delete.passing_score = last_criteria.passing_score
+                        criterion_to_delete.evaluation_prompt = last_criteria.evaluation_prompt
+                    # If new_criteria_list is empty, we leave the criterion as-is
+                    # (can't delete it due to foreign key, but template will effectively have no active criteria)
     
     db.commit()
+    db.refresh(template)
+    
+    # Auto-generate rules if template is being activated and has no rules
+    # Check again after commit to ensure we have the latest state
+    if needs_rule_generation:
+        # Double-check that template still has no rules (in case it was set elsewhere)
+        db.refresh(template)
+        if template.policy_rules is None:
+            try:
+                from app.services.policy_rule_builder import PolicyRuleBuilder
+                from sqlalchemy.orm import joinedload
+                
+                # Reload template with criteria and rubric levels
+                template_with_data = db.query(PolicyTemplate).options(
+                    joinedload(PolicyTemplate.evaluation_criteria).joinedload(EvaluationCriteria.rubric_levels)
+                ).filter(PolicyTemplate.id == template_id).first()
+                
+                if template_with_data:
+                    # Extract policy text
+                    policy_parts = []
+                    if template_with_data.description:
+                        policy_parts.append(template_with_data.description)
+                    for criterion in template_with_data.evaluation_criteria:
+                        if criterion.evaluation_prompt:
+                            policy_parts.append(f"{criterion.category_name}: {criterion.evaluation_prompt}")
+                    policy_text = "\n\n".join(policy_parts)
+                    
+                    # Extract rubric levels
+                    rubric_levels = {}
+                    for criterion in template_with_data.evaluation_criteria:
+                        rubric_levels[criterion.category_name] = []
+                        for level in criterion.rubric_levels:
+                            rubric_levels[criterion.category_name].append({
+                                "level_name": level.level_name,
+                                "min_score": level.min_score,
+                                "max_score": level.max_score,
+                                "description": level.description
+                            })
+                    
+                    if policy_text:
+                        # Generate rules automatically (skip clarification step)
+                        builder = PolicyRuleBuilder()
+                        validated_rules, metadata = builder.generate_structured_rules(
+                            policy_text=policy_text,
+                            clarification_answers={},  # Empty - auto-generate without clarifications
+                            rubric_levels=rubric_levels
+                        )
+                        
+                        # Convert to dict for storage
+                        rules_dict = {
+                            "version": 1,
+                            "rules": {
+                                category: [rule.dict() for rule in rules]
+                                for category, rules in validated_rules.rules.items()
+                            },
+                            "metadata": validated_rules.metadata
+                        }
+                        
+                        # Save rules to template
+                        template.policy_rules = rules_dict
+                        template.policy_rules_version = 1
+                        template.rules_generated_at = datetime.utcnow()
+                        template.rules_approved_by_user_id = current_user.id
+                        template.rules_generation_method = "ai"
+                        template.enable_structured_rules = True  # Enable structured rules when rules are generated
+                        
+                        db.commit()
+                    else:
+                        pass  # Policy text is empty, skip rule generation
+            except Exception as e:
+                logger.error(f"Failed to auto-generate rules for template {template_id}: {e}")
+                # Don't fail the template update if rule generation fails
+                # Template will still be activated, just without structured rules
+                # No rollback needed - template update is already saved
+        else:
+            # If template has rules but enable_structured_rules is False, enable it
+            if template.policy_rules is not None and not template.enable_structured_rules:
+                template.enable_structured_rules = True
+                db.commit()
     
     # Reload with criteria using joinedload
     from sqlalchemy.orm import joinedload
@@ -249,7 +556,10 @@ async def update_template(
                 evaluation_prompt=c.evaluation_prompt,
                 created_at=c.created_at
             ) for c in template_with_criteria.evaluation_criteria
-        ]
+        ],
+        policy_rules=template_with_criteria.policy_rules,
+        policy_rules_version=template_with_criteria.policy_rules_version,
+        enable_structured_rules=template_with_criteria.enable_structured_rules
     )
 
 
@@ -452,6 +762,108 @@ async def update_criteria(
     ).filter(EvaluationCriteria.id == criteria_id).first()
     
     return criterion_with_levels
+
+
+@router.post("/{template_id}/generate-rules")
+async def generate_rules_for_template(
+    template_id: str,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Temporary endpoint to manually generate policy rules for a template"""
+    if current_user.role not in [UserRole.admin, UserRole.qa_manager]:
+        raise HTTPException(status_code=403, detail="Insufficient permissions")
+    
+    template = db.query(PolicyTemplate).filter(
+        PolicyTemplate.id == template_id,
+        PolicyTemplate.company_id == current_user.company_id
+    ).first()
+    
+    if not template:
+        raise HTTPException(status_code=404, detail="Template not found")
+    
+    try:
+        from app.services.policy_rule_builder import PolicyRuleBuilder
+        from sqlalchemy.orm import joinedload
+        
+        # Reload template with criteria and rubric levels
+        template_with_data = db.query(PolicyTemplate).options(
+            joinedload(PolicyTemplate.evaluation_criteria).joinedload(EvaluationCriteria.rubric_levels)
+        ).filter(PolicyTemplate.id == template_id).first()
+        
+        if not template_with_data:
+            raise HTTPException(status_code=404, detail="Template not found")
+        
+        # Extract policy text
+        policy_parts = []
+        if template_with_data.description:
+            policy_parts.append(template_with_data.description)
+        for criterion in template_with_data.evaluation_criteria:
+            if criterion.evaluation_prompt:
+                policy_parts.append(f"{criterion.category_name}: {criterion.evaluation_prompt}")
+        policy_text = "\n\n".join(policy_parts)
+        
+        # Extract rubric levels
+        rubric_levels = {}
+        for criterion in template_with_data.evaluation_criteria:
+            rubric_levels[criterion.category_name] = []
+            for level in criterion.rubric_levels:
+                rubric_levels[criterion.category_name].append({
+                    "level_name": level.level_name,
+                    "min_score": level.min_score,
+                    "max_score": level.max_score,
+                    "description": level.description
+                })
+        
+        if not policy_text:
+            raise HTTPException(
+                status_code=400,
+                detail="Template has no description or evaluation prompts. Cannot generate rules."
+            )
+        
+        # Generate rules automatically (skip clarification step)
+        builder = PolicyRuleBuilder()
+        validated_rules, metadata = builder.generate_structured_rules(
+            policy_text=policy_text,
+            clarification_answers={},  # Empty - auto-generate without clarifications
+            rubric_levels=rubric_levels
+        )
+        
+        # Convert to dict for storage
+        rules_dict = {
+            "version": 1,
+            "rules": {
+                category: [rule.dict() for rule in rules]
+                for category, rules in validated_rules.rules.items()
+            },
+            "metadata": validated_rules.metadata
+        }
+        
+        # Save rules to template
+        template.policy_rules = rules_dict
+        template.policy_rules_version = 1
+        template.rules_generated_at = datetime.utcnow()
+        template.rules_approved_by_user_id = current_user.id
+        template.rules_generation_method = "ai"
+        template.enable_structured_rules = True
+        
+        db.commit()
+        
+        return {
+            "success": True,
+            "message": "Policy rules generated successfully",
+            "rules_version": template.policy_rules_version,
+            "categories": list(rules_dict.get('rules', {}).keys())
+        }
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Failed to generate rules for template {template_id}: {e}", exc_info=True)
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to generate rules: {str(e)}"
+        )
 
 
 @router.delete("/{template_id}/criteria/{criteria_id}")

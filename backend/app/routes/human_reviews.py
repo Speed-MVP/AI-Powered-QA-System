@@ -112,6 +112,7 @@ async def submit_human_review(
 
     # Create human review record
     human_review = HumanReview(
+        recording_id=evaluation.recording_id,
         evaluation_id=evaluation_id,
         reviewer_user_id=current_user.id,
         human_overall_score=review_data.human_scores.get("Overall") or review_data.overall_score,
@@ -120,7 +121,7 @@ async def submit_human_review(
         reviewer_notes=review_data.reviewer_notes,
         ai_scores=evaluation.llm_analysis,  # Snapshot of AI evaluation
         delta=_compute_human_ai_delta(evaluation.llm_analysis, review_data),
-        status=ReviewStatus.completed
+        review_status=ReviewStatus.completed
     )
 
     db.add(human_review)

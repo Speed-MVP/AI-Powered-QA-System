@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import { api } from '@/lib/api'
-import { FaPlus, FaTrash, FaEdit, FaSave, FaTimes, FaCheck, FaExclamationCircle, FaSpinner, FaLightbulb, FaCheckCircle, FaChevronDown, FaChevronRight } from 'react-icons/fa'
+import { FaPlus, FaTrash, FaEdit, FaSave, FaTimes, FaCheck, FaExclamationCircle, FaSpinner, FaLightbulb, FaCheckCircle, FaChevronDown, FaChevronRight, FaMagic, FaList, FaShieldAlt } from 'react-icons/fa'
 
 interface RubricLevel {
   id: string
@@ -31,6 +31,9 @@ interface PolicyTemplate {
   is_active: boolean
   created_at: string
   criteria: EvaluationCriteria[]
+  policy_rules?: any
+  policy_rules_version?: number
+  enable_structured_rules?: boolean
 }
 
 export function PolicyTemplates() {
@@ -39,18 +42,32 @@ export function PolicyTemplates() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [editingTemplate, setEditingTemplate] = useState<string | null>(null)
+  const [editingTemplateName, setEditingTemplateName] = useState('')
+  const [editingTemplateDesc, setEditingTemplateDesc] = useState('')
   const [editingCriteria, setEditingCriteria] = useState<string | null>(null)
   const [editingRubricLevel, setEditingRubricLevel] = useState<string | null>(null)
   const [expandedCriteria, setExpandedCriteria] = useState<Set<string>>(new Set())
   const [newTemplateName, setNewTemplateName] = useState('')
   const [newTemplateDesc, setNewTemplateDesc] = useState('')
   const [showNewTemplate, setShowNewTemplate] = useState(false)
+  const [showTemplateDropdown, setShowTemplateDropdown] = useState(false)
   const [saving, setSaving] = useState(false)
 
   // Fetch templates from backend
   useEffect(() => {
     loadTemplates()
   }, [])
+
+  // Close dropdown when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (showTemplateDropdown && !(event.target as Element).closest('.template-dropdown-container')) {
+        setShowTemplateDropdown(false)
+      }
+    }
+    document.addEventListener('mousedown', handleClickOutside)
+    return () => document.removeEventListener('mousedown', handleClickOutside)
+  }, [showTemplateDropdown])
 
   const loadTemplates = async () => {
     try {
@@ -94,6 +111,23 @@ export function PolicyTemplates() {
     }
   }
 
+  const handleCreatePrebuiltTemplate = async () => {
+    try {
+      setSaving(true)
+      setError(null)
+      setShowTemplateDropdown(false)
+      
+      const newTemplate = await api.createPrebuiltTemplate()
+      
+      setTemplates(prev => [...prev, newTemplate])
+      await loadTemplates() // Reload to get full template data with criteria
+    } catch (err: any) {
+      setError(err.message || 'Failed to create pre-built template')
+    } finally {
+      setSaving(false)
+    }
+  }
+
   const handleUpdateTemplate = async (templateId: string, updates: Partial<PolicyTemplate>) => {
     const template = templates.find(t => t.id === templateId)
     if (!template) return
@@ -118,11 +152,32 @@ export function PolicyTemplates() {
         setActiveTemplate(updated)
       }
       setEditingTemplate(null)
+      setEditingTemplateName('')
+      setEditingTemplateDesc('')
     } catch (err: any) {
       setError(err.message || 'Failed to update template')
     } finally {
       setSaving(false)
     }
+  }
+
+  const handleStartEditTemplate = (template: PolicyTemplate) => {
+    setEditingTemplate(template.id)
+    setEditingTemplateName(template.template_name)
+    setEditingTemplateDesc(template.description || '')
+  }
+
+  const handleSaveTemplateEdit = (templateId: string) => {
+    handleUpdateTemplate(templateId, {
+      template_name: editingTemplateName,
+      description: editingTemplateDesc || undefined
+    })
+  }
+
+  const handleCancelTemplateEdit = () => {
+    setEditingTemplate(null)
+    setEditingTemplateName('')
+    setEditingTemplateDesc('')
   }
 
   const handleDeleteTemplate = async (templateId: string) => {
@@ -447,6 +502,26 @@ export function PolicyTemplates() {
     }
   }
 
+  const handleGenerateRules = async (templateId: string) => {
+    if (!confirm('Generate policy rules for this template? This will overwrite any existing rules.')) return
+
+    try {
+      setSaving(true)
+      setError(null)
+      
+      const result = await api.generateRulesForTemplate(templateId)
+      
+      alert(`Rules generated successfully! Version: ${result.rules_version}, Categories: ${result.categories.join(', ')}`)
+      
+      // Reload templates to get updated state
+      await loadTemplates()
+    } catch (err: any) {
+      setError(err.message || 'Failed to generate rules')
+    } finally {
+      setSaving(false)
+    }
+  }
+
   const toggleCriteriaExpanded = (criteriaId: string) => {
     setExpandedCriteria(prev => {
       const newSet = new Set(prev)
@@ -508,14 +583,52 @@ export function PolicyTemplates() {
                 <FaSpinner className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
                 <span className="hidden sm:inline">Refresh</span>
               </button>
-              <button
-                onClick={() => setShowNewTemplate(true)}
-                disabled={saving || showNewTemplate}
-                className="px-4 py-2 text-sm bg-brand-500 text-white rounded-md hover:bg-brand-600 flex items-center gap-2 transition-colors disabled:opacity-50 disabled:cursor-not-allowed font-medium"
-              >
-                <FaPlus className="w-4 h-4" />
-                <span>New Template</span>
-              </button>
+              <div className="relative template-dropdown-container">
+                <button
+                  onClick={() => setShowTemplateDropdown(!showTemplateDropdown)}
+                  disabled={saving || showNewTemplate}
+                  className="px-4 py-2 text-sm bg-brand-500 text-white rounded-md hover:bg-brand-600 flex items-center gap-2 transition-colors disabled:opacity-50 disabled:cursor-not-allowed font-medium"
+                >
+                  <FaPlus className="w-4 h-4" />
+                  <span>New Template</span>
+                  <FaChevronDown className={`w-3 h-3 transition-transform ${showTemplateDropdown ? 'rotate-180' : ''}`} />
+                </button>
+                
+                {showTemplateDropdown && (
+                  <div className="absolute right-0 mt-2 w-72 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-md shadow-lg z-10">
+                    <div className="p-2">
+                      <button
+                        onClick={handleCreatePrebuiltTemplate}
+                        disabled={saving}
+                        className="w-full text-left px-4 py-3 rounded-md hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors disabled:opacity-50"
+                      >
+                        <div className="font-medium text-gray-900 dark:text-white mb-1">
+                          Pre-built Standard QA Template
+                        </div>
+                        <div className="text-xs text-gray-600 dark:text-gray-400">
+                          Includes 5 pre-configured criteria: Compliance, Communication Skills, Empathy, Problem-Solving, and Resolution. Ready to use immediately.
+                        </div>
+                      </button>
+                      <div className="border-t border-gray-200 dark:border-gray-700 my-1"></div>
+                      <button
+                        onClick={() => {
+                          setShowTemplateDropdown(false)
+                          setShowNewTemplate(true)
+                        }}
+                        disabled={saving}
+                        className="w-full text-left px-4 py-3 rounded-md hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors disabled:opacity-50"
+                      >
+                        <div className="font-medium text-gray-900 dark:text-white mb-1">
+                          Empty Template
+                        </div>
+                        <div className="text-xs text-gray-600 dark:text-gray-400">
+                          Start from scratch. Create your own criteria and rubric levels.
+                        </div>
+                      </button>
+                    </div>
+                  </div>
+                )}
+              </div>
             </div>
           </div>
         </div>
@@ -639,17 +752,13 @@ export function PolicyTemplates() {
                           <div className="space-y-3">
                             <input
                               type="text"
-                              value={template.template_name}
-                              onChange={(e) =>
-                                handleUpdateTemplate(template.id, { template_name: e.target.value })
-                              }
+                              value={editingTemplateName}
+                              onChange={(e) => setEditingTemplateName(e.target.value)}
                               className="text-lg font-semibold px-2 py-1 border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-700 text-gray-900 dark:text-white w-full focus:outline-none focus:ring-2 focus:ring-brand-500"
                             />
                             <textarea
-                              value={template.description || ''}
-                              onChange={(e) =>
-                                handleUpdateTemplate(template.id, { description: e.target.value })
-                              }
+                              value={editingTemplateDesc}
+                              onChange={(e) => setEditingTemplateDesc(e.target.value)}
                               rows={2}
                               className="text-sm px-2 py-1 border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-700 text-gray-900 dark:text-white w-full focus:outline-none focus:ring-2 focus:ring-brand-500 resize-none"
                             />
@@ -677,6 +786,15 @@ export function PolicyTemplates() {
                         {!isEditing && (
                           <>
                             <button
+                              onClick={() => handleGenerateRules(template.id)}
+                              disabled={saving}
+                              className="px-2.5 py-1.5 text-xs bg-purple-500 text-white rounded-md hover:bg-purple-600 disabled:opacity-50 transition-colors flex items-center gap-1"
+                              title="Generate Policy Rules (Temporary)"
+                            >
+                              <FaMagic className="w-3 h-3" />
+                              <span className="hidden sm:inline">Generate Rules</span>
+                            </button>
+                            <button
                               onClick={() => handleSetActive(template.id)}
                               disabled={saving}
                               className={`px-2.5 py-1.5 text-xs rounded-md disabled:opacity-50 transition-colors ${
@@ -688,7 +806,7 @@ export function PolicyTemplates() {
                               {isActive ? 'Active' : 'Set Active'}
                             </button>
                             <button
-                              onClick={() => setEditingTemplate(template.id)}
+                              onClick={() => handleStartEditTemplate(template)}
                               disabled={saving}
                               className="p-1.5 text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white hover:bg-gray-100 dark:hover:bg-gray-700 rounded disabled:opacity-50 transition-colors"
                               title="Edit template"
@@ -698,14 +816,24 @@ export function PolicyTemplates() {
                           </>
                         )}
                         {isEditing && (
-                          <button
-                            onClick={() => setEditingTemplate(null)}
-                            disabled={saving}
-                            className="p-1.5 text-green-600 dark:text-green-400 hover:bg-green-50 dark:hover:bg-green-900/20 rounded disabled:opacity-50 transition-colors"
-                            title="Save changes"
-                          >
-                            <FaSave className="w-3.5 h-3.5" />
-                          </button>
+                          <>
+                            <button
+                              onClick={() => handleSaveTemplateEdit(template.id)}
+                              disabled={saving || !editingTemplateName.trim()}
+                              className="p-1.5 text-green-600 dark:text-green-400 hover:bg-green-50 dark:hover:bg-green-900/20 rounded disabled:opacity-50 transition-colors"
+                              title="Save changes"
+                            >
+                              <FaSave className="w-3.5 h-3.5" />
+                            </button>
+                            <button
+                              onClick={handleCancelTemplateEdit}
+                              disabled={saving}
+                              className="p-1.5 text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700 rounded disabled:opacity-50 transition-colors"
+                              title="Cancel editing"
+                            >
+                              <FaTimes className="w-3.5 h-3.5" />
+                            </button>
+                          </>
                         )}
                         <button
                           onClick={() => handleDeleteTemplate(template.id)}
@@ -818,6 +946,19 @@ export function PolicyTemplates() {
                                           <span className="text-xs px-2 py-0.5 bg-brand-100 dark:bg-brand-900/30 text-brand-700 dark:text-brand-300 rounded font-medium">
                                             {criteria.rubric_levels.length} {criteria.rubric_levels.length === 1 ? 'Level' : 'Levels'}
                                           </span>
+                                        )}
+                                        {template.policy_rules?.rules?.[criteria.category_name] && (
+                                          <>
+                                            <span className="text-xs px-2 py-0.5 bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-300 rounded font-medium flex items-center gap-1">
+                                              <FaShieldAlt className="w-2.5 h-2.5" />
+                                              {template.policy_rules.rules[criteria.category_name].length} {template.policy_rules.rules[criteria.category_name].length === 1 ? 'Rule' : 'Rules'}
+                                            </span>
+                                            {template.policy_rules.rules[criteria.category_name].some((r: any) => r.critical) && (
+                                              <span className="text-xs px-2 py-0.5 bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-300 rounded font-medium">
+                                                Critical
+                                              </span>
+                                            )}
+                                          </>
                                         )}
                                       </div>
                                       <div className="mb-3">
@@ -1042,6 +1183,31 @@ export function PolicyTemplates() {
                                       </div>
                                     </div>
                                     <div className="flex items-center gap-1 flex-shrink-0">
+                                      {template.policy_rules?.rules?.[criteria.category_name] && (
+                                        <button
+                                          onClick={() => {
+                                            const rules = template.policy_rules?.rules?.[criteria.category_name] || []
+                                            const rulesText = JSON.stringify(rules, null, 2)
+                                            const newWindow = window.open('', '_blank')
+                                            if (newWindow) {
+                                              newWindow.document.write(`
+                                                <html>
+                                                  <head><title>Rules for ${criteria.category_name}</title></head>
+                                                  <body style="font-family: monospace; padding: 20px; background: #f5f5f5;">
+                                                    <h2>Policy Rules: ${criteria.category_name}</h2>
+                                                    <pre style="background: white; padding: 15px; border-radius: 5px; overflow-x: auto;">${rulesText}</pre>
+                                                  </body>
+                                                </html>
+                                              `)
+                                            }
+                                          }}
+                                          disabled={saving}
+                                          className="p-1.5 text-purple-600 dark:text-purple-400 hover:text-purple-700 dark:hover:text-purple-300 hover:bg-purple-50 dark:hover:bg-purple-900/20 rounded disabled:opacity-50 transition-colors"
+                                          title="View policy rules for this category"
+                                        >
+                                          <FaList className="w-3.5 h-3.5" />
+                                        </button>
+                                      )}
                                       <button
                                         onClick={() => setEditingCriteria(criteria.id)}
                                         disabled={saving}

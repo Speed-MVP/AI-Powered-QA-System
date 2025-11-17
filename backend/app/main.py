@@ -21,6 +21,8 @@ from app.routes import (
     agents,
     imports,
     human_reviews,
+    policy_rules,
+    rule_editor,
 )
 import logging
 
@@ -150,6 +152,8 @@ app.include_router(auth.router, prefix="/api/auth", tags=["auth"])
 app.include_router(recordings.router, prefix="/api/recordings", tags=["recordings"])
 app.include_router(evaluations.router, prefix="/api/evaluations", tags=["evaluations"])
 app.include_router(templates.router, prefix="/api/templates", tags=["templates"])
+app.include_router(policy_rules.router, prefix="/api/policy-templates", tags=["policy-rules"])
+app.include_router(rule_editor.router, prefix="/api/policy-templates", tags=["rule-editor"])
 app.include_router(fine_tuning.router, prefix="/api", tags=["fine-tuning"])
 app.include_router(batch_processing.router, prefix="/api/batch", tags=["batch-processing"])
 app.include_router(supervisor.router, prefix="/api", tags=["supervisor"])

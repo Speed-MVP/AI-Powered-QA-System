@@ -10,7 +10,6 @@ from app.services.gemini import GeminiService
 from app.services.scoring import ScoringService
 from app.services.email import EmailService
 from app.services.confidence import ConfidenceService  # Phase 1: Confidence-based routing
-from app.services.rule_engine import RuleEngineService  # Phase 2: Rule engine
 from app.services.audit import AuditService  # Phase 4: Compliance & audit
 # MVP Evaluation Improvements - Phase 2
 from app.services.schema_validator import SchemaValidator
@@ -74,7 +73,7 @@ async def process_recording_task(recording_id: str):
         if not policy_template:
             raise Exception(f"No active policy template found for company {recording.company_id}")
         
-        # Step 3: Phase 2 - Run rule engine for explicit policy compliance checking
+        # Step 3: Phase 3 - Run rule engine V2 for explicit policy compliance checking
         sentiment_data = transcript.sentiment_analysis
         if isinstance(sentiment_data, str):
             # If it's stored as a string, try to parse it as JSON
@@ -90,40 +89,177 @@ async def process_recording_task(recording_id: str):
 
         logger.info(f"Passing sentiment_analysis to rule engine: type={type(sentiment_data)}, len={len(sentiment_data) if isinstance(sentiment_data, list) else 'N/A'}")
 
-        rule_engine = RuleEngineService()
-        rule_results = rule_engine.evaluate_rules(
-            transcript_segments=transcript.diarized_segments or [],
-            sentiment_analysis=sentiment_data
-        )
+        # Use RuleEngineV2 if policy has structured rules, otherwise fallback to old engine
+        from app.services.rule_engine_v2 import RuleEngineV2
+        
+        if policy_template.enable_structured_rules and policy_template.policy_rules:
+            rule_engine = RuleEngineV2(policy_rules=policy_template.policy_rules)
+            rule_results = rule_engine.evaluate_rules(
+                transcript_segments=transcript.diarized_segments or [],
+                sentiment_analysis=sentiment_data,
+                policy_template_id=policy_template.id
+            )
+        else:
+            # Fallback to old rule engine for backward compatibility
+            from app.services.rule_engine import RuleEngineService
+            rule_engine = RuleEngineService()
+            rule_results = rule_engine.evaluate_rules(
+                transcript_segments=transcript.diarized_segments or [],
+                sentiment_analysis=sentiment_data
+            )
 
-        # Step 4: Evaluate with LLM (with rule engine context)
+        # Step 4: Evaluate with LLM (Phase 4: Use DeterministicLLMEvaluator if structured rules enabled)
         logger.info(f"Evaluating {recording_id}...")
-        gemini = GeminiService()
-        # Pass voice-based sentiment analysis (BOTH caller and agent) to LLM for tone detection
-        # This enables detection of tone mismatches and disingenuous behavior
-        sentiment_analysis_for_gemini = transcript.sentiment_analysis
-        if isinstance(sentiment_analysis_for_gemini, str):
-            # If it's stored as a string, try to parse it as JSON
+        
+        # Parse sentiment analysis
+        sentiment_analysis_for_eval = transcript.sentiment_analysis
+        if isinstance(sentiment_analysis_for_eval, str):
             import json
             try:
-                sentiment_analysis_for_gemini = json.loads(sentiment_analysis_for_gemini)
-                logger.info(f"Parsed sentiment_analysis for Gemini: {type(sentiment_analysis_for_gemini)} len: {len(sentiment_analysis_for_gemini)}")
+                sentiment_analysis_for_eval = json.loads(sentiment_analysis_for_eval)
             except json.JSONDecodeError:
-                logger.error(f"Failed to parse sentiment_analysis for Gemini: {sentiment_analysis_for_gemini[:100]}...")
-                sentiment_analysis_for_gemini = None
-        elif sentiment_analysis_for_gemini is None:
-            sentiment_analysis_for_gemini = None
-
-        evaluation_result = await gemini.evaluate(
-            transcript_text=transcript.transcript_text,
-            policy_template_id=policy_template.id,
-            sentiment_analysis=sentiment_analysis_for_gemini,
-            rule_results=rule_results  # Phase 2: Include rule engine results
-        )
-
-        # MVP Evaluation Improvements: Extract evaluation data and raw response
-        evaluation_data = evaluation_result["evaluation"]
-        raw_llm_response = evaluation_result["raw_llm_response"]
+                logger.error(f"Failed to parse sentiment_analysis: {sentiment_analysis_for_eval[:100]}...")
+                sentiment_analysis_for_eval = []
+        elif sentiment_analysis_for_eval is None:
+            sentiment_analysis_for_eval = []
+        
+        # Use DeterministicLLMEvaluator if structured rules are enabled
+        if policy_template.enable_structured_rules and policy_template.policy_rules:
+            logger.info("Using DeterministicLLMEvaluator (Phase 4)")
+            
+            from app.services.deterministic_llm_evaluator import DeterministicLLMEvaluator
+            from app.services.transcript_compressor import TranscriptCompressor
+            
+            # Compress transcript
+            compressor = TranscriptCompressor()
+            transcript_summary = compressor.compress_transcript(
+                transcript_segments=transcript.diarized_segments or [],
+                sentiment_analysis=sentiment_analysis_for_eval
+            )
+            
+            # Extract tone mismatches
+            tone_flags = compressor.extract_tone_mismatches(
+                transcript_segments=transcript.diarized_segments or [],
+                sentiment_analysis=sentiment_analysis_for_eval
+            )
+            
+            # Get categories and rubric levels
+            from sqlalchemy.orm import joinedload
+            criteria = db.query(EvaluationCriteria).options(
+                joinedload(EvaluationCriteria.rubric_levels)
+            ).filter(
+                EvaluationCriteria.policy_template_id == policy_template.id
+            ).all()
+            
+            categories = [c.category_name for c in criteria]
+            rubric_levels = {}
+            for criterion in criteria:
+                rubric_levels[criterion.category_name] = [
+                    level.level_name for level in criterion.rubric_levels
+                ]
+            
+            # Format rule results for LLM input
+            policy_results = {}
+            if isinstance(rule_results, dict) and "summary" not in rule_results:
+                # Old format - convert to new format
+                for rule_id, result in rule_results.items():
+                    # Try to infer category from rule_id or use default
+                    category = "Professionalism"  # Default
+                    if "empathy" in rule_id.lower():
+                        category = "Empathy"
+                    elif "resolution" in rule_id.lower():
+                        category = "Resolution"
+                    
+                    if category not in policy_results:
+                        policy_results[category] = {}
+                    
+                    policy_results[category][rule_id] = {
+                        "passed": not result.get("hit", False),
+                        "severity": result.get("severity", 3)
+                    }
+            else:
+                # New format from RuleEngineV2
+                policy_results = {k: v for k, v in rule_results.items() if k != "summary"}
+            
+            # Build evaluation input
+            evaluator = DeterministicLLMEvaluator()
+            evaluation_input = evaluator.build_evaluation_input(
+                evaluation_id=recording_id,
+                policy_template_id=policy_template.id,
+                categories=categories,
+                rubric_levels=rubric_levels,
+                policy_results=policy_results,
+                tone_flags={"has_mismatches": tone_flags.get("has_mismatches", False)},
+                transcript_summary=transcript_summary,
+                policy_rules_version=policy_template.policy_rules_version
+            )
+            
+            # Evaluate
+            llm_result, llm_metadata = evaluator.evaluate_recording(evaluation_input)
+            
+            # Apply critical rule overrides
+            final_rubric_levels, overrides_applied = evaluator.apply_critical_overrides(
+                llm_results=llm_result.results,
+                policy_results=policy_results,
+                policy_rules=policy_template.policy_rules
+            )
+            
+            # Map rubric levels to numeric scores
+            category_scores = {}
+            for category, rubric_level in final_rubric_levels.items():
+                # Find rubric level in criteria
+                criterion = next((c for c in criteria if c.category_name == category), None)
+                if criterion:
+                    rubric_level_obj = next(
+                        (rl for rl in criterion.rubric_levels if rl.level_name == rubric_level),
+                        None
+                    )
+                    if rubric_level_obj:
+                        # Use midpoint of score range
+                        score = (rubric_level_obj.min_score + rubric_level_obj.max_score) // 2
+                        category_scores[category] = {
+                            "score": score,
+                            "feedback": f"Rubric level: {rubric_level}",
+                            "rubric_level": rubric_level
+                        }
+                    else:
+                        category_scores[category] = {
+                            "score": 50,
+                            "feedback": f"Rubric level: {rubric_level} (score mapping not found)",
+                            "rubric_level": rubric_level
+                        }
+            
+            # Build evaluation_data in old format for compatibility
+            evaluation_data = {
+                "category_scores": category_scores,
+                "resolution_detected": transcript_summary.get("resolution_summary", {}).get("resolved", False),
+                "resolution_confidence": transcript_summary.get("resolution_summary", {}).get("confidence", 0.5),
+                "violations": [],
+                "rubric_levels": final_rubric_levels
+            }
+            
+            raw_llm_response = {
+                "model": llm_result.llm_meta.get("model", "unknown"),
+                "response": llm_result.raw_response,
+                "prompt_hash": llm_result.prompt_hash,
+                "tokens_used": llm_result.tokens_used,
+                "temperature": 0.0,
+                "top_p": 0.0
+            }
+            
+        else:
+            # Fallback to old GeminiService for backward compatibility
+            logger.info("Using legacy GeminiService (backward compatibility)")
+            gemini = GeminiService()
+            evaluation_result = await gemini.evaluate(
+                transcript_text=transcript.transcript_text,
+                policy_template_id=policy_template.id,
+                sentiment_analysis=sentiment_analysis_for_eval,
+                rule_results=rule_results
+            )
+            
+            evaluation_data = evaluation_result["evaluation"]
+            raw_llm_response = evaluation_result["raw_llm_response"]
 
         # Phase 2: Schema validation
         schema_validator = SchemaValidator()
@@ -351,6 +487,7 @@ async def process_recording_task(recording_id: str):
 
             from app.models.human_review import HumanReview, ReviewStatus
             human_review = HumanReview(
+                recording_id=evaluation.recording_id,
                 evaluation_id=evaluation.id,
                 reviewer_user_id=None,  # Will be assigned when picked up
                 review_status=ReviewStatus.pending,

@@ -370,6 +370,10 @@ class ApiClient {
     >('/api/templates')
   }
 
+  async createPrebuiltTemplate() {
+    return this.request<PolicyTemplate>(`/api/templates/prebuilt`, { method: 'POST' })
+  }
+
   async createTemplate(data: {
     template_name: string
     description?: string
@@ -438,6 +442,15 @@ class ApiClient {
     return this.request<{ message: string }>(`/api/templates/${templateId}`, {
       method: 'DELETE',
     })
+  }
+
+  async generateRulesForTemplate(templateId: string) {
+    return this.request<{
+      success: boolean
+      message: string
+      rules_version: number
+      categories: string[]
+    }>(`/api/templates/${templateId}/generate-rules`, { method: 'POST' })
   }
 
   async addCriteria(templateId: string, data: {

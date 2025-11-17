@@ -9,7 +9,7 @@ from app.models.evaluation import Evaluation, EvaluationStatus
 from app.models.recording import Recording
 from app.models.category_score import CategoryScore
 from app.models.policy_violation import PolicyViolation
-from app.models.human_review import HumanReview
+from app.models.human_review import HumanReview, ReviewStatus
 from app.services.gemini import GeminiService
 from app.services.scoring import ScoringService
 from app.services.confidence import ConfidenceService
@@ -207,13 +207,14 @@ async def override_evaluation_score(
         else:
             # Create new human review
             human_review = HumanReview(
+                recording_id=evaluation.recording_id,
                 evaluation_id=evaluation_id,
                 reviewer_user_id=reviewer_id,
                 human_overall_score=overall_score,
                 human_category_scores=category_scores,
                 ai_score_accuracy=5.0,  # Supervisor override = perfect accuracy
                 ai_recommendation=reason,
-                review_status="completed"
+                review_status=ReviewStatus.completed
             )
             db.add(human_review)
 

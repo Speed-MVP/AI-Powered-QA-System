@@ -290,6 +290,7 @@ async def create_test_human_review(
 
         # Create test review
         review = HumanReview(
+            recording_id=evaluation.recording_id,
             evaluation_id=evaluation_id,
             reviewer_user_id=None,  # Will be assigned when picked up
             review_status=ReviewStatus.pending,

@@ -6,6 +6,7 @@ from app.models.evaluation import Evaluation
 from typing import Dict, Any, Optional, List
 import logging
 import json
+from datetime import datetime
 
 logger = logging.getLogger(__name__)
 
@@ -484,6 +485,7 @@ class GeminiService:
 
         # Phase 2: Add rule engine violations (CRITICAL - these are confirmed violations)
         rule_violations_text = ""
+        human_examples_text = ""
         if rule_results and rule_results.get("violations"):
             rule_violations_text = "\n\nCRITICAL RULE VIOLATIONS DETECTED (These are confirmed policy breaches - match to appropriate lower rubric levels):\n"
             for i, violation in enumerate(rule_results["violations"], 1):
@@ -495,23 +497,23 @@ class GeminiService:
             rule_violations_text += "REMINDER: Rule violations are DETERMINISTIC and CONFIRMED. Match performance to lower rubric levels that reflect these violations.\n"
 
             # COST OPTIMIZATION: Skip expensive human examples for token efficiency
-            human_examples_text = ""
             # Temporarily disable human examples to save tokens - can be re-enabled when needed
             # if human_review_examples and len(human_review_examples) > 0:
             human_examples_text = "\n\nLEARNING FROM PAST HUMAN EVALUATIONS (Use these examples to understand how humans evaluate calls):\n"
             human_examples_text += "These are real examples of how human reviewers evaluated similar calls. Use them to guide your evaluation.\n\n"
             
-            for i, example in enumerate(human_review_examples, 1):
-                human_examples_text += f"EXAMPLE {i} (Similarity: {example['similarity']:.1%}):\n"
-                human_examples_text += f"TRANSCRIPT SNIPPET:\n{example['transcript_snippet'][:800]}...\n\n"
-                human_examples_text += f"AI EVALUATION:\n  Overall Score: {example['ai_overall_score']}/100\n"
-                human_examples_text += f"  Category Scores:\n{example['category_comparison']}\n\n"
-                human_examples_text += f"HUMAN EVALUATION (GROUND TRUTH):\n  Overall Score: {example['human_overall_score']}/100\n"
-                human_examples_text += f"  Category Scores:\n{example['category_comparison']}\n"
-                if example.get('ai_feedback') and example['ai_feedback'] != "No feedback":
-                    human_examples_text += f"  Human Feedback on AI: {example['ai_feedback']}\n"
-                human_examples_text += "\nLESSON: Compare the AI and Human evaluations above. Notice where the AI was correct and where it needed correction. "
-                human_examples_text += "Use these insights to improve your evaluation of the current call.\n\n"
+            if human_review_examples:
+                for i, example in enumerate(human_review_examples, 1):
+                    human_examples_text += f"EXAMPLE {i} (Similarity: {example['similarity']:.1%}):\n"
+                    human_examples_text += f"TRANSCRIPT SNIPPET:\n{example['transcript_snippet'][:800]}...\n\n"
+                    human_examples_text += f"AI EVALUATION:\n  Overall Score: {example['ai_overall_score']}/100\n"
+                    human_examples_text += f"  Category Scores:\n{example['category_comparison']}\n\n"
+                    human_examples_text += f"HUMAN EVALUATION (GROUND TRUTH):\n  Overall Score: {example['human_overall_score']}/100\n"
+                    human_examples_text += f"  Category Scores:\n{example['category_comparison']}\n"
+                    if example.get('ai_feedback') and example['ai_feedback'] != "No feedback":
+                        human_examples_text += f"  Human Feedback on AI: {example['ai_feedback']}\n"
+                    human_examples_text += "\nLESSON: Compare the AI and Human evaluations above. Notice where the AI was correct and where it needed correction. "
+                    human_examples_text += "Use these insights to improve your evaluation of the current call.\n\n"
             
             human_examples_text += "IMPORTANT: Use these examples to learn how humans evaluate calls, but remember that each call is unique. "
             human_examples_text += "Don't blindly copy scores - instead, understand the reasoning behind human evaluations and apply similar reasoning to the current call.\n"
@@ -873,5 +875,82 @@ Remember: Delivery matters as much as content. An agent who says the right words
             "resolution_detected": False,
             "resolution_confidence": 0.5,
             "violations": []
+        }
+    
+    def call_llm(
+        self,
+        prompt: str,
+        temperature: float = 0.0,
+        top_p: float = 1.0,
+        max_tokens: int = 2048,
+        model: Optional[str] = None,
+        seed: Optional[str] = None
+    ) -> Dict[str, Any]:
+        """
+        Generic LLM call method for deterministic evaluations.
+        
+        Args:
+            prompt: The prompt text to send to the LLM
+            temperature: Sampling temperature (0.0 for deterministic)
+            top_p: Nucleus sampling parameter
+            max_tokens: Maximum tokens in response
+            model: Model name (defaults to flash_model)
+            seed: Optional seed for deterministic generation
+            
+        Returns:
+            Dictionary with 'response', 'model', 'tokens_used', etc.
+        """
+        if not self.flash_model:
+            raise Exception("Gemini API key not configured")
+        
+        # Use specified model or default to flash_model
+        model_instance = self.flash_model
+        
+        # Build generation config
+        generation_config_kwargs = {
+            "temperature": temperature,
+            "top_p": top_p,
+            "candidate_count": 1,
+            "max_output_tokens": max_tokens,
+        }
+        
+        # Add seed if provided (for deterministic generation)
+        if seed is not None:
+            try:
+                # Convert seed string to integer if possible
+                seed_int = hash(seed) % (2**31)  # Convert to 32-bit signed int
+                generation_config_kwargs["seed"] = seed_int
+            except Exception as e:
+                logger.warning(f"Could not set seed: {e}")
+        
+        generation_config = genai.types.GenerationConfig(**generation_config_kwargs)
+        
+        try:
+            response = model_instance.generate_content(
+                prompt,
+                generation_config=generation_config
+            )
+        except Exception as e:
+            logger.error(f"Gemini API call failed: {e}")
+            raise Exception(f"Failed to generate content from Gemini API: {e}")
+        
+        # Parse response
+        if not response or not hasattr(response, 'text') or not response.text:
+            raise Exception("Empty or invalid response from Gemini API")
+        
+        response_text = response.text
+        
+        # Estimate tokens (rough approximation)
+        tokens_used = len(prompt.split()) + len(response_text.split())
+        
+        model_name = model or "gemini-2.5-flash-lite"
+        
+        return {
+            "response": response_text,
+            "model": model_name,
+            "tokens_used": tokens_used,
+            "temperature": temperature,
+            "top_p": top_p,
+            "seed": seed
         }
 

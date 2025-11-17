@@ -5,12 +5,6 @@ Phase 4: Scale & Optimization
 
 from app.database import SessionLocal
 from app.models.recording import Recording, RecordingStatus
-from app.models.evaluation import Evaluation
-from app.services.deepgram import DeepgramService
-from app.services.gemini import GeminiService
-from app.services.rule_engine import RuleEngineService
-from app.services.scoring import ScoringService
-from app.services.confidence import ConfidenceService
 from app.tasks.process_recording import process_recording_task
 from typing import List, Dict, Any, Optional
 import asyncio
@@ -179,7 +173,7 @@ class BatchProcessingService:
 
                 self.processing_queue.task_done()
 
-                logger.info(f"High-priority batch completed: {successful} successful, {failed} failed")
+                logger.info(f"Batch worker {worker_id} processed recording {recording_id}")
             except asyncio.TimeoutError:
                 # No work available, continue loop
                 continue
