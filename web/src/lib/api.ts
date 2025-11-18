@@ -62,6 +62,19 @@ export interface AuditLogEntry {
   changed_at: string
 }
 
+export interface PolicyTemplate {
+  id: string
+  company_id: string
+  template_name: string
+  description: string | null
+  is_active: boolean
+  created_at: string
+  criteria: any[]
+  policy_rules?: any
+  policy_rules_version?: number
+  enable_structured_rules?: boolean
+}
+
 class ApiClient {
   private baseUrl: string
   private token: string | null = null
