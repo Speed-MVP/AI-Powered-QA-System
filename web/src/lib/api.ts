@@ -510,7 +510,7 @@ class ApiClient {
     min_score: number
     max_score: number
     description: string
-    examples?: string
+    examples?: string | null
   }) {
     return this.request<{
       id: string
@@ -533,7 +533,7 @@ class ApiClient {
     min_score: number
     max_score: number
     description: string
-    examples?: string
+    examples?: string | null
   }) {
     return this.request<{
       id: string

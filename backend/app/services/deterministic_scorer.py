@@ -220,3 +220,6 @@ class DeterministicScorer:
             weights[criterion["category_name"]] = Decimal(str(criterion["weight"]))
 
         return weights
+
+
+

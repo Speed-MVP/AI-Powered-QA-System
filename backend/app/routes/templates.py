@@ -581,10 +581,39 @@ async def delete_template(
     if not template:
         raise HTTPException(status_code=404, detail="Template not found")
     
-    db.delete(template)
-    db.commit()
+    # Check if template is used in evaluations
+    from app.models.evaluation import Evaluation
+    evaluation_count = db.query(Evaluation).filter(
+        Evaluation.policy_template_id == template_id
+    ).count()
     
-    return {"message": "Template deleted successfully"}
+    if evaluation_count > 0:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Cannot delete template: It is used in {evaluation_count} evaluation(s). Please delete or reassign those evaluations first."
+        )
+    
+    # Note: Other relationships (clarifications, rule_drafts, rule_versions, rule_audit_logs) 
+    # have cascade delete, so they won't block deletion. Only evaluations block deletion.
+    
+    try:
+        db.delete(template)
+        db.commit()
+        return {"message": "Template deleted successfully"}
+    except Exception as e:
+        db.rollback()
+        logger.error(f"Error deleting template {template_id}: {e}", exc_info=True)
+        # Check for foreign key constraint violation
+        error_str = str(e).lower()
+        if "foreign key" in error_str or "constraint" in error_str:
+            raise HTTPException(
+                status_code=400,
+                detail="Cannot delete template: It is referenced by other records (evaluations, rule versions, etc.). Please remove those references first."
+            )
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to delete template: {str(e)}"
+        )
 
 
 @router.post("/{template_id}/criteria", response_model=EvaluationCriteriaResponse)
@@ -951,6 +980,8 @@ async def add_rubric_level(
             )
     
     # Create rubric level
+    # Convert empty string to None for examples
+    examples_value = level_data.examples if level_data.examples and level_data.examples.strip() else None
     rubric_level = EvaluationRubricLevel(
         criteria_id=criteria_id,
         level_name=level_data.level_name,
@@ -958,7 +989,7 @@ async def add_rubric_level(
         min_score=level_data.min_score,
         max_score=level_data.max_score,
         description=level_data.description,
-        examples=level_data.examples
+        examples=examples_value
     )
     db.add(rubric_level)
     db.commit()
@@ -1040,7 +1071,8 @@ async def update_rubric_level(
     rubric_level.min_score = level_data.min_score
     rubric_level.max_score = level_data.max_score
     rubric_level.description = level_data.description
-    rubric_level.examples = level_data.examples
+    # Convert empty string to None for examples
+    rubric_level.examples = level_data.examples if level_data.examples and level_data.examples.strip() else None
     
     db.commit()
     db.refresh(rubric_level)

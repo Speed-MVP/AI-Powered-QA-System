@@ -53,6 +53,7 @@ export function PolicyTemplates() {
   const [showTemplateDropdown, setShowTemplateDropdown] = useState(false)
   const [saving, setSaving] = useState(false)
   const [editingRulesForCategory, setEditingRulesForCategory] = useState<{templateId: string, categoryName: string} | null>(null)
+  const [deleteConfirmation, setDeleteConfirmation] = useState<{type: 'rubric' | 'criteria' | 'template', templateId: string, criteriaId?: string, levelId?: string, levelName?: string} | null>(null)
 
   // Fetch templates from backend
   useEffect(() => {
@@ -361,13 +362,29 @@ export function PolicyTemplates() {
       setSaving(true)
       setError(null)
       
+      // Find template and criteria to get existing levels for validation
+      const template = templates.find(t => t.id === templateId)
+      const criterion = template?.criteria.find(c => c.id === criteriaId)
+      const existingLevels = criterion?.rubric_levels || []
+      
+      // Validate for overlapping scores
+      for (const existing of existingLevels) {
+        const rangesOverlap = !(level.max_score < existing.min_score || level.min_score > existing.max_score)
+        if (rangesOverlap) {
+          throw new Error(`Score range (${level.min_score}-${level.max_score}) overlaps with existing level "${existing.level_name}" (${existing.min_score}-${existing.max_score})`)
+        }
+      }
+      
+      // Convert empty string to null for examples
+      const examplesValue = level.examples && level.examples.trim() !== '' ? level.examples : null
+      
       const newLevel = await api.addRubricLevel(templateId, criteriaId, {
         level_name: level.level_name,
         level_order: level.level_order,
         min_score: level.min_score,
         max_score: level.max_score,
         description: level.description,
-        examples: level.examples || undefined
+        examples: examplesValue ?? null
       })
       
       // Update templates
@@ -406,8 +423,36 @@ export function PolicyTemplates() {
       setSaving(true)
       setError(null)
       
-      const level = activeTemplate?.criteria.find(c => c.id === criteriaId)?.rubric_levels?.find(l => l.id === levelId)
-      if (!level) return
+      // Find level from templates array (more reliable than just activeTemplate)
+      const template = templates.find(t => t.id === templateId)
+      const criterion = template?.criteria.find(c => c.id === criteriaId)
+      const level = criterion?.rubric_levels?.find(l => l.id === levelId)
+      
+      if (!level) {
+        setError('Rubric level not found')
+        setSaving(false)
+        return
+      }
+      
+      // Get final values (use updates if provided, otherwise use existing level values)
+      const finalMinScore = updates.min_score !== undefined ? updates.min_score : level.min_score
+      const finalMaxScore = updates.max_score !== undefined ? updates.max_score : level.max_score
+      const existingLevels = criterion?.rubric_levels || []
+      
+      // Validate for overlapping scores (excluding current level)
+      for (const existing of existingLevels) {
+        if (existing.id === levelId) continue // Skip current level
+        
+        const rangesOverlap = !(finalMaxScore < existing.min_score || finalMinScore > existing.max_score)
+        if (rangesOverlap) {
+          throw new Error(`Score range (${finalMinScore}-${finalMaxScore}) overlaps with existing level "${existing.level_name}" (${existing.min_score}-${existing.max_score})`)
+        }
+      }
+      
+      // Convert empty string to null for examples
+      const examplesValue = updates.examples !== undefined 
+        ? (updates.examples === '' || updates.examples === null ? null : updates.examples)
+        : (level.examples === '' || !level.examples ? null : level.examples)
       
       const updatedLevel = await api.updateRubricLevel(templateId, criteriaId, levelId, {
         level_name: updates.level_name || level.level_name,
@@ -415,7 +460,7 @@ export function PolicyTemplates() {
         min_score: updates.min_score !== undefined ? updates.min_score : level.min_score,
         max_score: updates.max_score !== undefined ? updates.max_score : level.max_score,
         description: updates.description || level.description,
-        examples: updates.examples !== undefined ? updates.examples : level.examples || undefined
+        examples: examplesValue ?? null
       })
       
       // Update templates
@@ -458,11 +503,31 @@ export function PolicyTemplates() {
   }
 
   const handleDeleteRubricLevel = async (templateId: string, criteriaId: string, levelId: string) => {
-    if (!confirm('Delete this rubric level?')) return
+    // Find level name for confirmation message
+    const template = templates.find(t => t.id === templateId)
+    const criterion = template?.criteria.find(c => c.id === criteriaId)
+    const level = criterion?.rubric_levels?.find(l => l.id === levelId)
+    const levelName = level?.level_name || 'this rubric level'
+    
+    // Show confirmation dialog
+    setDeleteConfirmation({
+      type: 'rubric',
+      templateId,
+      criteriaId,
+      levelId,
+      levelName
+    })
+  }
+
+  const confirmDeleteRubricLevel = async () => {
+    if (!deleteConfirmation || deleteConfirmation.type !== 'rubric' || !deleteConfirmation.templateId || !deleteConfirmation.criteriaId || !deleteConfirmation.levelId) return
+
+    const { templateId, criteriaId, levelId } = deleteConfirmation
 
     try {
       setSaving(true)
       setError(null)
+      setDeleteConfirmation(null)
       
       await api.deleteRubricLevel(templateId, criteriaId, levelId)
       
@@ -512,10 +577,18 @@ export function PolicyTemplates() {
       
       const result = await api.generateRulesForTemplate(templateId)
       
-      alert(`Rules generated successfully! Version: ${result.rules_version}, Categories: ${result.categories.join(', ')}`)
-      
+      // Show success message via error state (we'll use it for both errors and success)
+      setError(null) // Clear any previous errors
       // Reload templates to get updated state
       await loadTemplates()
+      
+      // Show success message temporarily
+      const successMsg = `Rules generated successfully! Version: ${result.rules_version}, Categories: ${result.categories.join(', ')}`
+      setError(successMsg)
+      // Clear success message after 5 seconds
+      setTimeout(() => {
+        setError(null)
+      }, 5000)
     } catch (err: any) {
       setError(err.message || 'Failed to generate rules')
     } finally {
@@ -634,14 +707,30 @@ export function PolicyTemplates() {
           </div>
         </div>
 
-        {/* Error Message */}
+        {/* Error/Success Message */}
         {error && (
-          <div className="mb-6 p-3 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-md flex items-center gap-3">
-            <FaExclamationCircle className="w-4 h-4 text-red-600 dark:text-red-400 flex-shrink-0" />
-            <span className="text-sm text-red-800 dark:text-red-200 flex-1">{error}</span>
+          <div className={`mb-6 p-3 border rounded-md flex items-center gap-3 ${
+            error.includes('successfully') || error.includes('Success')
+              ? 'bg-green-50 dark:bg-green-900/20 border-green-200 dark:border-green-800'
+              : 'bg-red-50 dark:bg-red-900/20 border-red-200 dark:border-red-800'
+          }`}>
+            {error.includes('successfully') || error.includes('Success') ? (
+              <FaCheckCircle className="w-4 h-4 text-green-600 dark:text-green-400 flex-shrink-0" />
+            ) : (
+              <FaExclamationCircle className="w-4 h-4 text-red-600 dark:text-red-400 flex-shrink-0" />
+            )}
+            <span className={`text-sm flex-1 ${
+              error.includes('successfully') || error.includes('Success')
+                ? 'text-green-800 dark:text-green-200'
+                : 'text-red-800 dark:text-red-200'
+            }`}>{error}</span>
             <button
               onClick={() => setError(null)}
-              className="text-red-600 dark:text-red-400 hover:text-red-800 dark:hover:text-red-200"
+              className={`hover:opacity-70 ${
+                error.includes('successfully') || error.includes('Success')
+                  ? 'text-green-600 dark:text-green-400'
+                  : 'text-red-600 dark:text-red-400'
+              }`}
             >
               <FaTimes className="w-4 h-4" />
             </button>
@@ -1014,6 +1103,8 @@ export function PolicyTemplates() {
                                                           level={level}
                                                           onSave={(updates) => handleUpdateRubricLevel(template.id, criteria.id, level.id, updates)}
                                                           onCancel={() => setEditingRubricLevel(null)}
+                                                          onError={(error) => setError(error)}
+                                                          existingLevels={criteria.rubric_levels || []}
                                                         />
                                                       ) : (
                                                         <div className="flex items-start justify-between gap-2">
@@ -1270,6 +1361,57 @@ export function PolicyTemplates() {
             />
           )
         })()}
+
+        {/* Delete Confirmation Dialog */}
+        {deleteConfirmation && (
+          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+            <div className="bg-white dark:bg-gray-800 rounded-lg p-6 max-w-md w-full mx-4 border border-gray-200 dark:border-gray-700">
+              <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">
+                Confirm Delete
+              </h3>
+              <p className="text-sm text-gray-700 dark:text-gray-300 mb-6">
+                {deleteConfirmation.type === 'rubric' && (
+                  <>Are you sure you want to delete the rubric level <strong>"{deleteConfirmation.levelName}"</strong>? This action cannot be undone.</>
+                )}
+                {deleteConfirmation.type === 'criteria' && (
+                  <>Are you sure you want to delete this criteria? This action cannot be undone.</>
+                )}
+                {deleteConfirmation.type === 'template' && (
+                  <>Are you sure you want to delete this template? This action cannot be undone.</>
+                )}
+              </p>
+              <div className="flex items-center justify-end gap-3">
+                <button
+                  onClick={() => setDeleteConfirmation(null)}
+                  disabled={saving}
+                  className="px-4 py-2 text-sm bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 rounded-md hover:bg-gray-50 dark:hover:bg-gray-600 disabled:opacity-50 transition-colors"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={() => {
+                    if (deleteConfirmation.type === 'rubric') {
+                      confirmDeleteRubricLevel()
+                    } else {
+                      setDeleteConfirmation(null)
+                    }
+                  }}
+                  disabled={saving}
+                  className="px-4 py-2 text-sm bg-red-600 text-white rounded-md hover:bg-red-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors font-medium"
+                >
+                  {saving ? (
+                    <span className="flex items-center gap-2">
+                      <FaSpinner className="w-4 h-4 animate-spin" />
+                      Deleting...
+                    </span>
+                  ) : (
+                    'Delete'
+                  )}
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
       </div>
     </div>
   )
@@ -1440,10 +1582,14 @@ function RubricLevelEditor({
   level,
   onSave,
   onCancel,
+  onError,
+  existingLevels = [],
 }: {
   level: RubricLevel
   onSave: (updates: Partial<RubricLevel>) => void
   onCancel: () => void
+  onError?: (error: string) => void
+  existingLevels?: RubricLevel[]
 }) {
   const [levelName, setLevelName] = useState(level.level_name)
   const [levelOrder, setLevelOrder] = useState(level.level_order.toString())
@@ -1451,20 +1597,79 @@ function RubricLevelEditor({
   const [maxScore, setMaxScore] = useState(level.max_score.toString())
   const [description, setDescription] = useState(level.description)
   const [examples, setExamples] = useState(level.examples || '')
+  const [validationError, setValidationError] = useState<string | null>(null)
 
-  const handleSave = () => {
+  const validateAndSave = () => {
+    setValidationError(null)
+    
+    // Basic validation
+    if (!levelName.trim()) {
+      const error = 'Level name is required'
+      setValidationError(error)
+      if (onError) onError(error)
+      return
+    }
+    if (!description.trim()) {
+      const error = 'Description is required'
+      setValidationError(error)
+      if (onError) onError(error)
+      return
+    }
+    const min = parseInt(minScore) || 0
+    const max = parseInt(maxScore) || 100
+    if (min < 0 || max > 100) {
+      const error = 'Scores must be between 0 and 100'
+      setValidationError(error)
+      if (onError) onError(error)
+      return
+    }
+    if (min > max) {
+      const error = 'Min score must be less than or equal to max score'
+      setValidationError(error)
+      if (onError) onError(error)
+      return
+    }
+    
+    // Check for overlapping score ranges with existing levels (excluding current level)
+    for (const existing of existingLevels) {
+      if (existing.id === level.id) continue // Skip current level when updating
+      
+      // Check if ranges overlap: ranges overlap if they don't have a gap between them
+      const rangesOverlap = !(max < existing.min_score || min > existing.max_score)
+      
+      if (rangesOverlap) {
+        const error = `Score range (${min}-${max}) overlaps with existing level "${existing.level_name}" (${existing.min_score}-${existing.max_score})`
+        setValidationError(error)
+        if (onError) onError(error)
+        return
+      }
+    }
+    
+    // All validation passed
     onSave({
-      level_name: levelName,
+      level_name: levelName.trim(),
       level_order: parseInt(levelOrder) || 1,
-      min_score: parseInt(minScore) || 0,
-      max_score: parseInt(maxScore) || 100,
-      description: description,
-      examples: examples || null
+      min_score: min,
+      max_score: max,
+      description: description.trim(),
+      examples: examples.trim() || null
     })
   }
 
   return (
     <div className="space-y-3">
+      {validationError && (
+        <div className="p-2 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-md flex items-start gap-2">
+          <FaExclamationCircle className="w-4 h-4 text-red-600 dark:text-red-400 flex-shrink-0 mt-0.5" />
+          <span className="text-xs text-red-800 dark:text-red-200 flex-1">{validationError}</span>
+          <button
+            onClick={() => setValidationError(null)}
+            className="text-red-600 dark:text-red-400 hover:text-red-800 dark:hover:text-red-200"
+          >
+            <FaTimes className="w-3 h-3" />
+          </button>
+        </div>
+      )}
       <div className="grid grid-cols-2 gap-2">
         <div>
           <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">
@@ -1546,7 +1751,7 @@ function RubricLevelEditor({
       </div>
       <div className="flex items-center gap-2 pt-1">
         <button
-          onClick={handleSave}
+          onClick={validateAndSave}
           className="px-3 py-1.5 text-xs bg-brand-500 text-white rounded-md hover:bg-brand-600 flex items-center gap-1.5 transition-colors font-medium"
         >
           <FaCheck className="w-3 h-3" />

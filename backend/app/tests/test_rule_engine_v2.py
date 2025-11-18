@@ -302,3 +302,6 @@ class TestRuleEngineV2:
         # Check that categories are in sorted order
         category_names = list(results1.keys())
         assert category_names == sorted(category_names)
+
+
+

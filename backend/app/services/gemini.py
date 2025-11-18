@@ -915,15 +915,29 @@ Remember: Delivery matters as much as content. An agent who says the right words
         }
         
         # Add seed if provided (for deterministic generation)
+        seed_used = False
         if seed is not None:
             try:
                 # Convert seed string to integer if possible
                 seed_int = hash(seed) % (2**31)  # Convert to 32-bit signed int
                 generation_config_kwargs["seed"] = seed_int
+                seed_used = True
             except Exception as e:
                 logger.warning(f"Could not set seed: {e}")
         
-        generation_config = genai.types.GenerationConfig(**generation_config_kwargs)
+        # Try to create GenerationConfig with seed, fallback without if not supported
+        try:
+            generation_config = genai.types.GenerationConfig(**generation_config_kwargs)
+        except TypeError as e:
+            if "seed" in str(e) and seed_used:
+                # Seed parameter not supported in this version, retry without it
+                logger.warning(f"GenerationConfig does not support 'seed' parameter in this version. Falling back without seed. Error: {e}")
+                generation_config_kwargs.pop("seed", None)
+                generation_config = genai.types.GenerationConfig(**generation_config_kwargs)
+                seed_used = False
+            else:
+                # Some other error, re-raise it
+                raise
         
         try:
             response = model_instance.generate_content(
@@ -951,6 +965,6 @@ Remember: Delivery matters as much as content. An agent who says the right words
             "tokens_used": tokens_used,
             "temperature": temperature,
             "top_p": top_p,
-            "seed": seed
+            "seed": seed if seed_used else None
         }
 
