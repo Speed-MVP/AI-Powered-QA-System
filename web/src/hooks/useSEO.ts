@@ -1,5 +1,40 @@
 import { useEffect } from 'react'
 
+const envSiteUrl = import.meta.env.VITE_SITE_URL?.trim()
+
+const getSiteOrigin = () => {
+  if (envSiteUrl) {
+    try {
+      const parsed = new URL(envSiteUrl)
+      return parsed.origin
+    } catch {
+      return envSiteUrl.replace(/\/$/, '')
+    }
+  }
+
+  if (typeof window !== 'undefined' && window.location?.origin) {
+    return window.location.origin
+  }
+
+  return ''
+}
+
+const buildAbsoluteUrl = (pathOrUrl?: string) => {
+  if (!pathOrUrl) return ''
+
+  if (/^https?:\/\//i.test(pathOrUrl)) {
+    return pathOrUrl
+  }
+
+  const origin = getSiteOrigin()
+  if (!origin) {
+    return pathOrUrl
+  }
+
+  const normalizedPath = pathOrUrl.startsWith('/') ? pathOrUrl : `/${pathOrUrl}`
+  return `${origin}${normalizedPath}`
+}
+
 interface SEOProps {
   title?: string
   description?: string
@@ -40,6 +75,13 @@ export const useSEO = ({
       }
     }
 
+    const canonicalUrl = buildAbsoluteUrl(url || '/')
+    const breadcrumbPath = url
+      ? url.startsWith('http')
+        ? new URL(url).pathname || '/'
+        : url
+      : '/'
+
     // Update description
     if (description) {
       updateMetaTag('description', description)
@@ -63,9 +105,9 @@ export const useSEO = ({
       updateMetaTag('twitter:image', image, true)
     }
 
-    if (url) {
-      updateMetaTag('og:url', url, true)
-      updateMetaTag('twitter:url', url, true)
+    if (canonicalUrl) {
+      updateMetaTag('og:url', canonicalUrl, true)
+      updateMetaTag('twitter:url', canonicalUrl, true)
     }
 
     if (type) {
@@ -81,32 +123,35 @@ export const useSEO = ({
 
     // Update canonical URL
     let canonicalLink = document.querySelector('link[rel="canonical"]') as HTMLLinkElement
-    if (url) {
-      if (canonicalLink) {
-        canonicalLink.href = url
-      } else {
+    if (canonicalUrl) {
+      if (!canonicalLink) {
         canonicalLink = document.createElement('link')
         canonicalLink.rel = 'canonical'
-        canonicalLink.href = url
         document.head.appendChild(canonicalLink)
       }
+      canonicalLink.href = canonicalUrl
     }
 
     // Update JSON-LD structured data for breadcrumbs
     const updateBreadcrumbSchema = (path: string) => {
+      const siteOrigin = getSiteOrigin()
       const pathSegments = path.split('/').filter(Boolean)
       const breadcrumbs = [
-        { position: 1, name: 'Home', item: '/' }
+        { position: 1, name: 'Home', item: siteOrigin || '/' }
       ]
 
       let currentPath = ''
       pathSegments.forEach((segment, index) => {
         currentPath += `/${segment}`
         const name = segment.charAt(0).toUpperCase() + segment.slice(1).replace('-', ' ')
+        const absoluteItem = siteOrigin
+          ? `${siteOrigin}${currentPath}`
+          : currentPath || '/'
+
         breadcrumbs.push({
           position: index + 2,
           name,
-          item: currentPath
+          item: absoluteItem
         })
       })
 
@@ -131,9 +176,7 @@ export const useSEO = ({
       document.head.appendChild(breadcrumbScript)
     }
 
-    if (url) {
-      updateBreadcrumbSchema(url)
-    }
+    updateBreadcrumbSchema(breadcrumbPath)
 
   }, [title, description, keywords, image, url, type, noindex])
 }

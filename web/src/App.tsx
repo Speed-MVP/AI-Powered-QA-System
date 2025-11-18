@@ -57,14 +57,7 @@ function AppRoutes() {
             </SEOWrapper>
           }
         />
-        <Route
-          path="login"
-          element={
-            <SEOWrapper seoConfig={pageSEO.signIn}>
-              <SignIn />
-            </SEOWrapper>
-          }
-        />
+        <Route path="login" element={<Navigate to="/sign-in" replace />} />
         <Route
           index
           element={
@@ -87,14 +80,7 @@ function AppRoutes() {
           path="test"
           element={<Navigate to="/demo" replace />}
         />
-        <Route
-          path="home"
-          element={
-            <SEOWrapper seoConfig={pageSEO.home}>
-              <Home />
-            </SEOWrapper>
-          }
-        />
+        <Route path="home" element={<Navigate to="/" replace />} />
         <Route
           path="dashboard"
           element={
