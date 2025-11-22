@@ -3,13 +3,14 @@ from . import (
     auth,
     recordings,
     evaluations,
-    templates,
     health,
-    fine_tuning,
     batch_processing,
     supervisor,
     teams,
     agents,
     imports,
+    flow_versions,
+    compliance_rules,
+    rubrics,
 )
 

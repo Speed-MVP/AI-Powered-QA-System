@@ -263,7 +263,7 @@ async def delete_recording(
         # But we'll delete explicitly to be sure
         from app.models.evaluation import Evaluation
         from app.models.transcript import Transcript
-        from app.models.policy_violation import PolicyViolation
+        # Legacy: PolicyViolation removed - violations are now stored in deterministic_results JSONB
         from app.models.category_score import CategoryScore
         from app.models.audit import EvaluationVersion
         from app.models.human_review import HumanReview
@@ -327,7 +327,7 @@ async def reevaluate_recording(
         # Delete existing evaluation and transcript to start fresh
         from app.models.evaluation import Evaluation
         from app.models.transcript import Transcript
-        from app.models.policy_violation import PolicyViolation
+        # Legacy: PolicyViolation removed - violations are now stored in deterministic_results JSONB
         from app.models.category_score import CategoryScore
         from app.models.audit import EvaluationVersion
         from app.models.human_review import HumanReview

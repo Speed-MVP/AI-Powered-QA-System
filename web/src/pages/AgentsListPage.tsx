@@ -3,6 +3,7 @@ import { api } from '@/lib/api'
 import type { Agent, Team } from '@/lib/api'
 import { AgentFormModal } from '@/components/modals/AgentFormModal'
 import { BulkImportModal } from '@/components/modals/BulkImportModal'
+import { ConfirmModal } from '@/components/modals'
 
 export function AgentsListPage() {
   const [agents, setAgents] = useState<Agent[]>([])
@@ -16,6 +17,7 @@ export function AgentsListPage() {
     agent?: Agent
   }>({ open: false, mode: 'create' })
   const [importModalOpen, setImportModalOpen] = useState(false)
+  const [deleteConfirmModal, setDeleteConfirmModal] = useState<{ isOpen: boolean; agent: Agent } | null>(null)
 
   const loadDirectory = async () => {
     try {
@@ -49,12 +51,18 @@ export function AgentsListPage() {
     await loadDirectory()
   }
 
-  const handleDeleteAgent = async (agent: Agent) => {
-    if (!window.confirm(`Remove agent "${agent.full_name}"?`)) {
-      return
-    }
-    await api.deleteAgent(agent.id)
+  const handleDeleteAgent = (agent: Agent) => {
+    setDeleteConfirmModal({
+      isOpen: true,
+      agent,
+    })
+  }
+
+  const confirmDeleteAgent = async () => {
+    if (!deleteConfirmModal) return
+    await api.deleteAgent(deleteConfirmModal.agent.id)
     await loadDirectory()
+    setDeleteConfirmModal(null)
   }
 
   const getPrimaryTeam = (agent: Agent) => agent.team_memberships[0]?.team_name ?? 'Unassigned'
@@ -215,6 +223,21 @@ export function AgentsListPage() {
               await loadDirectory()
               setImportModalOpen(false)
             }}
+          />
+        )}
+
+        {/* Delete Confirmation Modal */}
+        {deleteConfirmModal && (
+          <ConfirmModal
+            isOpen={deleteConfirmModal.isOpen}
+            onClose={() => setDeleteConfirmModal(null)}
+            onConfirm={confirmDeleteAgent}
+            title="Remove Agent"
+            message={`Remove agent "${deleteConfirmModal.agent.full_name}"?`}
+            confirmText="Remove"
+            cancelText="Cancel"
+            confirmColor="red"
+            danger
           />
         )}
       </div>

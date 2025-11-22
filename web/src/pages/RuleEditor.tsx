@@ -14,6 +14,7 @@ import { useState, useEffect } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { api } from '@/lib/api'
 import { FaSave, FaEye, FaRocket, FaTrash, FaHistory, FaChevronDown, FaChevronRight, FaEdit, FaToggleOn, FaToggleOff } from 'react-icons/fa'
+import { ConfirmModal, AlertModal } from '@/components/modals'
 
 interface Rule {
   id: string
@@ -89,29 +90,53 @@ export function RuleEditor() {
       await api.post(`/api/policy-templates/${templateId}/rules/draft`, {
         rules: rules
       })
-      alert('Draft saved successfully')
+      setAlertModal({
+        isOpen: true,
+        title: 'Success',
+        message: 'Draft saved successfully',
+        type: 'success',
+      })
     } catch (err: any) {
-      alert(`Failed to save draft: ${err.message}`)
+      setAlertModal({
+        isOpen: true,
+        title: 'Error',
+        message: `Failed to save draft: ${err.message}`,
+        type: 'error',
+      })
     }
   }
 
-  const handlePublish = async () => {
+  const handlePublish = () => {
     if (!templateId) return
     
-    if (!confirm('Are you sure you want to publish these rules? This will create a new version.')) {
-      return
-    }
-    
-    try {
-      await api.post(`/api/policy-templates/${templateId}/rules/publish`, {
-        reason: 'Published from rule editor'
-      })
-      alert('Rules published successfully')
-      loadRules()
-      loadTemplateInfo()
-    } catch (err: any) {
-      alert(`Failed to publish: ${err.message}`)
-    }
+    setConfirmModal({
+      isOpen: true,
+      title: 'Publish Rules',
+      message: 'Are you sure you want to publish these rules? This will create a new version.',
+      onConfirm: async () => {
+        setConfirmModal(null)
+        try {
+          await api.post(`/api/policy-templates/${templateId}/rules/publish`, {
+            reason: 'Published from rule editor'
+          })
+          setAlertModal({
+            isOpen: true,
+            title: 'Success',
+            message: 'Rules published successfully',
+            type: 'success',
+          })
+          loadRules()
+          loadTemplateInfo()
+        } catch (err: any) {
+          setAlertModal({
+            isOpen: true,
+            title: 'Error',
+            message: `Failed to publish: ${err.message}`,
+            type: 'error',
+          })
+        }
+      },
+    })
   }
 
   const toggleCategory = (category: string) => {
@@ -259,6 +284,31 @@ export function RuleEditor() {
           )}
         </div>
       </div>
+
+      {/* Confirm Modal */}
+      {confirmModal && (
+        <ConfirmModal
+          isOpen={confirmModal.isOpen}
+          onClose={() => setConfirmModal(null)}
+          onConfirm={confirmModal.onConfirm}
+          title={confirmModal.title}
+          message={confirmModal.message}
+          confirmText="Publish"
+          cancelText="Cancel"
+          confirmColor="blue"
+        />
+      )}
+
+      {/* Alert Modal */}
+      {alertModal && (
+        <AlertModal
+          isOpen={alertModal.isOpen}
+          onClose={() => setAlertModal(null)}
+          title={alertModal.title}
+          message={alertModal.message}
+          type={alertModal.type}
+        />
+      )}
     </div>
   )
 }

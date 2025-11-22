@@ -15,7 +15,7 @@ class Company(Base):
     
     # Relationships
     users = relationship("User", back_populates="company")
-    policy_templates = relationship("PolicyTemplate", back_populates="company")
     recordings = relationship("Recording", back_populates="company")
     teams = relationship("Team", back_populates="company")
+    flow_versions = relationship("FlowVersion", back_populates="company")
 

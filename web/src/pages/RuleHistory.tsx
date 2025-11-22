@@ -10,11 +10,14 @@ import { useState, useEffect } from 'react'
 import { useParams } from 'react-router-dom'
 import { api } from '@/lib/api'
 import { FaHistory, FaUndo } from 'react-icons/fa'
+import { ConfirmModal, AlertModal } from '@/components/modals'
 
 export function RuleHistory() {
   const { templateId } = useParams<{ templateId: string }>()
   const [history, setHistory] = useState<any>(null)
   const [loading, setLoading] = useState(true)
+  const [confirmModal, setConfirmModal] = useState<{ isOpen: boolean; versionId: string; onConfirm: () => void } | null>(null)
+  const [alertModal, setAlertModal] = useState<{ isOpen: boolean; title: string; message: string; type: 'success' | 'error' } | null>(null)
 
   useEffect(() => {
     if (templateId) {
@@ -35,23 +38,36 @@ export function RuleHistory() {
     }
   }
 
-  const handleRollback = async (versionId: string) => {
+  const handleRollback = (versionId: string) => {
     if (!templateId) return
     
-    if (!confirm('Create a draft from this version? You will need to publish it to activate.')) {
-      return
-    }
-
-    try {
-      await api.post(`/api/policy-templates/${templateId}/rules/rollback`, {
-        version_id: versionId,
-        reason: 'Rollback from history page'
-      })
-      alert('Rollback draft created successfully')
-      loadHistory()
-    } catch (err: any) {
-      alert(`Failed to rollback: ${err.message}`)
-    }
+    setConfirmModal({
+      isOpen: true,
+      versionId,
+      onConfirm: async () => {
+        setConfirmModal(null)
+        try {
+          await api.post(`/api/policy-templates/${templateId}/rules/rollback`, {
+            version_id: versionId,
+            reason: 'Rollback from history page'
+          })
+          setAlertModal({
+            isOpen: true,
+            title: 'Success',
+            message: 'Rollback draft created successfully',
+            type: 'success',
+          })
+          loadHistory()
+        } catch (err: any) {
+          setAlertModal({
+            isOpen: true,
+            title: 'Error',
+            message: `Failed to rollback: ${err.message}`,
+            type: 'error',
+          })
+        }
+      },
+    })
   }
 
   if (loading) {
@@ -102,6 +118,31 @@ export function RuleHistory() {
           ))}
         </div>
       </div>
+
+      {/* Confirm Modal */}
+      {confirmModal && (
+        <ConfirmModal
+          isOpen={confirmModal.isOpen}
+          onClose={() => setConfirmModal(null)}
+          onConfirm={confirmModal.onConfirm}
+          title="Rollback to Version"
+          message="Create a draft from this version? You will need to publish it to activate."
+          confirmText="Create Draft"
+          cancelText="Cancel"
+          confirmColor="blue"
+        />
+      )}
+
+      {/* Alert Modal */}
+      {alertModal && (
+        <AlertModal
+          isOpen={alertModal.isOpen}
+          onClose={() => setAlertModal(null)}
+          title={alertModal.title}
+          message={alertModal.message}
+          type={alertModal.type}
+        />
+      )}
     </div>
   )
 }

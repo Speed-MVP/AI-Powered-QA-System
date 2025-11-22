@@ -35,7 +35,6 @@ async def get_human_review_queue(
     # Get evaluations requiring human review
     evaluations = db.query(Evaluation).options(
         joinedload(Evaluation.recording),
-        joinedload(Evaluation.policy_template),
         joinedload(Evaluation.category_scores),
         joinedload(Evaluation.human_review)
     ).filter(
@@ -186,7 +185,7 @@ async def list_human_reviews(
 def _compute_human_ai_delta(ai_evaluation: dict, human_review: HumanReviewCreate) -> dict:
     """
     Compute the delta between AI evaluation and human review.
-    Used for fine-tuning dataset curation.
+    Used for audit and override tracking only - NOT for training.
     """
     delta = {
         "overall_score_diff": None,

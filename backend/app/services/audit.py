@@ -101,7 +101,7 @@ class AuditService:
         try:
             from app.models.evaluation import Evaluation
             from app.models.category_score import CategoryScore
-            from app.models.policy_violation import PolicyViolation
+            # Legacy: PolicyViolation removed - violations are now stored in deterministic_results JSONB
 
             evaluation = db.query(Evaluation).filter(Evaluation.id == evaluation_id).first()
             if not evaluation:
@@ -400,6 +400,10 @@ class AuditService:
             return {"success": False, "error": str(e)}
         finally:
             db.close()
+
+
+
+
 
 
 

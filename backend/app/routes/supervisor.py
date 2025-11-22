@@ -8,10 +8,9 @@ from app.database import SessionLocal
 from app.models.evaluation import Evaluation, EvaluationStatus
 from app.models.recording import Recording
 from app.models.category_score import CategoryScore
-from app.models.policy_violation import PolicyViolation
+# Legacy: PolicyViolation removed - violations are now stored in deterministic_results JSONB
 from app.models.human_review import HumanReview, ReviewStatus
 from app.services.gemini import GeminiService
-from app.services.scoring import ScoringService
 from app.services.confidence import ConfidenceService
 from app.tasks.process_recording import process_recording_task
 from sqlalchemy import func

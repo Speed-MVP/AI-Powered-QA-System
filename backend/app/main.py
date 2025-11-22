@@ -12,17 +12,17 @@ from app.routes import (
     auth,
     recordings,
     evaluations,
-    templates,
     health,
-    fine_tuning,
     batch_processing,
     supervisor,
     teams,
     agents,
     imports,
     human_reviews,
-    policy_rules,
-    rule_editor,
+    flow_versions,
+    compliance_rules,
+    rubrics,
+    templates,
 )
 import logging
 
@@ -151,16 +151,16 @@ app.include_router(health.router)
 app.include_router(auth.router, prefix="/api/auth", tags=["auth"])
 app.include_router(recordings.router, prefix="/api/recordings", tags=["recordings"])
 app.include_router(evaluations.router, prefix="/api/evaluations", tags=["evaluations"])
-app.include_router(templates.router, prefix="/api/templates", tags=["templates"])
-app.include_router(policy_rules.router, prefix="/api/policy-templates", tags=["policy-rules"])
-app.include_router(rule_editor.router, prefix="/api/policy-templates", tags=["rule-editor"])
-app.include_router(fine_tuning.router, prefix="/api", tags=["fine-tuning"])
 app.include_router(batch_processing.router, prefix="/api/batch", tags=["batch-processing"])
 app.include_router(supervisor.router, prefix="/api", tags=["supervisor"])
 app.include_router(teams.router, prefix="/api", tags=["teams"])
 app.include_router(agents.router, prefix="/api", tags=["agents"])
 app.include_router(imports.router, prefix="/api", tags=["bulk-import"])
 app.include_router(human_reviews.router, prefix="/api/human_reviews", tags=["human-reviews"])
+app.include_router(flow_versions.router)  # Prefix already included in router definition
+app.include_router(compliance_rules.router)  # Prefix already included in router definition
+app.include_router(rubrics.router)  # Prefix already included in router definition
+app.include_router(templates.router)  # Prefix already included in router definition
 
 @app.get("/")
 async def root():

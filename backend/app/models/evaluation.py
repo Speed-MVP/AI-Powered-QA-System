@@ -18,7 +18,6 @@ class Evaluation(Base):
     
     id = Column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
     recording_id = Column(String(36), ForeignKey("recordings.id"), nullable=False, unique=True, index=True)
-    policy_template_id = Column(String(36), ForeignKey("policy_templates.id"), nullable=False)
     evaluated_by_user_id = Column(String(36), ForeignKey("users.id"), nullable=True)
     overall_score = Column(Integer, nullable=False)
     resolution_detected = Column(Boolean, nullable=False)
@@ -44,14 +43,19 @@ class Evaluation(Base):
     agent_id = Column(String(36), ForeignKey("users.id"), nullable=True, index=True)
     team_id = Column(String(36), ForeignKey("teams.id"), nullable=True)
     
+    # Phase 3-7: Standardized Phases - Store evaluation results
+    deterministic_results = Column(JSONB, nullable=True)  # Phase 3: DeterministicRuleEngine output
+    llm_stage_evaluations = Column(JSONB, nullable=True)  # Phase 4: LLM stage evaluations
+    final_evaluation = Column(JSONB, nullable=True)  # Phase 6: FinalEvaluation from RubricScorer
+    flow_version_id = Column(String(36), ForeignKey("flow_versions.id"), nullable=True)  # Link to FlowVersion used
+    rubric_template_id = Column(String(36), ForeignKey("rubric_templates.id"), nullable=True)  # Link to RubricTemplate used
+    
     # Relationships
     recording = relationship("Recording", back_populates="evaluation")
-    policy_template = relationship("PolicyTemplate", back_populates="evaluations")
     evaluated_by_user = relationship("User", back_populates="evaluations", foreign_keys=[evaluated_by_user_id])
     agent = relationship("User", foreign_keys=[agent_id])
     team = relationship("Team", back_populates="evaluations")
     category_scores = relationship("CategoryScore", back_populates="evaluation", cascade="all, delete-orphan")
-    policy_violations = relationship("PolicyViolation", back_populates="evaluation", cascade="all, delete-orphan")
     human_review = relationship("HumanReview", uselist=False, back_populates="evaluation", cascade="all, delete-orphan")  # Phase 3
     rule_engine_results = relationship("RuleEngineResults", back_populates="evaluation", cascade="all, delete-orphan")  # MVP Evaluation Improvements
     versions = relationship("EvaluationVersion", back_populates="evaluation", cascade="all, delete-orphan", order_by="EvaluationVersion.version_number")  # Phase 4

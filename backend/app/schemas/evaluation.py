@@ -13,17 +13,6 @@ class CategoryScoreResponse(BaseModel):
         from_attributes = True
 
 
-class PolicyViolationResponse(BaseModel):
-    id: str
-    violation_type: str
-    description: str
-    severity: str
-    criteria_id: str
-    
-    class Config:
-        from_attributes = True
-
-
 class CustomerToneResponse(BaseModel):
     primary_emotion: str
     confidence: float
@@ -34,7 +23,6 @@ class CustomerToneResponse(BaseModel):
 class EvaluationResponse(BaseModel):
     id: str
     recording_id: str
-    policy_template_id: str
     overall_score: int
     resolution_detected: bool
     resolution_confidence: float
@@ -43,7 +31,6 @@ class EvaluationResponse(BaseModel):
     status: str
     created_at: datetime
     category_scores: List[CategoryScoreResponse] = []
-    policy_violations: List[PolicyViolationResponse] = []
     
     class Config:
         from_attributes = True

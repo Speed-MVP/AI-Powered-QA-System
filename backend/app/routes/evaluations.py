@@ -40,7 +40,8 @@ async def get_evaluation(
     evaluation_dict = {
         "id": evaluation.id,
         "recording_id": evaluation.recording_id,
-        "policy_template_id": evaluation.policy_template_id,
+        "flow_version_id": evaluation.flow_version_id,
+        "rubric_template_id": evaluation.rubric_template_id,
         "overall_score": evaluation.overall_score,
         "resolution_detected": evaluation.resolution_detected,
         "resolution_confidence": evaluation.resolution_confidence,
@@ -56,16 +57,6 @@ async def get_evaluation(
                 "feedback": score.feedback
             }
             for score in evaluation.category_scores
-        ],
-        "policy_violations": [
-            {
-                "id": violation.id,
-                "violation_type": violation.violation_type,
-                "description": violation.description,
-                "severity": violation.severity.value,
-                "criteria_id": violation.criteria_id
-            }
-            for violation in evaluation.policy_violations
         ]
     }
     
@@ -78,7 +69,7 @@ async def get_evaluation_with_template(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
-    """Get evaluation results with full template details for human review"""
+    """Get evaluation results with FlowVersion and RubricTemplate details for human review"""
     # Get evaluation
     evaluation = db.query(Evaluation).filter(
         Evaluation.id == evaluation_id
@@ -96,25 +87,33 @@ async def get_evaluation_with_template(
     if not recording:
         raise HTTPException(status_code=404, detail="Recording not found")
 
-    # Get policy template with criteria and rubric levels
+    # Get FlowVersion and RubricTemplate (Phase 7 system)
+    from app.models.flow_version import FlowVersion
+    from app.models.rubric_template import RubricTemplate, RubricCategory
     from sqlalchemy.orm import joinedload
-    from app.models.policy_template import PolicyTemplate
 
-    template = db.query(PolicyTemplate).options(
-        joinedload(PolicyTemplate.evaluation_criteria).joinedload('rubric_levels')
-    ).filter(
-        PolicyTemplate.id == evaluation.policy_template_id,
-        PolicyTemplate.company_id == current_user.company_id
-    ).first()
-
-    if not template:
-        raise HTTPException(status_code=404, detail="Policy template not found")
+    flow_version = None
+    rubric_template = None
+    
+    if evaluation.flow_version_id:
+        flow_version = db.query(FlowVersion).filter(
+            FlowVersion.id == evaluation.flow_version_id,
+            FlowVersion.company_id == current_user.company_id
+        ).first()
+    
+    if evaluation.rubric_template_id:
+        rubric_template = db.query(RubricTemplate).options(
+            joinedload(RubricTemplate.categories).joinedload(RubricCategory.mappings)
+        ).filter(
+            RubricTemplate.id == evaluation.rubric_template_id
+        ).first()
 
     # Convert customer_tone JSONB to dict if it exists
     evaluation_dict = {
         "id": evaluation.id,
         "recording_id": evaluation.recording_id,
-        "policy_template_id": evaluation.policy_template_id,
+        "flow_version_id": evaluation.flow_version_id,
+        "rubric_template_id": evaluation.rubric_template_id,
         "overall_score": evaluation.overall_score,
         "resolution_detected": evaluation.resolution_detected,
         "resolution_confidence": evaluation.resolution_confidence,
@@ -131,42 +130,44 @@ async def get_evaluation_with_template(
             }
             for score in evaluation.category_scores
         ],
-        "policy_violations": [
-            {
-                "id": violation.id,
-                "violation_type": violation.violation_type,
-                "description": violation.description,
-                "severity": violation.severity.value,
-                "criteria_id": violation.criteria_id
-            }
-            for violation in evaluation.policy_violations
-        ],
-        "template": {
-            "id": template.id,
-            "template_name": template.template_name,
-            "description": template.description,
-            "criteria": [
+        "flow_version": {
+            "id": flow_version.id,
+            "name": flow_version.name,
+            "description": flow_version.description,
+            "stages": [
                 {
-                    "id": criterion.id,
-                    "category_name": criterion.category_name,
-                    "weight": criterion.weight,
-                    "passing_score": criterion.passing_score,
-                    "evaluation_prompt": criterion.evaluation_prompt,
-                    "rubric_levels": [
+                    "id": stage.id,
+                    "name": stage.name,
+                    "order": stage.order,
+                    "steps": [
                         {
-                            "id": level.id,
-                            "level_name": level.level_name,
-                            "level_order": level.level_order,
-                            "min_score": level.min_score,
-                            "max_score": level.max_score,
-                            "description": level.description,
-                            "examples": level.examples
+                            "id": step.id,
+                            "name": step.name,
+                            "description": step.description,
+                            "required": step.required,
+                            "order": step.order
                         }
-                        for level in sorted(criterion.rubric_levels, key=lambda x: x.level_order)
+                        for step in sorted(stage.steps, key=lambda x: x.order)
                     ]
                 }
-                for criterion in template.evaluation_criteria
-            ]
+                for stage in sorted(flow_version.stages, key=lambda x: x.order)
+            ] if flow_version else []
+        },
+        "rubric_template": {
+            "id": rubric_template.id,
+            "name": rubric_template.name,
+            "description": rubric_template.description,
+            "categories": [
+                {
+                    "id": category.id,
+                    "name": category.name,
+                    "description": category.description,
+                    "weight": float(category.weight),
+                    "pass_threshold": category.pass_threshold,
+                    "level_definitions": category.level_definitions
+                }
+                for category in rubric_template.categories
+            ] if rubric_template else []
         }
     }
 
@@ -248,7 +249,7 @@ async def get_policy_violations(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
-    """Get policy violations for an evaluation"""
+    """Get compliance rule violations for an evaluation (from Phase 3 deterministic results)"""
     evaluation = db.query(Evaluation).filter(Evaluation.id == evaluation_id).first()
     
     if not evaluation:
@@ -263,17 +264,23 @@ async def get_policy_violations(
     if not recording:
         raise HTTPException(status_code=403, detail="Access denied")
     
+    # Get violations from deterministic_results (Phase 3)
+    violations = []
+    if evaluation.deterministic_results and isinstance(evaluation.deterministic_results, dict):
+        rule_violations = evaluation.deterministic_results.get("rule_violations", [])
+        violations = [
+            {
+                "rule_id": v.get("rule_id"),
+                "rule_type": v.get("rule_type"),
+                "description": v.get("description"),
+                "severity": v.get("severity"),
+                "stage_id": v.get("stage_id"),
+                "step_id": v.get("step_id")
+            }
+            for v in rule_violations
+        ]
+    
     return {
         "evaluation_id": evaluation.id,
-        "violations": [
-            {
-                "id": violation.id,
-                "violation_type": violation.violation_type,
-                "description": violation.description,
-                "severity": violation.severity.value,
-                "criteria_id": violation.criteria_id
-            }
-            for violation in evaluation.policy_violations
-        ]
+        "violations": violations
     }
-

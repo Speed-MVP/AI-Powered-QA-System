@@ -1,17 +1,12 @@
 import { useEffect, useRef, useState } from 'react'
 import { useParams, Link, useNavigate } from 'react-router-dom'
 import { api } from '@/lib/api'
-import { FaArrowLeft, FaChartBar, FaExclamationCircle, FaPlay, FaPause, FaSpinner, FaVolumeUp, FaChevronDown, FaChevronRight, FaFileCsv, FaFileAlt } from 'react-icons/fa'
+import { FaArrowLeft, FaChartBar, FaExclamationCircle, FaPlay, FaPause, FaSpinner, FaVolumeUp, FaChevronDown, FaChevronRight, FaFileCsv, FaFileAlt, FaCheckCircle, FaTimesCircle, FaShieldAlt, FaBrain, FaRobot } from 'react-icons/fa'
+import { ConfirmModal, AlertModal } from '@/components/modals'
 
 type EvaluationResponse = Awaited<ReturnType<typeof api.getEvaluation>>
 type TranscriptResponse = Awaited<ReturnType<typeof api.getTranscript>>
 type RecordingResponse = Awaited<ReturnType<typeof api.getRecording>>
-type TemplatesResponse = Awaited<ReturnType<typeof api.getTemplates>>
-
-// Cache templates (they don't change often)
-let templatesCache: TemplatesResponse | null = null
-let templatesCacheTime: number = 0
-const TEMPLATES_CACHE_TTL = 5 * 60 * 1000 // 5 minutes
 
 export function Results() {
   const { recordingId } = useParams<{ recordingId: string }>()
@@ -29,9 +24,10 @@ export function Results() {
   const [transcript, setTranscript] = useState<TranscriptResponse | null>(null)
   const [audioUrl, setAudioUrl] = useState<string | null>(null)
   const [isPlaying, setIsPlaying] = useState(false)
-  const [policyTemplate, setPolicyTemplate] = useState<TemplatesResponse[number] | null>(null)
   const [showAnalysis, setShowAnalysis] = useState(false)
   const [creatingReview, setCreatingReview] = useState(false)
+  const [confirmModal, setConfirmModal] = useState<{ isOpen: boolean; title: string; message: string; onConfirm: () => void } | null>(null)
+  const [alertModal, setAlertModal] = useState<{ isOpen: boolean; title: string; message: string; type: 'success' | 'error' | 'info' } | null>(null)
 
   useEffect(() => {
     if (!recordingId) {
@@ -92,20 +88,6 @@ export function Results() {
           const now = Date.now()
           let templates: TemplatesResponse
           
-          // Use cache if available and fresh
-          if (templatesCache && (now - templatesCacheTime) < TEMPLATES_CACHE_TTL) {
-            templates = templatesCache
-          } else {
-            templates = await api.getTemplates()
-            templatesCache = templates
-            templatesCacheTime = now
-          }
-          
-          // Check if request was aborted
-          if (abortController.signal.aborted) return
-          
-          const tpl = templates.find(t => t.id === evalRes.policy_template_id) || null
-          setPolicyTemplate(tpl)
         } catch {
           // non-fatal
         }
@@ -156,10 +138,6 @@ export function Results() {
   const handleRefresh = async () => {
     if (!recordingId || refreshing) return
     
-    // Invalidate templates cache on refresh
-    templatesCache = null
-    templatesCacheTime = 0
-    
     try {
       setRefreshing(true)
       const rec = await api.getRecording(recordingId)
@@ -173,16 +151,6 @@ export function Results() {
         setEvaluation(evalRes)
         if (transcriptRes) setTranscript(transcriptRes)
         if (dl?.download_url) setAudioUrl(dl.download_url)
-        try {
-          // Use fresh templates on refresh
-          const templates = await api.getTemplates()
-          templatesCache = templates
-          templatesCacheTime = Date.now()
-          const tpl = templates.find(t => t.id === evalRes.policy_template_id) || null
-          setPolicyTemplate(tpl)
-        } catch {
-          // ignore
-        }
       }
     } catch (e: any) {
       setError(e.message || 'Failed to refresh results')
@@ -191,16 +159,33 @@ export function Results() {
     }
   }
 
-  const handleReevaluate = async () => {
+  const handleReevaluate = () => {
     if (!recordingId) return
-    if (!confirm('This will re-evaluate the recording. Continue?')) return
-    try {
-      await api.reevaluateRecording(recordingId)
-      alert('Re-evaluation started. Please return later or refresh to check status.')
-      navigate('/demo')
-    } catch (e: any) {
-      alert('Failed to start re-evaluation: ' + (e.message || 'Unknown error'))
-    }
+    setConfirmModal({
+      isOpen: true,
+      title: 'Re-evaluate Recording',
+      message: 'This will re-evaluate the recording. Continue?',
+      onConfirm: async () => {
+        setConfirmModal(null)
+        try {
+          await api.reevaluateRecording(recordingId)
+          setAlertModal({
+            isOpen: true,
+            title: 'Re-evaluation Started',
+            message: 'Re-evaluation started. Please return later or refresh to check status.',
+            type: 'success',
+          })
+          setTimeout(() => navigate('/demo'), 2000)
+        } catch (e: any) {
+          setAlertModal({
+            isOpen: true,
+            title: 'Error',
+            message: 'Failed to start re-evaluation: ' + (e.message || 'Unknown error'),
+            type: 'error',
+          })
+        }
+      },
+    })
   }
 
   const createTestHumanReview = async () => {
@@ -209,10 +194,20 @@ export function Results() {
     try {
       setCreatingReview(true)
       await api.createTestHumanReview(evaluation.id)
-      alert('Test human review created! Check the Human Review page to see it in the queue.')
-    } catch (error) {
+      setAlertModal({
+        isOpen: true,
+        title: 'Success',
+        message: 'Test human review created! Check the Human Review page to see it in the queue.',
+        type: 'success',
+      })
+    } catch (error: any) {
       console.error('Failed to create test human review:', error)
-      alert('Failed to create test human review. Make sure this evaluation doesn\'t already have a pending review.')
+      setAlertModal({
+        isOpen: true,
+        title: 'Error',
+        message: 'Failed to create test human review. Make sure this evaluation doesn\'t already have a pending review.',
+        type: 'error',
+      })
     } finally {
       setCreatingReview(false)
     }
@@ -236,10 +231,19 @@ export function Results() {
   }
 
   const downloadScoresCsv = () => {
-    if (!evaluation?.category_scores?.length) return
+    // Check for Phase 7 final_evaluation first, then fall back to legacy category_scores
+    const categoryScores = evaluation?.final_evaluation?.category_scores || evaluation?.category_scores
+    if (!categoryScores?.length) return
+    
     const rows = [
-      ['Category', 'Score', 'Feedback'],
-      ...evaluation.category_scores.map(cs => [cs.category_name, String(cs.score), (cs.feedback || '').replace(/\n/g, ' ')])
+      ['Category', 'Score', 'Weight', 'Passed', 'Feedback'],
+      ...categoryScores.map((cs: any) => [
+        cs.name || cs.category_name,
+        String(cs.score),
+        cs.weight ? `${cs.weight}%` : '',
+        cs.passed !== undefined ? (cs.passed ? 'Yes' : 'No') : '',
+        (cs.feedback || '').replace(/\n/g, ' ')
+      ])
     ]
     const csv = rows.map(r => r.map(field => `"${String(field).replace(/"/g, '""')}"`).join(',')).join('\n')
     const blob = new Blob([csv], { type: 'text/csv;charset=utf-8' })
@@ -311,7 +315,7 @@ export function Results() {
               </button>
               <button
                 onClick={downloadScoresCsv}
-                disabled={!evaluation?.category_scores?.length}
+                disabled={!(evaluation?.final_evaluation?.category_scores?.length || evaluation?.category_scores?.length)}
                 className="inline-flex items-center px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-md text-sm font-medium text-slate-700 dark:text-slate-200 bg-white dark:bg-slate-700 hover:bg-slate-50 dark:hover:bg-slate-600 disabled:opacity-50"
               >
                 <FaFileCsv className="w-4 h-4 mr-2" />
@@ -412,40 +416,6 @@ export function Results() {
                 </div>
               </div>
 
-              {policyTemplate && (
-                <div className="bg-white dark:bg-slate-800 rounded-lg border border-slate-200 dark:border-slate-700">
-                  <div className="px-6 py-4 border-b border-slate-200 dark:border-slate-700">
-                    <h2 className="text-lg font-semibold text-slate-900 dark:text-white">
-                      Policy Template
-                    </h2>
-                  </div>
-                  <div className="p-6">
-                    <p className="text-sm font-medium text-slate-900 dark:text-white">
-                      {policyTemplate.template_name}
-                    </p>
-                    {policyTemplate.description && (
-                      <p className="text-sm text-slate-600 dark:text-slate-400 mt-1">
-                        {policyTemplate.description}
-                      </p>
-                    )}
-                    <div className="mt-4">
-                      <h4 className="text-sm font-semibold text-slate-700 dark:text-slate-300 mb-2">
-                        Criteria (Weights must sum to 100%)
-                      </h4>
-                      <div className="space-y-2">
-                        {policyTemplate.criteria.map(c => (
-                          <div key={c.id} className="p-3 rounded border border-slate-200 dark:border-slate-600 bg-slate-50 dark:bg-slate-700/50">
-                            <div className="flex items-center justify-between">
-                              <span className="text-sm font-medium text-slate-900 dark:text-white">{c.category_name}</span>
-                              <span className="text-xs text-slate-600 dark:text-slate-300">{c.weight}% • Pass ≥ {c.passing_score}</span>
-                            </div>
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              )}
 
               <div className="bg-white dark:bg-slate-800 rounded-lg border border-slate-200 dark:border-slate-700">
                 <div className="px-6 py-4 border-b border-slate-200 dark:border-slate-700">
@@ -454,7 +424,13 @@ export function Results() {
                   </h2>
                 </div>
                 <div className="p-6 text-center">
-                  <div className="inline-flex items-center justify-center w-24 h-24 bg-gradient-to-br from-blue-500 to-indigo-600 rounded-full mb-4">
+                  <div className={`inline-flex items-center justify-center w-24 h-24 rounded-full mb-4 ${
+                    evaluation?.final_evaluation?.overall_passed === false
+                      ? 'bg-gradient-to-br from-red-500 to-red-600'
+                      : evaluation?.final_evaluation?.overall_passed === true
+                      ? 'bg-gradient-to-br from-green-500 to-green-600'
+                      : 'bg-gradient-to-br from-blue-500 to-indigo-600'
+                  }`}>
                     <span className="text-2xl font-bold text-white">
                       {evaluation?.overall_score ?? '--'}
                     </span>
@@ -463,6 +439,23 @@ export function Results() {
                     <FaChartBar className="w-4 h-4 mr-2 text-blue-600" />
                     Quality Score
                   </p>
+                  {evaluation?.final_evaluation && (
+                    <div className="mt-2">
+                      <span className={`inline-flex items-center px-3 py-1 rounded-full text-sm font-medium ${
+                        evaluation.final_evaluation.overall_passed
+                          ? 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300'
+                          : 'bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-300'
+                      }`}>
+                        {evaluation.final_evaluation.overall_passed ? 'Passed' : 'Failed'}
+                      </span>
+                      {evaluation.final_evaluation.requires_human_review && (
+                        <p className="text-xs text-orange-600 dark:text-orange-400 mt-2 flex items-center justify-center gap-1">
+                          <FaExclamationCircle className="w-3 h-3" />
+                          Requires Human Review
+                        </p>
+                      )}
+                    </div>
+                  )}
                   {evaluation && (
                     <button
                       onClick={createTestHumanReview}
@@ -553,39 +546,261 @@ export function Results() {
             </div>
 
             <div className="xl:col-span-2 space-y-8">
-              <div className="bg-white dark:bg-slate-800 rounded-lg border border-slate-200 dark:border-slate-700">
-                <div className="px-6 py-4 border-b border-slate-200 dark:border-slate-700">
-                  <h3 className="text-lg font-semibold text-slate-900 dark:text-white">Category Performance</h3>
-                </div>
-                <div className="p-6">
-                  {evaluation?.category_scores?.length ? (
-                    <div className="space-y-4">
-                      {evaluation.category_scores.map((c) => (
-                        <div key={c.id} className="p-4 bg-slate-50 dark:bg-slate-700/50 rounded-lg border border-slate-200 dark:border-slate-600">
-                          <div className="flex items-center justify-between mb-3">
-                            <span className="font-medium text-slate-900 dark:text-white">{c.category_name}</span>
-                            <div className="flex items-center space-x-2">
-                              <span className="text-lg font-bold text-slate-900 dark:text-white">{c.score}</span>
-                              <span className="text-sm text-slate-600 dark:text-slate-400">/100</span>
-                            </div>
-                          </div>
-                          <div className="w-full bg-slate-200 dark:bg-slate-600 rounded-full h-2 mb-3">
-                            <div
-                              className="h-2 rounded-full transition-all bg-blue-500"
-                              style={{ width: `${c.score}%` }}
-                            />
-                          </div>
-                          {c.feedback && (
-                            <p className="text-sm text-slate-600 dark:text-slate-400">{c.feedback}</p>
-                          )}
-                        </div>
-                      ))}
+              {/* Phase 7: Final Evaluation Display */}
+              {evaluation?.final_evaluation ? (
+                <>
+                  {/* Category Scores from Final Evaluation */}
+                  <div className="bg-white dark:bg-slate-800 rounded-lg border border-slate-200 dark:border-slate-700">
+                    <div className="px-6 py-4 border-b border-slate-200 dark:border-slate-700">
+                      <h3 className="text-lg font-semibold text-slate-900 dark:text-white flex items-center gap-2">
+                        <FaChartBar className="w-5 h-5" />
+                        Category Performance
+                      </h3>
                     </div>
-                  ) : (
-                    <p className="text-sm text-slate-600 dark:text-slate-400">No category scores found.</p>
+                    <div className="p-6">
+                      {evaluation.final_evaluation.category_scores?.length ? (
+                        <div className="space-y-4">
+                          {evaluation.final_evaluation.category_scores.map((cat: any, idx: number) => (
+                            <div key={cat.category_id || idx} className="p-4 bg-slate-50 dark:bg-slate-700/50 rounded-lg border border-slate-200 dark:border-slate-600">
+                              <div className="flex items-center justify-between mb-3">
+                                <div className="flex items-center gap-2">
+                                  <span className="font-medium text-slate-900 dark:text-white">{cat.name}</span>
+                                  <span className="text-xs px-2 py-0.5 rounded bg-slate-200 dark:bg-slate-600 text-slate-700 dark:text-slate-300">
+                                    {cat.weight}% weight
+                                  </span>
+                                  {cat.passed ? (
+                                    <FaCheckCircle className="w-4 h-4 text-green-600 dark:text-green-400" />
+                                  ) : (
+                                    <FaTimesCircle className="w-4 h-4 text-red-600 dark:text-red-400" />
+                                  )}
+                                </div>
+                                <div className="flex items-center space-x-2">
+                                  <span className={`text-lg font-bold ${
+                                    cat.passed 
+                                      ? 'text-green-600 dark:text-green-400' 
+                                      : 'text-red-600 dark:text-red-400'
+                                  }`}>
+                                    {cat.score}
+                                  </span>
+                                  <span className="text-sm text-slate-600 dark:text-slate-400">/100</span>
+                                </div>
+                              </div>
+                              <div className="w-full bg-slate-200 dark:bg-slate-600 rounded-full h-2 mb-2">
+                                <div
+                                  className={`h-2 rounded-full transition-all ${
+                                    cat.passed ? 'bg-green-500' : 'bg-red-500'
+                                  }`}
+                                  style={{ width: `${cat.score}%` }}
+                                />
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      ) : (
+                        <p className="text-sm text-slate-600 dark:text-slate-400">No category scores found.</p>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Stage Scores Breakdown */}
+                  {evaluation.final_evaluation.stage_scores && Object.keys(evaluation.final_evaluation.stage_scores).length > 0 && (
+                    <div className="bg-white dark:bg-slate-800 rounded-lg border border-slate-200 dark:border-slate-700">
+                      <div className="px-6 py-4 border-b border-slate-200 dark:border-slate-700">
+                        <h3 className="text-lg font-semibold text-slate-900 dark:text-white flex items-center gap-2">
+                          <FaRobot className="w-5 h-5" />
+                          Stage Evaluations
+                        </h3>
+                      </div>
+                      <div className="p-6">
+                        <div className="space-y-4">
+                          {Object.entries(evaluation.final_evaluation.stage_scores).map(([stageId, stageData]: [string, any]) => {
+                            const llmStageEval = evaluation.llm_stage_evaluations?.[stageId]
+                            return (
+                              <div key={stageId} className="p-4 bg-slate-50 dark:bg-slate-700/50 rounded-lg border border-slate-200 dark:border-slate-600">
+                                <div className="flex items-center justify-between mb-3">
+                                  <div className="flex items-center gap-2">
+                                    <span className="font-medium text-slate-900 dark:text-white">
+                                      {llmStageEval?.stage_name || `Stage ${stageId.slice(0, 8)}`}
+                                    </span>
+                                    {stageData.critical_violation && (
+                                      <span className="text-xs px-2 py-0.5 rounded bg-red-100 dark:bg-red-900/30 text-red-800 dark:text-red-300">
+                                        Critical
+                                      </span>
+                                    )}
+                                  </div>
+                                  <div className="flex items-center space-x-2">
+                                    <span className="text-lg font-bold text-slate-900 dark:text-white">{stageData.score}</span>
+                                    <span className="text-sm text-slate-600 dark:text-slate-400">/100</span>
+                                    <span className="text-xs text-slate-500 dark:text-slate-400">
+                                      {(stageData.confidence * 100).toFixed(0)}% conf
+                                    </span>
+                                  </div>
+                                </div>
+                                <div className="w-full bg-slate-200 dark:bg-slate-600 rounded-full h-2 mb-3">
+                                  <div
+                                    className="h-2 rounded-full transition-all bg-blue-500"
+                                    style={{ width: `${stageData.score}%` }}
+                                  />
+                                </div>
+                                
+                                {/* Step Evaluations */}
+                                {llmStageEval?.step_evaluations?.length > 0 && (
+                                  <div className="mt-3 space-y-2">
+                                    <h4 className="text-sm font-semibold text-slate-700 dark:text-slate-300 mb-2">Steps:</h4>
+                                    {llmStageEval.step_evaluations.map((stepEval: any, stepIdx: number) => (
+                                      <div key={stepEval.step_id || stepIdx} className="p-2 bg-white dark:bg-slate-800 rounded border border-slate-200 dark:border-slate-600">
+                                        <div className="flex items-center justify-between">
+                                          <div className="flex items-center gap-2">
+                                            {stepEval.passed ? (
+                                              <FaCheckCircle className="w-3 h-3 text-green-600 dark:text-green-400" />
+                                            ) : (
+                                              <FaTimesCircle className="w-3 h-3 text-red-600 dark:text-red-400" />
+                                            )}
+                                            <span className="text-sm text-slate-700 dark:text-slate-300">
+                                              {stepEval.step_name || `Step ${stepEval.step_id?.slice(0, 8)}`}
+                                            </span>
+                                          </div>
+                                          <span className={`text-xs px-2 py-0.5 rounded ${
+                                            stepEval.passed
+                                              ? 'bg-green-100 dark:bg-green-900/30 text-green-800 dark:text-green-300'
+                                              : 'bg-red-100 dark:bg-red-900/30 text-red-800 dark:text-red-300'
+                                          }`}>
+                                            {stepEval.passed ? 'Passed' : 'Failed'}
+                                          </span>
+                                        </div>
+                                        {stepEval.rationale && (
+                                          <p className="text-xs text-slate-600 dark:text-slate-400 mt-1">{stepEval.rationale}</p>
+                                        )}
+                                        {stepEval.evidence?.length > 0 && (
+                                          <div className="mt-2 text-xs text-slate-500 dark:text-slate-400">
+                                            <span className="font-medium">Evidence:</span>
+                                            <ul className="list-disc list-inside ml-2 mt-1">
+                                              {stepEval.evidence.map((ev: any, evIdx: number) => (
+                                                <li key={evIdx}>
+                                                  {ev.type === 'transcript_snippet' && ev.text && (
+                                                    <span className="italic">"{ev.text}"</span>
+                                                  )}
+                                                  {ev.type === 'rule_evidence' && ev.rule_id && (
+                                                    <span>Rule {ev.rule_id.slice(0, 8)}</span>
+                                                  )}
+                                                </li>
+                                              ))}
+                                            </ul>
+                                          </div>
+                                        )}
+                                      </div>
+                                    ))}
+                                  </div>
+                                )}
+                                
+                                {/* Stage Feedback */}
+                                {llmStageEval?.stage_feedback?.length > 0 && (
+                                  <div className="mt-3">
+                                    <h4 className="text-sm font-semibold text-slate-700 dark:text-slate-300 mb-2">Feedback:</h4>
+                                    <ul className="list-disc list-inside text-sm text-slate-600 dark:text-slate-400 space-y-1">
+                                      {llmStageEval.stage_feedback.map((fb: string, fbIdx: number) => (
+                                        <li key={fbIdx}>{fb}</li>
+                                      ))}
+                                    </ul>
+                                  </div>
+                                )}
+                              </div>
+                            )
+                          })}
+                        </div>
+                      </div>
+                    </div>
                   )}
+
+                  {/* Deterministic Rule Results */}
+                  {evaluation.deterministic_results?.rule_evaluations?.length > 0 && (
+                    <div className="bg-white dark:bg-slate-800 rounded-lg border border-slate-200 dark:border-slate-700">
+                      <div className="px-6 py-4 border-b border-slate-200 dark:border-slate-700">
+                        <h3 className="text-lg font-semibold text-slate-900 dark:text-white flex items-center gap-2">
+                          <FaShieldAlt className="w-5 h-5" />
+                          Compliance Rules
+                        </h3>
+                      </div>
+                      <div className="p-6">
+                        <div className="space-y-3">
+                          {evaluation.deterministic_results.rule_evaluations.map((rule: any, idx: number) => (
+                            <div key={rule.rule_id || idx} className={`p-3 rounded-lg border ${
+                              rule.passed
+                                ? 'bg-green-50 dark:bg-green-900/20 border-green-200 dark:border-green-800'
+                                : `bg-red-50 dark:bg-red-900/20 border-red-200 dark:border-red-800`
+                            }`}>
+                              <div className="flex items-center justify-between">
+                                <div className="flex items-center gap-2">
+                                  {rule.passed ? (
+                                    <FaCheckCircle className="w-4 h-4 text-green-600 dark:text-green-400" />
+                                  ) : (
+                                    <FaTimesCircle className="w-4 h-4 text-red-600 dark:text-red-400" />
+                                  )}
+                                  <span className="font-medium text-slate-900 dark:text-white">{rule.rule_title || rule.rule_id}</span>
+                                  <span className={`text-xs px-2 py-0.5 rounded ${
+                                    rule.severity === 'critical'
+                                      ? 'bg-red-200 dark:bg-red-800 text-red-900 dark:text-red-200'
+                                      : rule.severity === 'major'
+                                      ? 'bg-orange-200 dark:bg-orange-800 text-orange-900 dark:text-orange-200'
+                                      : 'bg-yellow-200 dark:bg-yellow-800 text-yellow-900 dark:text-yellow-200'
+                                  }`}>
+                                    {rule.severity || 'minor'}
+                                  </span>
+                                </div>
+                                <span className={`text-sm font-medium ${
+                                  rule.passed
+                                    ? 'text-green-700 dark:text-green-300'
+                                    : 'text-red-700 dark:text-red-300'
+                                }`}>
+                                  {rule.passed ? 'Passed' : 'Failed'}
+                                </span>
+                              </div>
+                              {rule.evidence && (
+                                <p className="text-sm text-slate-600 dark:text-slate-400 mt-2">{rule.evidence}</p>
+                              )}
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    </div>
+                  )}
+                </>
+              ) : (
+                /* Legacy Category Scores Display */
+                <div className="bg-white dark:bg-slate-800 rounded-lg border border-slate-200 dark:border-slate-700">
+                  <div className="px-6 py-4 border-b border-slate-200 dark:border-slate-700">
+                    <h3 className="text-lg font-semibold text-slate-900 dark:text-white">Category Performance</h3>
+                  </div>
+                  <div className="p-6">
+                    {evaluation?.category_scores?.length ? (
+                      <div className="space-y-4">
+                        {evaluation.category_scores.map((c) => (
+                          <div key={c.id} className="p-4 bg-slate-50 dark:bg-slate-700/50 rounded-lg border border-slate-200 dark:border-slate-600">
+                            <div className="flex items-center justify-between mb-3">
+                              <span className="font-medium text-slate-900 dark:text-white">{c.category_name}</span>
+                              <div className="flex items-center space-x-2">
+                                <span className="text-lg font-bold text-slate-900 dark:text-white">{c.score}</span>
+                                <span className="text-sm text-slate-600 dark:text-slate-400">/100</span>
+                              </div>
+                            </div>
+                            <div className="w-full bg-slate-200 dark:bg-slate-600 rounded-full h-2 mb-3">
+                              <div
+                                className="h-2 rounded-full transition-all bg-blue-500"
+                                style={{ width: `${c.score}%` }}
+                              />
+                            </div>
+                            {c.feedback && (
+                              <p className="text-sm text-slate-600 dark:text-slate-400">{c.feedback}</p>
+                            )}
+                          </div>
+                        ))}
+                      </div>
+                    ) : (
+                      <p className="text-sm text-slate-600 dark:text-slate-400">No category scores found.</p>
+                    )}
+                  </div>
                 </div>
-              </div>
+              )}
 
               {evaluation?.policy_violations?.length ? (
                 <div className="bg-white dark:bg-slate-800 rounded-lg border border-slate-200 dark:border-slate-700">
@@ -692,6 +907,31 @@ export function Results() {
           </div>
         )}
       </div>
+
+      {/* Confirm Modal */}
+      {confirmModal && (
+        <ConfirmModal
+          isOpen={confirmModal.isOpen}
+          onClose={() => setConfirmModal(null)}
+          onConfirm={confirmModal.onConfirm}
+          title={confirmModal.title}
+          message={confirmModal.message}
+          confirmText="Continue"
+          cancelText="Cancel"
+          confirmColor="blue"
+        />
+      )}
+
+      {/* Alert Modal */}
+      {alertModal && (
+        <AlertModal
+          isOpen={alertModal.isOpen}
+          onClose={() => setAlertModal(null)}
+          title={alertModal.title}
+          message={alertModal.message}
+          type={alertModal.type}
+        />
+      )}
     </div>
   )
 }

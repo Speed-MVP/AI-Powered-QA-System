@@ -7,7 +7,7 @@ from app.models.recording import RecordingStatus
 class RecordingCreate(BaseModel):
     file_name: str
     file_url: str
-    policy_template_id: Optional[str] = None
+    # Phase 7: No longer using policy_template_id - evaluations use FlowVersion + RubricTemplate
 
 
 class RecordingResponse(BaseModel):

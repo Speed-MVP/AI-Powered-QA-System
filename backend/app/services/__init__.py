@@ -2,7 +2,6 @@ from app.services.storage import StorageService
 from app.services.deepgram import DeepgramService
 from app.services.assemblyai import AssemblyAIService
 from app.services.gemini import GeminiService
-from app.services.scoring import ScoringService
 from app.services.email import EmailService
 
 __all__ = [
@@ -10,7 +9,6 @@ __all__ = [
     "DeepgramService",
     "AssemblyAIService",
     "GeminiService",
-    "ScoringService",
     "EmailService",
 ]
 

@@ -4,7 +4,6 @@ import { Test } from '@/pages/Test'
 import { Home } from '@/pages/Home'
 import { Dashboard } from '@/pages/Dashboard'
 import { Results } from '@/pages/Results'
-import { PolicyTemplates } from '@/pages/PolicyTemplates'
 import { HumanReview } from '@/pages/HumanReview'
 import { Pricing } from '@/pages/Pricing'
 import { Features } from '@/pages/Features'
@@ -14,6 +13,10 @@ import { TeamsListPage } from '@/pages/TeamsListPage'
 import { AgentsListPage } from '@/pages/AgentsListPage'
 import { AuditTrailPage } from '@/pages/AuditTrailPage'
 import { SupervisorDashboard } from '@/pages/SupervisorDashboard'
+import { SOPBuilder } from '@/pages/SOPBuilder'
+import { ComplianceRulesBuilder } from '@/pages/ComplianceRulesBuilder'
+import { RubricBuilder } from '@/pages/RubricBuilder'
+import { TemplatesPage } from '@/pages/TemplatesPage'
 import { AuthProvider, useAuth } from '@/contexts/AuthContext'
 import { useSEO, pageSEO } from '@/hooks/useSEO'
 
@@ -102,11 +105,41 @@ function AppRoutes() {
           }
         />
         <Route
+          path="sop-builder"
+          element={
+            <SEOWrapper seoConfig={pageSEO.dashboard}>
+              <ProtectedRoute>
+                <SOPBuilder />
+              </ProtectedRoute>
+            </SEOWrapper>
+          }
+        />
+        <Route
+          path="compliance-rules"
+          element={
+            <SEOWrapper seoConfig={pageSEO.dashboard}>
+              <ProtectedRoute>
+                <ComplianceRulesBuilder />
+              </ProtectedRoute>
+            </SEOWrapper>
+          }
+        />
+        <Route
+          path="rubric-builder"
+          element={
+            <SEOWrapper seoConfig={pageSEO.dashboard}>
+              <ProtectedRoute>
+                <RubricBuilder />
+              </ProtectedRoute>
+            </SEOWrapper>
+          }
+        />
+        <Route
           path="policy-templates"
           element={
             <SEOWrapper seoConfig={pageSEO.dashboard}>
               <ProtectedRoute>
-                <PolicyTemplates />
+                <TemplatesPage />
               </ProtectedRoute>
             </SEOWrapper>
           }

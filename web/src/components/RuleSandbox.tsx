@@ -8,6 +8,7 @@
 
 import { useState } from 'react'
 import { FaCheckCircle, FaTimesCircle, FaExclamationTriangle } from 'react-icons/fa'
+import { AlertModal } from '@/components/modals'
 
 interface SandboxResult {
   rule_results: any
@@ -25,10 +26,16 @@ export function RuleSandbox({ templateId, onClose }: RuleSandboxProps) {
   const [transcriptText, setTranscriptText] = useState('')
   const [loading, setLoading] = useState(false)
   const [results, setResults] = useState<SandboxResult | null>(null)
+  const [alertModal, setAlertModal] = useState<{ isOpen: boolean; title: string; message: string; type: 'error' } | null>(null)
 
   const handleTest = async () => {
     if (!transcriptText.trim()) {
-      alert('Please enter transcript text')
+      setAlertModal({
+        isOpen: true,
+        title: 'Validation Error',
+        message: 'Please enter transcript text',
+        type: 'error',
+      })
       return
     }
 
@@ -56,7 +63,12 @@ export function RuleSandbox({ templateId, onClose }: RuleSandboxProps) {
       const data = await response.json()
       setResults(data)
     } catch (err: any) {
-      alert(`Failed to test rules: ${err.message}`)
+      setAlertModal({
+        isOpen: true,
+        title: 'Error',
+        message: `Failed to test rules: ${err.message}`,
+        type: 'error',
+      })
     } finally {
       setLoading(false)
     }
@@ -161,6 +173,17 @@ export function RuleSandbox({ templateId, onClose }: RuleSandboxProps) {
           Close
         </button>
       </div>
+
+      {/* Alert Modal */}
+      {alertModal && (
+        <AlertModal
+          isOpen={alertModal.isOpen}
+          onClose={() => setAlertModal(null)}
+          title={alertModal.title}
+          message={alertModal.message}
+          type={alertModal.type}
+        />
+      )}
     </div>
   )
 }

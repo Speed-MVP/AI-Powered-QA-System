@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { api } from '@/lib/api'
 import type { Agent, Team } from '@/lib/api'
 import { TeamFormModal } from '@/components/modals/TeamFormModal'
+import { ConfirmModal } from '@/components/modals'
 
 export function TeamsListPage() {
   const [teams, setTeams] = useState<Team[]>([])
@@ -12,6 +13,7 @@ export function TeamsListPage() {
     open: false,
     mode: 'create',
   })
+  const [deleteConfirmModal, setDeleteConfirmModal] = useState<{ isOpen: boolean; team: Team } | null>(null)
 
   const loadDirectory = async () => {
     try {
@@ -50,18 +52,23 @@ export function TeamsListPage() {
     await loadDirectory()
   }
 
-  const handleDeleteTeam = async (team: Team) => {
+  const handleDeleteTeam = (team: Team) => {
     const hasAgents = agentCounts[team.id] && agentCounts[team.id] > 0
     const confirmationMessage = hasAgents
       ? `Team "${team.name}" still has assigned agents. Deleting it will remove access from their dashboards. Continue?`
       : `Delete team "${team.name}"?`
 
-    if (!window.confirm(confirmationMessage)) {
-      return
-    }
+    setDeleteConfirmModal({
+      isOpen: true,
+      team,
+    })
+  }
 
-    await api.deleteTeam(team.id)
+  const confirmDeleteTeam = async () => {
+    if (!deleteConfirmModal) return
+    await api.deleteTeam(deleteConfirmModal.team.id)
     await loadDirectory()
+    setDeleteConfirmModal(null)
   }
 
   const formatDate = (value?: string) => {
@@ -181,6 +188,25 @@ export function TeamsListPage() {
             initialName={teamModal.team?.name}
             onClose={() => setTeamModal((prev) => ({ ...prev, open: false }))}
             onSave={handleSaveTeam}
+          />
+        )}
+
+        {/* Delete Confirmation Modal */}
+        {deleteConfirmModal && (
+          <ConfirmModal
+            isOpen={deleteConfirmModal.isOpen}
+            onClose={() => setDeleteConfirmModal(null)}
+            onConfirm={confirmDeleteTeam}
+            title="Delete Team"
+            message={
+              agentCounts[deleteConfirmModal.team.id] && agentCounts[deleteConfirmModal.team.id] > 0
+                ? `Team "${deleteConfirmModal.team.name}" still has assigned agents. Deleting it will remove access from their dashboards. Continue?`
+                : `Delete team "${deleteConfirmModal.team.name}"?`
+            }
+            confirmText="Delete"
+            cancelText="Cancel"
+            confirmColor="red"
+            danger
           />
         )}
       </div>

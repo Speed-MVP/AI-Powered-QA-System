@@ -62,18 +62,7 @@ export interface AuditLogEntry {
   changed_at: string
 }
 
-export interface PolicyTemplate {
-  id: string
-  company_id: string
-  template_name: string
-  description: string | null
-  is_active: boolean
-  created_at: string
-  criteria: any[]
-  policy_rules?: any
-  policy_rules_version?: number
-  enable_structured_rules?: boolean
-}
+// Legacy PolicyTemplate interface removed - use FlowVersion + RubricTemplate + ComplianceRule instead
 
 class ApiClient {
   private baseUrl: string
@@ -272,7 +261,8 @@ class ApiClient {
     return this.request<{
       id: string
       recording_id: string
-      policy_template_id: string
+      flow_version_id: string | null
+      rubric_template_id: string | null
       overall_score: number
       resolution_detected: boolean
       resolution_confidence: number
@@ -295,13 +285,6 @@ class ApiClient {
         category_name: string
         score: number
         feedback: string | null
-      }>
-      policy_violations: Array<{
-        id: string
-        violation_type: string
-        description: string
-        severity: string
-        criteria_id: string
       }>
     }>(`/api/evaluations/${recordingId}`)
   }
@@ -361,213 +344,7 @@ class ApiClient {
     }>(`/api/recordings/${recordingId}/download-url`)
   }
 
-  // Policy Template endpoints
-  async getTemplates() {
-    return this.request<
-      Array<{
-        id: string
-        company_id: string
-        template_name: string
-        description: string | null
-        is_active: boolean
-        created_at: string
-        criteria: Array<{
-          id: string
-          category_name: string
-          weight: number
-          passing_score: number
-          evaluation_prompt: string
-          created_at: string
-        }>
-      }>
-    >('/api/templates')
-  }
-
-  async createPrebuiltTemplate() {
-    return this.request<PolicyTemplate>(`/api/templates/prebuilt`, { method: 'POST' })
-  }
-
-  async createTemplate(data: {
-    template_name: string
-    description?: string
-    is_active?: boolean
-    criteria: Array<{
-      category_name: string
-      weight: number
-      passing_score: number
-      evaluation_prompt: string
-    }>
-  }) {
-    return this.request<{
-      id: string
-      company_id: string
-      template_name: string
-      description: string | null
-      is_active: boolean
-      created_at: string
-      criteria: Array<{
-        id: string
-        category_name: string
-        weight: number
-        passing_score: number
-        evaluation_prompt: string
-        created_at: string
-      }>
-    }>('/api/templates', {
-      method: 'POST',
-      body: JSON.stringify(data),
-    })
-  }
-
-  async updateTemplate(templateId: string, data: {
-    template_name: string
-    description?: string
-    is_active?: boolean
-    criteria: Array<{
-      category_name: string
-      weight: number
-      passing_score: number
-      evaluation_prompt: string
-    }>
-  }) {
-    return this.request<{
-      id: string
-      company_id: string
-      template_name: string
-      description: string | null
-      is_active: boolean
-      created_at: string
-      criteria: Array<{
-        id: string
-        category_name: string
-        weight: number
-        passing_score: number
-        evaluation_prompt: string
-        created_at: string
-      }>
-    }>(`/api/templates/${templateId}`, {
-      method: 'PUT',
-      body: JSON.stringify(data),
-    })
-  }
-
-  async deleteTemplate(templateId: string) {
-    return this.request<{ message: string }>(`/api/templates/${templateId}`, {
-      method: 'DELETE',
-    })
-  }
-
-  async generateRulesForTemplate(templateId: string) {
-    return this.request<{
-      success: boolean
-      message: string
-      rules_version: number
-      categories: string[]
-    }>(`/api/templates/${templateId}/generate-rules`, { method: 'POST' })
-  }
-
-  async updatePolicyRules(templateId: string, rulesData: { version?: number; rules: any; metadata?: any }) {
-    return this.request<PolicyTemplate>(`/api/templates/${templateId}/rules`, {
-      method: 'PUT',
-      body: JSON.stringify(rulesData),
-    })
-  }
-
-  async addCriteria(templateId: string, data: {
-    category_name: string
-    weight: number
-    passing_score: number
-    evaluation_prompt: string
-  }) {
-    return this.request<{
-      id: string
-      category_name: string
-      weight: number
-      passing_score: number
-      evaluation_prompt: string
-      created_at: string
-    }>(`/api/templates/${templateId}/criteria`, {
-      method: 'POST',
-      body: JSON.stringify(data),
-    })
-  }
-
-  async updateCriteria(templateId: string, criteriaId: string, data: {
-    category_name: string
-    weight: number
-    passing_score: number
-    evaluation_prompt: string
-  }) {
-    return this.request<{
-      id: string
-      category_name: string
-      weight: number
-      passing_score: number
-      evaluation_prompt: string
-      created_at: string
-    }>(`/api/templates/${templateId}/criteria/${criteriaId}`, {
-      method: 'PUT',
-      body: JSON.stringify(data),
-    })
-  }
-
-  async deleteCriteria(templateId: string, criteriaId: string) {
-    return this.request<{ message: string }>(`/api/templates/${templateId}/criteria/${criteriaId}`, {
-      method: 'DELETE',
-    })
-  }
-
-  async addRubricLevel(templateId: string, criteriaId: string, data: {
-    level_name: string
-    level_order: number
-    min_score: number
-    max_score: number
-    description: string
-    examples?: string | null
-  }) {
-    return this.request<{
-      id: string
-      criteria_id: string
-      level_name: string
-      level_order: number
-      min_score: number
-      max_score: number
-      description: string
-      examples: string | null
-    }>(`/api/templates/${templateId}/criteria/${criteriaId}/rubric-levels`, {
-      method: 'POST',
-      body: JSON.stringify(data),
-    })
-  }
-
-  async updateRubricLevel(templateId: string, criteriaId: string, levelId: string, data: {
-    level_name: string
-    level_order: number
-    min_score: number
-    max_score: number
-    description: string
-    examples?: string | null
-  }) {
-    return this.request<{
-      id: string
-      criteria_id: string
-      level_name: string
-      level_order: number
-      min_score: number
-      max_score: number
-      description: string
-      examples: string | null
-    }>(`/api/templates/${templateId}/criteria/${criteriaId}/rubric-levels/${levelId}`, {
-      method: 'PUT',
-      body: JSON.stringify(data),
-    })
-  }
-
-  async deleteRubricLevel(templateId: string, criteriaId: string, levelId: string) {
-    return this.request<{ message: string }>(`/api/templates/${templateId}/criteria/${criteriaId}/rubric-levels/${levelId}`, {
-      method: 'DELETE',
-    })
-  }
+  // Legacy Policy Template endpoints removed - use FlowVersion + RubricTemplate + ComplianceRule instead
 
   // Upload file directly to GCP Storage using signed URL
   async uploadFileToStorage(signedUrl: string, file: File): Promise<void> {
@@ -631,10 +408,12 @@ class ApiClient {
     return this.request<{
       id: string
       recording_id: string
-      policy_template_id: string
+      flow_version_id: string | null
+      rubric_template_id: string | null
       overall_score: number
       resolution_detected: boolean
       resolution_confidence: number
+      customer_tone: any
       llm_analysis: any
       status: string
       created_at: string
@@ -644,34 +423,48 @@ class ApiClient {
         score: number
         feedback: string | null
       }>
-      policy_violations: Array<{
+      flow_version: {
         id: string
-        violation_type: string
-        description: string
-        severity: string
-        criteria_id: string
-      }>
-      template: {
-        id: string
-        template_name: string
+        name: string
         description: string | null
-        criteria: Array<{
+        stages: Array<{
           id: string
-          category_name: string
-          weight: number
-          passing_score: number
-          evaluation_prompt: string
-          rubric_levels: Array<{
+          name: string
+          order: number
+          steps: Array<{
             id: string
-            level_name: string
-            level_order: number
-            min_score: number
-            max_score: number
-            description: string
-            examples: string | null
+            name: string
+            order: number
+            description: string | null
           }>
         }>
-      }
+      } | null
+      rubric_template: {
+        id: string
+        name: string
+        description: string | null
+        categories: Array<{
+          id: string
+          name: string
+          description: string | null
+          weight: number
+          pass_threshold: number
+          level_definitions: Array<{
+            name: string
+            min_score: number
+            max_score: number
+            description?: string
+            label?: string
+          }>
+          mappings: Array<{
+            id: string
+            target_type: string
+            target_id: string
+            contribution_weight: number
+            required_flag: boolean
+          }>
+        }>
+      } | null
     }>(`/api/evaluations/${evaluationId}/with-template`)
   }
 
@@ -785,6 +578,447 @@ class ApiClient {
       data: Array<Record<string, any>>
       pagination: { total: number; limit: number; offset: number; has_more: boolean }
     }>(`/api/supervisor/evaluations${query ? `?${query}` : ''}`)
+  }
+
+  // FlowVersion endpoints (Phase 1)
+  async listFlowVersions() {
+    return this.request<Array<{
+      id: string
+      company_id: string
+      name: string
+      description: string | null
+      is_active: boolean
+      version_number: number
+      created_at: string
+      updated_at: string
+      stages: Array<{
+        id: string
+        flow_version_id: string
+        name: string
+        order: number
+        steps: Array<{
+          id: string
+          stage_id: string
+          name: string
+          description: string | null
+          required: boolean
+          expected_phrases: string[]
+          timing_requirement: { enabled: boolean; seconds: number } | null
+          order: number
+        }>
+      }>
+    }>>('/api/flow-versions')
+  }
+
+  async createFlowVersion(data: { name: string; description?: string }) {
+    return this.request<{
+      id: string
+      name: string
+      description: string | null
+      is_active: boolean
+    }>('/api/flow-versions', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    })
+  }
+
+  async updateFlowVersion(flowVersionId: string, data: { name?: string; description?: string; is_active?: boolean }) {
+    return this.request<{
+      id: string
+      name: string
+      description: string | null
+      is_active: boolean
+    }>(`/api/flow-versions/${flowVersionId}`, {
+      method: 'PUT',
+      body: JSON.stringify(data),
+    })
+  }
+
+  async deleteFlowVersion(flowVersionId: string) {
+    return this.request<{ message: string }>(`/api/flow-versions/${flowVersionId}`, {
+      method: 'DELETE',
+    })
+  }
+
+  async createStage(flowVersionId: string, data: { name: string; order: number }) {
+    return this.request<{
+      id: string
+      name: string
+      order: number
+    }>(`/api/flow-versions/${flowVersionId}/stages`, {
+      method: 'POST',
+      body: JSON.stringify(data),
+    })
+  }
+
+  async updateStage(flowVersionId: string, stageId: string, data: { name?: string; order?: number }) {
+    return this.request<{
+      id: string
+      name: string
+      order: number
+    }>(`/api/flow-versions/${flowVersionId}/stages/${stageId}`, {
+      method: 'PUT',
+      body: JSON.stringify(data),
+    })
+  }
+
+  async deleteStage(flowVersionId: string, stageId: string) {
+    return this.request<{ message: string }>(`/api/flow-versions/${flowVersionId}/stages/${stageId}`, {
+      method: 'DELETE',
+    })
+  }
+
+  async reorderStages(flowVersionId: string, stageIds: string[]) {
+    return this.request<{ message: string }>(`/api/flow-versions/${flowVersionId}/reorder-stages`, {
+      method: 'POST',
+      body: JSON.stringify({ stage_ids: stageIds }),
+    })
+  }
+
+  async createStep(flowVersionId: string, stageId: string, data: {
+    name: string
+    description?: string
+    required: boolean
+    expected_phrases?: string[]
+    timing_requirement?: { enabled: boolean; seconds: number } | null
+    order: number
+  }) {
+    return this.request<{
+      id: string
+      name: string
+      description: string | null
+      required: boolean
+      expected_phrases: string[]
+      timing_requirement: { enabled: boolean; seconds: number } | null
+      order: number
+    }>(`/api/flow-versions/${flowVersionId}/stages/${stageId}/steps`, {
+      method: 'POST',
+      body: JSON.stringify(data),
+    })
+  }
+
+  async updateStep(flowVersionId: string, stageId: string, stepId: string, data: {
+    name?: string
+    description?: string
+    required?: boolean
+    expected_phrases?: string[]
+    timing_requirement?: { enabled: boolean; seconds: number } | null
+    order?: number
+  }) {
+    return this.request<{
+      id: string
+      name: string
+      description: string | null
+      required: boolean
+      expected_phrases: string[]
+      timing_requirement: { enabled: boolean; seconds: number } | null
+      order: number
+    }>(`/api/flow-versions/${flowVersionId}/stages/${stageId}/steps/${stepId}`, {
+      method: 'PUT',
+      body: JSON.stringify(data),
+    })
+  }
+
+  async deleteStep(flowVersionId: string, stageId: string, stepId: string) {
+    return this.request<{ message: string }>(`/api/flow-versions/${flowVersionId}/stages/${stageId}/steps/${stepId}`, {
+      method: 'DELETE',
+    })
+  }
+
+  async reorderSteps(flowVersionId: string, stageId: string, stepIds: string[]) {
+    return this.request<{ message: string }>(`/api/flow-versions/${flowVersionId}/stages/${stageId}/reorder-steps`, {
+      method: 'POST',
+      body: JSON.stringify({ step_ids: stepIds }),
+    })
+  }
+
+  // ComplianceRule endpoints (Phase 2)
+  async listComplianceRules(params?: { flow_version_id?: string; active_only?: boolean }) {
+    const queryParams = new URLSearchParams()
+    if (params?.flow_version_id) queryParams.append('flow_version_id', params.flow_version_id)
+    if (params?.active_only) queryParams.append('active_only', 'true')
+    const query = queryParams.toString()
+    return this.request<Array<{
+      id: string
+      flow_version_id: string
+      title: string
+      description: string | null
+      severity: string
+      rule_type: string
+      applies_to_stages: string[]
+      params: any
+      active: boolean
+      created_at: string
+    }>>(`/api/compliance-rules${query ? `?${query}` : ''}`)
+  }
+
+  async createComplianceRule(data: {
+    flow_version_id: string
+    title: string
+    description?: string
+    severity: string
+    rule_type: string
+    applies_to_stages?: string[]
+    params: any
+    active?: boolean
+  }) {
+    return this.request<{
+      id: string
+      title: string
+      description: string | null
+      severity: string
+      rule_type: string
+      params: any
+      active: boolean
+    }>('/api/compliance-rules', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    })
+  }
+
+  async updateComplianceRule(ruleId: string, data: {
+    title?: string
+    description?: string
+    severity?: string
+    rule_type?: string
+    applies_to_stages?: string[]
+    params?: any
+    active?: boolean
+  }) {
+    return this.request<{
+      id: string
+      title: string
+      description: string | null
+      severity: string
+      rule_type: string
+      params: any
+      active: boolean
+    }>(`/api/compliance-rules/${ruleId}`, {
+      method: 'PUT',
+      body: JSON.stringify(data),
+    })
+  }
+
+  async deleteComplianceRule(ruleId: string) {
+    return this.request<{ message: string }>(`/api/compliance-rules/${ruleId}`, {
+      method: 'DELETE',
+    })
+  }
+
+  async toggleComplianceRule(ruleId: string) {
+    return this.request<{ active: boolean }>(`/api/compliance-rules/${ruleId}/toggle`, {
+      method: 'POST',
+    })
+  }
+
+  // Rubric endpoints (Phase 5)
+  async listRubrics(params?: { flow_version_id?: string; policy_template_id?: string; active_only?: boolean }) {
+    const queryParams = new URLSearchParams()
+    if (params?.flow_version_id) queryParams.append('flow_version_id', params.flow_version_id)
+    if (params?.policy_template_id) queryParams.append('policy_template_id', params.policy_template_id)
+    if (params?.active_only) queryParams.append('active_only', 'true')
+    const query = queryParams.toString()
+    return this.request<Array<{
+      id: string
+      policy_template_id: string | null
+      flow_version_id: string
+      name: string
+      description: string | null
+      version_number: number
+      is_active: boolean
+      created_at: string
+      categories: Array<{
+        id: string
+        name: string
+        description: string | null
+        weight: number
+        pass_threshold: number
+        level_definitions: Array<{
+          level: string
+          min_score: number
+          max_score: number
+          description: string
+        }>
+        mappings: Array<{
+          id: string
+          target_type: string
+          target_id: string
+          contribution_weight: number
+          required_flag: boolean
+        }>
+      }>
+    }>>(`/api/rubrics${query ? `?${query}` : ''}`)
+  }
+
+  async createRubric(data: {
+    policy_template_id?: string | null
+    flow_version_id: string
+    name: string
+    description?: string
+    categories?: Array<{
+      name: string
+      description?: string
+      weight: number
+      pass_threshold: number
+      level_definitions?: Array<{
+        level: string
+        min_score: number
+        max_score: number
+        description: string
+      }>
+    }>
+  }) {
+    return this.request<{
+      id: string
+      name: string
+      description: string | null
+      is_active: boolean
+    }>('/api/rubrics', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    })
+  }
+
+  async updateRubric(rubricId: string, data: {
+    name?: string
+    description?: string
+    is_active?: boolean
+  }) {
+    return this.request<{
+      id: string
+      name: string
+      description: string | null
+      is_active: boolean
+    }>(`/api/rubrics/${rubricId}`, {
+      method: 'PUT',
+      body: JSON.stringify(data),
+    })
+  }
+
+  async deleteRubric(rubricId: string) {
+    return this.request<{ message: string }>(`/api/rubrics/${rubricId}`, {
+      method: 'DELETE',
+    })
+  }
+
+  async createRubricCategory(rubricId: string, data: {
+    name: string
+    description?: string
+    weight: number
+    pass_threshold: number
+    level_definitions?: Array<{
+      level: string
+      min_score: number
+      max_score: number
+      description: string
+    }>
+  }) {
+    return this.request<{
+      id: string
+      name: string
+      description: string | null
+      weight: number
+      pass_threshold: number
+      level_definitions: Array<any>
+    }>(`/api/rubrics/${rubricId}/categories`, {
+      method: 'POST',
+      body: JSON.stringify(data),
+    })
+  }
+
+  async updateRubricCategory(rubricId: string, categoryId: string, data: {
+    name?: string
+    description?: string
+    weight?: number
+    pass_threshold?: number
+    level_definitions?: Array<{
+      level: string
+      min_score: number
+      max_score: number
+      description: string
+    }>
+  }) {
+    return this.request<{
+      id: string
+      name: string
+      description: string | null
+      weight: number
+      pass_threshold: number
+      level_definitions: Array<any>
+    }>(`/api/rubrics/${rubricId}/categories/${categoryId}`, {
+      method: 'PUT',
+      body: JSON.stringify(data),
+    })
+  }
+
+  async deleteRubricCategory(rubricId: string, categoryId: string) {
+    return this.request<{ message: string }>(`/api/rubrics/${rubricId}/categories/${categoryId}`, {
+      method: 'DELETE',
+    })
+  }
+
+  async createRubricMapping(rubricId: string, categoryId: string, data: {
+    target_type: string
+    target_id: string
+    contribution_weight: number
+    required_flag: boolean
+  }) {
+    return this.request<{
+      id: string
+      target_type: string
+      target_id: string
+      contribution_weight: number
+      required_flag: boolean
+    }>(`/api/rubrics/${rubricId}/categories/${categoryId}/mappings`, {
+      method: 'POST',
+      body: JSON.stringify(data),
+    })
+  }
+
+  async deleteRubricMapping(rubricId: string, categoryId: string, mappingId: string) {
+    return this.request<{ message: string }>(`/api/rubrics/${rubricId}/categories/${categoryId}/mappings/${mappingId}`, {
+      method: 'DELETE',
+    })
+  }
+
+  async publishRubric(rubricId: string) {
+    return this.request<{ message: string }>(`/api/rubrics/${rubricId}/publish`, {
+      method: 'POST',
+    })
+  }
+
+  // Generic HTTP methods
+  async post<T>(endpoint: string, data?: any): Promise<T> {
+    return this.request<T>(endpoint, {
+      method: 'POST',
+      body: data ? JSON.stringify(data) : undefined,
+    })
+  }
+
+  async put<T>(endpoint: string, data?: any): Promise<T> {
+    return this.request<T>(endpoint, {
+      method: 'PUT',
+      body: data ? JSON.stringify(data) : undefined,
+    })
+  }
+
+  async patch<T>(endpoint: string, data?: any): Promise<T> {
+    return this.request<T>(endpoint, {
+      method: 'PATCH',
+      body: data ? JSON.stringify(data) : undefined,
+    })
+  }
+
+  async get<T>(endpoint: string): Promise<T> {
+    return this.request<T>(endpoint, {
+      method: 'GET',
+    })
+  }
+
+  async delete<T>(endpoint: string): Promise<T> {
+    return this.request<T>(endpoint, {
+      method: 'DELETE',
+    })
   }
 }
 

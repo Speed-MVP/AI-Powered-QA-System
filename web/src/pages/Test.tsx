@@ -3,6 +3,7 @@ import { useDropzone } from 'react-dropzone'
 import { FaCloudUploadAlt, FaCheckCircle, FaSpinner, FaFileAudio, FaPlay, FaChartBar, FaCog, FaExclamationCircle, FaTrash, FaRedo, FaVolumeUp, FaPause, FaHistory, FaTimes, FaUser, FaInfoCircle } from 'react-icons/fa'
 import { Link } from 'react-router-dom'
 import { api } from '@/lib/api'
+import { ConfirmModal } from '@/components/modals'
 
 interface UploadedFile {
   id: string
@@ -77,6 +78,7 @@ export function Test() {
   const [loadingAudio, setLoadingAudio] = useState(false)
   const [notification, setNotification] = useState<{ type: 'success' | 'error' | 'info'; message: string } | null>(null)
   const notificationTimeout = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const [confirmModal, setConfirmModal] = useState<{ isOpen: boolean; title: string; message: string; onConfirm: () => void } | null>(null)
 
   const showNotification = (type: 'success' | 'error' | 'info', message: string, duration = 5000) => {
     if (notificationTimeout.current) {
@@ -405,99 +407,103 @@ export function Test() {
 
   // Delete recording
   const handleDeleteRecording = async (recordingId: string) => {
-    if (!confirm('Are you sure you want to delete this recording? This will permanently delete the file from storage.')) {
-      return
-    }
-
-    try {
-      await api.deleteRecording(recordingId)
-      setHistory(prev => prev.filter(r => r.id !== recordingId))
-      if (selectedRecordingId === recordingId) {
-        setSelectedRecordingId(null)
-        setAudioUrl(null)
-        setResult(null)
-      }
-      showNotification('success', 'Recording deleted successfully')
-    } catch (error: any) {
-      console.error('Failed to delete recording:', error)
-      showNotification('error', 'Failed to delete recording: ' + (error.message || 'Unknown error'))
-    }
+    setConfirmModal({
+      isOpen: true,
+      title: 'Delete Recording',
+      message: 'Are you sure you want to delete this recording? This will permanently delete the file from storage.',
+      onConfirm: async () => {
+        setConfirmModal(null)
+        try {
+          await api.deleteRecording(recordingId)
+          setHistory(prev => prev.filter(r => r.id !== recordingId))
+          if (selectedRecordingId === recordingId) {
+            setSelectedRecordingId(null)
+            setAudioUrl(null)
+            setResult(null)
+          }
+          showNotification('success', 'Recording deleted successfully')
+        } catch (error: any) {
+          console.error('Failed to delete recording:', error)
+          showNotification('error', 'Failed to delete recording: ' + (error.message || 'Unknown error'))
+        }
+      },
+    })
   }
 
   // Reevaluate recording
   const handleReevaluate = async (recordingId: string) => {
-    if (!confirm('This will re-evaluate the recording. Continue?')) {
-      return
-    }
-
-    try {
-      await api.reevaluateRecording(recordingId)
-      showNotification('info', 'Re-evaluation started. Results will update once processing completes.')
-      // Begin polling immediately (don't rely on stale history state)
-        setIsProcessing(true)
-        setResult(null)
-      setSelectedRecordingId(recordingId)
-      await loadHistory()
-        // Poll for results
-        const poll = async () => {
-          try {
-            const updated = await api.getRecording(recordingId)
-            if (updated.status === 'completed') {
-              // Load results
-              const evaluation = await api.getEvaluation(recordingId)
-              const transcriptData = await api.getTranscript(recordingId)
-              
-              const processingResult: ProcessingResult = {
-                transcript: transcriptData.transcript_text,
-                diarizedSegments: transcriptData.diarized_segments || null,
-                overallScore: evaluation.overall_score,
-                resolutionDetected: evaluation.resolution_detected,
-                resolutionConfidence: evaluation.resolution_confidence,
-                categoryScores: evaluation.category_scores.map(cs => ({
-                  category: cs.category_name,
-                  score: cs.score,
-                  feedback: cs.feedback || ''
-                })),
-                violations: evaluation.policy_violations.map(v => ({
-                  type: v.violation_type,
-                  severity: v.severity as 'critical' | 'major' | 'minor',
-                  description: v.description
-                }))
+    setConfirmModal({
+      isOpen: true,
+      title: 'Re-evaluate Recording',
+      message: 'This will re-evaluate the recording. Continue?',
+      onConfirm: async () => {
+        setConfirmModal(null)
+        try {
+          await api.reevaluateRecording(recordingId)
+          showNotification('info', 'Re-evaluation started. Results will update once processing completes.')
+          // Begin polling immediately (don't rely on stale history state)
+          setIsProcessing(true)
+          setResult(null)
+          setSelectedRecordingId(recordingId)
+          await loadHistory()
+          // Poll for results
+          const poll = async () => {
+            try {
+              const updated = await api.getRecording(recordingId)
+              if (updated.status === 'completed') {
+                // Load results
+                const evaluation = await api.getEvaluation(recordingId)
+                const transcriptData = await api.getTranscript(recordingId)
+                
+                const processingResult: ProcessingResult = {
+                  transcript: transcriptData.transcript_text,
+                  diarizedSegments: transcriptData.diarized_segments || null,
+                  overallScore: evaluation.overall_score,
+                  resolutionDetected: evaluation.resolution_detected,
+                  resolutionConfidence: evaluation.resolution_confidence,
+                  categoryScores: evaluation.category_scores.map(cs => ({
+                    category: cs.category_name,
+                    score: cs.score,
+                    feedback: cs.feedback || ''
+                  })),
+                  violations: [] // Phase 7: Violations are now handled through compliance rules in deterministic_results
+                }
+                
+                setResult(processingResult)
+                setIsProcessing(false)
+                await loadHistory()
+              } else if (updated.status === 'failed') {
+                showNotification('error', 'Re-evaluation failed: ' + (updated.error_message || 'Unknown error'))
+                setIsProcessing(false)
+                await loadHistory()
+              } else {
+                // Continue polling
+                setTimeout(poll, 5000)
               }
-              
-              setResult(processingResult)
+            } catch (error: any) {
+              console.error('Polling error:', error)
               setIsProcessing(false)
-              await loadHistory()
-            } else if (updated.status === 'failed') {
-            showNotification('error', 'Re-evaluation failed: ' + (updated.error_message || 'Unknown error'))
-              setIsProcessing(false)
-              await loadHistory()
-            } else {
-              // Continue polling
-              setTimeout(poll, 5000)
             }
-          } catch (error: any) {
-            console.error('Polling error:', error)
-            setIsProcessing(false)
           }
+          poll()
+        } catch (error: any) {
+          console.error('Failed to reevaluate:', error)
+          
+          // Check for connection errors
+          let errorMessage = error.message || 'Unknown error'
+          
+          if (error.message?.includes('Failed to fetch') || error.message?.includes('network')) {
+            errorMessage = 'Cannot connect to backend server. Please make sure the backend is running on http://localhost:8000'
+          } else if (error.message?.includes('CORS')) {
+            errorMessage = 'CORS error: Backend server may not be running or CORS is not configured correctly.'
+          } else if (error.message?.includes('500')) {
+            errorMessage = 'Server error: ' + (error.message || 'Internal server error occurred')
+          }
+          
+          showNotification('error', `Failed to start re-evaluation: ${errorMessage}`)
         }
-        poll()
-    } catch (error: any) {
-      console.error('Failed to reevaluate:', error)
-      
-      // Check for connection errors
-      let errorMessage = error.message || 'Unknown error'
-      
-      if (error.message?.includes('Failed to fetch') || error.message?.includes('network')) {
-        errorMessage = 'Cannot connect to backend server. Please make sure the backend is running on http://localhost:8000'
-      } else if (error.message?.includes('CORS')) {
-        errorMessage = 'CORS error: Backend server may not be running or CORS is not configured correctly.'
-      } else if (error.message?.includes('500')) {
-        errorMessage = 'Server error: ' + (error.message || 'Internal server error occurred')
-      }
-      
-      showNotification('error', `Failed to start re-evaluation: ${errorMessage}`)
-    }
+      },
+    })
   }
 
   // Removed: loadRecordingResults (navigation now handled via Link to /results/:recordingId)
@@ -599,11 +605,7 @@ export function Test() {
                 score: cs.score,
                 feedback: cs.feedback || ''
               })),
-              violations: evaluation.policy_violations.map(v => ({
-                type: v.violation_type,
-                severity: v.severity as 'critical' | 'major' | 'minor',
-                description: v.description
-              }))
+              violations: [] // Phase 7: Violations are now handled through compliance rules in deterministic_results
             }
             
             setResult(processingResult)
@@ -718,6 +720,9 @@ export function Test() {
                 <p className="text-sm text-slate-600 dark:text-slate-400">
                   Test and validate your QA evaluation system
                 </p>
+                <p className="text-xs text-slate-500 dark:text-slate-500 mt-1">
+                  <span className="font-semibold">Setup Flow:</span> SOP Builder → Compliance Rules → Rubric Builder → Activate
+                </p>
               </div>
             </div>
             <div className="flex items-center space-x-3">
@@ -733,13 +738,59 @@ export function Test() {
                 <FaHistory className="w-4 h-4 mr-2" />
                 {showHistory ? 'Hide Records' : 'View Records'}
               </button>
-              <Link
-                to="/policy-templates"
-                className="inline-flex items-center px-3 py-2 border border-transparent text-sm font-medium rounded-md text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
-              >
-                <FaCog className="w-4 h-4 mr-2" />
-                Policy Settings
-              </Link>
+              
+              {/* Workflow Steps - Clear Visual Flow */}
+              <div className="flex items-center space-x-2 border-l border-slate-300 dark:border-slate-600 pl-4 ml-2">
+                <span className="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wide mr-1">Setup:</span>
+                
+                {/* Step 1: SOP Builder */}
+                <Link
+                  to="/sop-builder"
+                  className="inline-flex items-center px-3 py-2 border border-transparent text-sm font-medium rounded-md text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 relative group"
+                  title="Step 1: Define your call flow stages and steps"
+                >
+                  <span className="absolute -left-2 -top-2 w-5 h-5 bg-blue-800 rounded-full flex items-center justify-center text-xs font-bold text-white border-2 border-white dark:border-slate-800">
+                    1
+                  </span>
+                  <FaCog className="w-4 h-4 mr-2" />
+                  <span className="hidden sm:inline">SOP Builder</span>
+                  <span className="sm:hidden">SOP</span>
+                </Link>
+                
+                {/* Arrow */}
+                <span className="text-slate-400 dark:text-slate-500 text-xs">→</span>
+                
+                {/* Step 2: Compliance Rules */}
+                <Link
+                  to="/compliance-rules"
+                  className="inline-flex items-center px-3 py-2 border border-transparent text-sm font-medium rounded-md text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 relative group"
+                  title="Step 2: Define mandatory compliance rules"
+                >
+                  <span className="absolute -left-2 -top-2 w-5 h-5 bg-blue-800 rounded-full flex items-center justify-center text-xs font-bold text-white border-2 border-white dark:border-slate-800">
+                    2
+                  </span>
+                  <FaCog className="w-4 h-4 mr-2" />
+                  <span className="hidden sm:inline">Compliance Rules</span>
+                  <span className="sm:hidden">Rules</span>
+                </Link>
+                
+                {/* Arrow */}
+                <span className="text-slate-400 dark:text-slate-500 text-xs">→</span>
+                
+                {/* Step 3: Rubric Builder */}
+                <Link
+                  to="/rubric-builder"
+                  className="inline-flex items-center px-3 py-2 border border-transparent text-sm font-medium rounded-md text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 relative group"
+                  title="Step 3: Define scoring categories and mappings"
+                >
+                  <span className="absolute -left-2 -top-2 w-5 h-5 bg-blue-800 rounded-full flex items-center justify-center text-xs font-bold text-white border-2 border-white dark:border-slate-800">
+                    3
+                  </span>
+                  <FaCog className="w-4 h-4 mr-2" />
+                  <span className="hidden sm:inline">Rubric Builder</span>
+                  <span className="sm:hidden">Rubric</span>
+                </Link>
+              </div>
             </div>
           </div>
         </div>
@@ -840,7 +891,7 @@ export function Test() {
                   Active Template
                 </dt>
                 <dd className="text-lg font-semibold text-slate-900 dark:text-white">
-                  <TemplateInfo />
+                  {/* Legacy PolicyTemplate removed - use FlowVersion + RubricTemplate instead */}
                 </dd>
               </div>
             </div>
@@ -1505,38 +1556,23 @@ export function Test() {
           </div>
         </div>
       </div>
+
+      {/* Confirm Modal */}
+      {confirmModal && (
+        <ConfirmModal
+          isOpen={confirmModal.isOpen}
+          onClose={() => setConfirmModal(null)}
+          onConfirm={confirmModal.onConfirm}
+          title={confirmModal.title}
+          message={confirmModal.message}
+          confirmText="Continue"
+          cancelText="Cancel"
+          confirmColor="blue"
+        />
+      )}
     </div>
   )
 }
 
-// Component to show active template info
-function TemplateInfo() {
-  const [activeTemplate, setActiveTemplate] = useState<any>(null)
-  const [loading, setLoading] = useState(true)
-
-  useEffect(() => {
-    const loadTemplate = async () => {
-      try {
-        const templates = await api.getTemplates()
-        const active = templates.find(t => t.is_active) || null
-        setActiveTemplate(active)
-      } catch (err) {
-        // Silently fail - template info is optional
-        console.warn('Could not load templates:', err)
-      } finally {
-        setLoading(false)
-      }
-    }
-    loadTemplate()
-  }, [])
-
-  if (loading) return <span className="text-sm text-slate-600 dark:text-slate-400">Loading...</span>
-  if (!activeTemplate) return <span className="text-sm text-slate-600 dark:text-slate-400">None active</span>
-
-  return (
-    <span className="text-sm font-medium text-slate-900 dark:text-white">
-      {activeTemplate.template_name}
-    </span>
-  )
-}
+// Legacy TemplateInfo component removed - PolicyTemplate system no longer exists
 

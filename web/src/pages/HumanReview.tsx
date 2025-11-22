@@ -26,6 +26,7 @@ export function HumanReview() {
   const [submitting, setSubmitting] = useState(false)
   const [humanScores, setHumanScores] = useState<Record<string, number>>({})
   const [overallScore, setOverallScore] = useState<number>(0)
+  const [showScorePrompt, setShowScorePrompt] = useState(false)
   const [aiAccuracy, setAiAccuracy] = useState<number>(3)
   const [message, setMessage] = useState<string>('')
   const [isPlaying, setIsPlaying] = useState(false)
@@ -616,13 +617,7 @@ export function HumanReview() {
                     <button
                       type="button"
                       onClick={() => {
-                        const newScore = prompt('Override auto-calculated score:', overallScore.toString())
-                        if (newScore !== null) {
-                          const score = parseInt(newScore)
-                          if (!isNaN(score) && score >= 0 && score <= 100) {
-                            setOverallScore(score)
-                          }
-                        }
+                        setShowScorePrompt(true)
                       }}
                       className="px-3 py-2 text-xs text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-200 border border-gray-300 dark:border-gray-600 rounded-md hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
                     >
@@ -721,6 +716,34 @@ export function HumanReview() {
           </p>
         </div>
       </div>
+
+      {/* Score Prompt Modal */}
+      {showScorePrompt && (
+        <PromptModal
+          isOpen={showScorePrompt}
+          onClose={() => setShowScorePrompt(false)}
+          onConfirm={(value) => {
+            const score = parseInt(value)
+            if (!isNaN(score) && score >= 0 && score <= 100) {
+              setOverallScore(score)
+            }
+            setShowScorePrompt(false)
+          }}
+          title="Override Score"
+          message="Enter a new score (0-100):"
+          defaultValue={overallScore.toString()}
+          inputType="number"
+          confirmText="Set Score"
+          cancelText="Cancel"
+          required
+          validator={(value) => {
+            const score = parseInt(value)
+            if (isNaN(score)) return 'Please enter a valid number'
+            if (score < 0 || score > 100) return 'Score must be between 0 and 100'
+            return true
+          }}
+        />
+      )}
     </div>
   )
 }
