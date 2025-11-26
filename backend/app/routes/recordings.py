@@ -7,7 +7,15 @@ from app.middleware.auth import get_current_user
 from app.services.storage import StorageService
 from app.tasks.process_recording import process_recording_task
 from app.schemas.recording import RecordingCreate, RecordingResponse, RecordingListResponse
+import mimetypes
 import logging
+
+# Helper to guess content type from filename
+def get_content_type(filename: str) -> str:
+    """Guesses content type based on filename, with a fallback."""
+    content_type, _ = mimetypes.guess_type(filename)
+    return content_type or "application/octet-stream"
+
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
@@ -90,14 +98,17 @@ async def upload_file_direct(
                 
                 temp_file.flush()
             
+            # Determine content type
+            content_type = file.content_type or get_content_type(file.filename)
+            
             logger.info(f"Uploading file '{file.filename}' to bucket '{storage_service.bucket.name}' as '{blob_name}'")
-            logger.info(f"File size: {total_size} bytes, Content-Type: {file.content_type or 'audio/mpeg'}")
+            logger.info(f"File size: {total_size} bytes, Determined Content-Type: {content_type}")
             
             # Upload file to GCP Storage using streaming from temp file
             try:
                 blob.upload_from_filename(
                     temp_file_path,
-                    content_type=file.content_type or "audio/mpeg"
+                    content_type=content_type
                 )
                 logger.info(f"Successfully uploaded file to GCP Storage: {blob_name}")
             except Exception as upload_error:
@@ -263,24 +274,13 @@ async def delete_recording(
         # But we'll delete explicitly to be sure
         from app.models.evaluation import Evaluation
         from app.models.transcript import Transcript
-        # Legacy: PolicyViolation removed - violations are now stored in deterministic_results JSONB
-        from app.models.category_score import CategoryScore
-        from app.models.audit import EvaluationVersion
         from app.models.human_review import HumanReview
 
         evaluation = db.query(Evaluation).filter(Evaluation.recording_id == recording_id).first()
         if evaluation:
             logger.info(f"Deleting related evaluation data for recording {recording_id}")
 
-            db.query(PolicyViolation).filter(
-                PolicyViolation.evaluation_id == evaluation.id
-            ).delete(synchronize_session=False)
-            db.query(CategoryScore).filter(
-                CategoryScore.evaluation_id == evaluation.id
-            ).delete(synchronize_session=False)
-            db.query(EvaluationVersion).filter(
-                EvaluationVersion.evaluation_id == evaluation.id
-            ).delete(synchronize_session=False)
+            # Data is now stored in final_evaluation JSONB
             db.query(HumanReview).filter(
                 HumanReview.evaluation_id == evaluation.id
             ).delete(synchronize_session=False)
@@ -327,9 +327,6 @@ async def reevaluate_recording(
         # Delete existing evaluation and transcript to start fresh
         from app.models.evaluation import Evaluation
         from app.models.transcript import Transcript
-        # Legacy: PolicyViolation removed - violations are now stored in deterministic_results JSONB
-        from app.models.category_score import CategoryScore
-        from app.models.audit import EvaluationVersion
         from app.models.human_review import HumanReview
         
         try:
@@ -338,21 +335,7 @@ async def reevaluate_recording(
             if evaluation:
                 logger.info(f"Found existing evaluation {evaluation.id} for recording {recording_id}. Deleting related data.")
                 
-                # Delete related objects that might not cascade automatically
-                violations_deleted = db.query(PolicyViolation).filter(
-                    PolicyViolation.evaluation_id == evaluation.id
-                ).delete(synchronize_session=False)
-                logger.info(f"Deleted {violations_deleted} policy violation(s) for recording {recording_id}")
-                
-                category_scores_deleted = db.query(CategoryScore).filter(
-                    CategoryScore.evaluation_id == evaluation.id
-                ).delete(synchronize_session=False)
-                logger.info(f"Deleted {category_scores_deleted} category score(s) for recording {recording_id}")
-                
-                versions_deleted = db.query(EvaluationVersion).filter(
-                    EvaluationVersion.evaluation_id == evaluation.id
-                ).delete(synchronize_session=False)
-                logger.info(f"Deleted {versions_deleted} evaluation version(s) for recording {recording_id}")
+                # Data is now stored in final_evaluation JSONB
                 
                 human_review_deleted = db.query(HumanReview).filter(
                     HumanReview.evaluation_id == evaluation.id

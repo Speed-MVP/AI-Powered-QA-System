@@ -19,10 +19,10 @@ from app.routes import (
     agents,
     imports,
     human_reviews,
-    flow_versions,
-    compliance_rules,
-    rubrics,
-    templates,
+    blueprints,
+    tasks,
+    sandbox,
+    monitoring,
 )
 import logging
 
@@ -113,19 +113,32 @@ async def http_exception_handler(request: Request, exc: StarletteHTTPException):
 @app.exception_handler(RequestValidationError)
 async def validation_exception_handler(request: Request, exc: RequestValidationError):
     """Handle validation errors"""
-    return JSONResponse(
+    response = JSONResponse(
         status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
         content={"detail": exc.errors()}
     )
+    # Add CORS headers
+    response.headers["Access-Control-Allow-Origin"] = request.headers.get("origin", "*")
+    response.headers["Access-Control-Allow-Credentials"] = "true"
+    response.headers["Access-Control-Allow-Methods"] = "GET, POST, PUT, DELETE, OPTIONS, PATCH"
+    response.headers["Access-Control-Allow-Headers"] = "*"
+    return response
 
 @app.exception_handler(Exception)
 async def general_exception_handler(request: Request, exc: Exception):
     """Handle all other exceptions"""
     logger.error(f"Unhandled exception: {exc}", exc_info=True)
-    return JSONResponse(
+    # Create response with CORS headers
+    response = JSONResponse(
         status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-        content={"detail": "Internal server error"}
+        content={"detail": f"Internal server error: {str(exc)}"}
     )
+    # Add CORS headers
+    response.headers["Access-Control-Allow-Origin"] = request.headers.get("origin", "*")
+    response.headers["Access-Control-Allow-Credentials"] = "true"
+    response.headers["Access-Control-Allow-Methods"] = "GET, POST, PUT, DELETE, OPTIONS, PATCH"
+    response.headers["Access-Control-Allow-Headers"] = "*"
+    return response
 
 # Initialize database
 @app.on_event("startup")
@@ -157,10 +170,13 @@ app.include_router(teams.router, prefix="/api", tags=["teams"])
 app.include_router(agents.router, prefix="/api", tags=["agents"])
 app.include_router(imports.router, prefix="/api", tags=["bulk-import"])
 app.include_router(human_reviews.router, prefix="/api/human_reviews", tags=["human-reviews"])
-app.include_router(flow_versions.router)  # Prefix already included in router definition
-app.include_router(compliance_rules.router)  # Prefix already included in router definition
-app.include_router(rubrics.router)  # Prefix already included in router definition
-app.include_router(templates.router)  # Prefix already included in router definition
+app.include_router(blueprints.router)  # Prefix already included in router definition
+app.include_router(tasks.router)  # Prefix already included in router definition
+
+# Import sandbox router
+from app.routes import sandbox, monitoring
+app.include_router(sandbox.router)  # Prefix already included in router definition
+app.include_router(monitoring.router)  # Prefix already included in router definition
 
 @app.get("/")
 async def root():

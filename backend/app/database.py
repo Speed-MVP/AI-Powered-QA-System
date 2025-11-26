@@ -9,7 +9,7 @@ logger = logging.getLogger(__name__)
 # Create engine
 engine = create_engine(
     settings.database_url,
-    echo=settings.environment == "development",
+    echo=False,  # Set to True for verbose SQL logging
     pool_pre_ping=True,  # Test connections before using
     pool_size=10,
     max_overflow=20

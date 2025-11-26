@@ -15,7 +15,6 @@ from app.models.human_review import HumanReview, ReviewStatus
 from app.models.evaluation import Evaluation
 from app.models.recording import Recording
 from app.models.user import User
-from app.models.rule_engine_results import RuleEngineResults
 from app.middleware.auth import get_current_user
 from app.schemas.human_review import HumanReviewCreate, HumanReviewResponse, HumanReviewQueueItem
 
@@ -35,7 +34,6 @@ async def get_human_review_queue(
     # Get evaluations requiring human review
     evaluations = db.query(Evaluation).options(
         joinedload(Evaluation.recording),
-        joinedload(Evaluation.category_scores),
         joinedload(Evaluation.human_review)
     ).filter(
         and_(
@@ -48,11 +46,6 @@ async def get_human_review_queue(
 
     queue_items = []
     for evaluation in evaluations:
-        # Get rule engine results
-        rule_results = db.query(RuleEngineResults).filter(
-            RuleEngineResults.evaluation_id == evaluation.id
-        ).first()
-
         # Check if already has pending human review
         existing_review = db.query(HumanReview).filter(
             and_(
@@ -64,14 +57,19 @@ async def get_human_review_queue(
         if existing_review:
             continue  # Skip if already in queue
 
+        # Extract stage scores and policy violations from final_evaluation JSONB
+        final_eval = evaluation.final_evaluation or {}
+        stage_scores = final_eval.get("stage_scores", [])
+        policy_violations = final_eval.get("policy_violations", [])
+
         queue_item = HumanReviewQueueItem(
             evaluation_id=evaluation.id,
             recording_id=evaluation.recording_id,
             recording_title=evaluation.recording.file_name if evaluation.recording else "Unknown",
             ai_overall_score=evaluation.overall_score,
-            ai_category_scores={cs.category_name: cs.score for cs in evaluation.category_scores},
-            ai_violations=evaluation.llm_analysis.get("violations", []) if evaluation.llm_analysis else [],
-            rule_engine_results=rule_results.rules if rule_results else {},
+            ai_stage_scores=stage_scores,
+            ai_violations=policy_violations,
+            rule_engine_results={},
             confidence_score=evaluation.confidence_score,
             transcript_preview=evaluation.recording.transcript.transcript_text[:500] + "..." if evaluation.recording and evaluation.recording.transcript else "",
             created_at=evaluation.created_at
@@ -110,16 +108,18 @@ async def submit_human_review(
         raise HTTPException(status_code=400, detail="Human review already exists for this evaluation")
 
     # Create human review record
+    ai_scores_snapshot = evaluation.final_evaluation or {}
+    
     human_review = HumanReview(
         recording_id=evaluation.recording_id,
         evaluation_id=evaluation_id,
         reviewer_user_id=current_user.id,
-        human_overall_score=review_data.human_scores.get("Overall") or review_data.overall_score,
-        human_category_scores=review_data.human_scores,
+        human_overall_score=review_data.human_overall_score,
+        human_stage_scores=review_data.human_stage_scores,
         human_violations=review_data.human_violations,
         reviewer_notes=review_data.reviewer_notes,
-        ai_scores=evaluation.llm_analysis,  # Snapshot of AI evaluation
-        delta=_compute_human_ai_delta(evaluation.llm_analysis, review_data),
+        ai_scores=ai_scores_snapshot,
+        delta=_compute_human_ai_delta(ai_scores_snapshot, review_data),
         review_status=ReviewStatus.completed
     )
 
@@ -133,12 +133,11 @@ async def submit_human_review(
     if review_data.corrections:
         if "overall_score" in review_data.corrections:
             evaluation.overall_score = review_data.corrections["overall_score"]
-        if "category_scores" in review_data.corrections:
-            # Update category scores
-            for cat_name, new_score in review_data.corrections["category_scores"].items():
-                cat_score = next((cs for cs in evaluation.category_scores if cs.category_name == cat_name), None)
-                if cat_score:
-                    cat_score.score = new_score
+        if "stage_scores" in review_data.corrections:
+            # Update stage scores in final_evaluation
+            if not evaluation.final_evaluation:
+                evaluation.final_evaluation = {}
+            evaluation.final_evaluation["stage_scores"] = review_data.corrections["stage_scores"]
 
     db.commit()
     db.refresh(human_review)
@@ -189,7 +188,7 @@ def _compute_human_ai_delta(ai_evaluation: dict, human_review: HumanReviewCreate
     """
     delta = {
         "overall_score_diff": None,
-        "category_score_diffs": {},
+        "stage_score_diffs": {},
         "violation_diffs": [],
         "computed_at": datetime.utcnow().isoformat()
     }
@@ -199,22 +198,25 @@ def _compute_human_ai_delta(ai_evaluation: dict, human_review: HumanReviewCreate
 
     # Overall score difference
     ai_overall = ai_evaluation.get("overall_score")
-    human_overall = human_review.human_scores.get("Overall") or human_review.overall_score
+    human_overall = human_review.human_overall_score
     if ai_overall is not None and human_overall is not None:
         delta["overall_score_diff"] = human_overall - ai_overall
 
-    # Category score differences
-    ai_categories = ai_evaluation.get("category_scores", {})
-    human_categories = human_review.human_scores
+    # Stage score differences
+    ai_stages = {stage.get("stage_id") or stage.get("name") or stage.get("stage_name", ""): stage.get("score", 0) 
+                 for stage in ai_evaluation.get("stage_scores", [])}
+    
+    human_stages = {stage.get("stage_id") or stage.get("name") or stage.get("stage_name", ""): stage.get("score", 0)
+                    for stage in human_review.human_stage_scores}
 
-    for cat_name in set(ai_categories.keys()) | set(human_categories.keys()):
-        ai_score = ai_categories.get(cat_name)
-        human_score = human_categories.get(cat_name)
+    for stage_id in set(ai_stages.keys()) | set(human_stages.keys()):
+        ai_score = ai_stages.get(stage_id)
+        human_score = human_stages.get(stage_id)
         if ai_score is not None and human_score is not None:
-            delta["category_score_diffs"][cat_name] = human_score - ai_score
+            delta["stage_score_diffs"][stage_id] = human_score - ai_score
 
-    # Violation differences (simplified)
-    ai_violations = ai_evaluation.get("violations", [])
+    # Violation differences
+    ai_violations = ai_evaluation.get("policy_violations", [])
     human_violations = human_review.human_violations or []
 
     delta["violation_diffs"] = {

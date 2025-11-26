@@ -1,6 +1,6 @@
 """
 Internal API Endpoints
-Legacy PolicyTemplate routes have been removed - use Phase 7 pipeline instead.
+PolicyTemplate routes have been removed - use Phase 7 pipeline instead.
 """
 
 from fastapi import APIRouter, Depends, HTTPException

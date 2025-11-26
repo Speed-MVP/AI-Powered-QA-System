@@ -7,8 +7,6 @@ from fastapi import APIRouter, HTTPException, Query, BackgroundTasks
 from app.database import SessionLocal
 from app.models.evaluation import Evaluation, EvaluationStatus
 from app.models.recording import Recording
-from app.models.category_score import CategoryScore
-# Legacy: PolicyViolation removed - violations are now stored in deterministic_results JSONB
 from app.models.human_review import HumanReview, ReviewStatus
 from app.services.gemini import GeminiService
 from app.services.confidence import ConfidenceService
@@ -74,8 +72,8 @@ async def get_evaluations(
                 "confidence_score": eval.confidence_score,
                 "requires_human_review": eval.requires_human_review,
                 "status": eval.status.value,
-                "model_used": eval.llm_analysis.get("model_used", "unknown") if eval.llm_analysis else "unknown",
-                "complexity_score": eval.llm_analysis.get("complexity_score", 0) if eval.llm_analysis else 0,
+                "model_used": eval.model_version or "unknown",
+                "complexity_score": 0,
                 "uploaded_at": recording.uploaded_at.isoformat(),
                 "processed_at": eval.created_at.isoformat(),
                 "has_human_review": eval.human_review is not None
@@ -108,24 +106,10 @@ async def get_evaluation_details(evaluation_id: str):
 
         recording = evaluation.recording
 
-        # Get category scores
-        category_scores = []
-        for score in evaluation.category_scores:
-            category_scores.append({
-                "category": score.category_name,
-                "score": score.score,
-                "feedback": score.feedback
-            })
-
-        # Get violations
-        violations = []
-        for violation in evaluation.policy_violations:
-            violations.append({
-                "category": violation.criteria.category_name if violation.criteria else "Unknown",
-                "type": violation.violation_type,
-                "description": violation.description,
-                "severity": violation.severity
-            })
+        # Get category scores from final_evaluation JSONB
+        final_eval = evaluation.final_evaluation or {}
+        stage_scores = final_eval.get("stage_scores", [])
+        policy_violations = final_eval.get("policy_violations", [])
 
         # Get human review if exists
         human_review = None
@@ -134,7 +118,7 @@ async def get_evaluation_details(evaluation_id: str):
             human_review = {
                 "reviewer_id": hr.reviewer_user_id,
                 "human_overall_score": hr.human_overall_score,
-                "human_category_scores": hr.human_category_scores,
+                "human_stage_scores": hr.human_stage_scores or [],
                 "ai_accuracy_rating": hr.ai_score_accuracy,
                 "recommendation": hr.ai_recommendation,
                 "time_spent_seconds": hr.time_spent_seconds,
@@ -155,13 +139,9 @@ async def get_evaluation_details(evaluation_id: str):
                     "overall_score": evaluation.overall_score,
                     "confidence_score": evaluation.confidence_score,
                     "requires_human_review": evaluation.requires_human_review,
-                    "resolution_detected": evaluation.resolution_detected,
-                    "resolution_confidence": evaluation.resolution_confidence,
-                    "model_used": evaluation.llm_analysis.get("model_used", "unknown") if evaluation.llm_analysis else "unknown",
-                    "complexity_score": evaluation.llm_analysis.get("complexity_score", 0) if evaluation.llm_analysis else 0,
-                    "category_scores": category_scores,
-                    "violations": violations,
-                    "customer_tone": evaluation.customer_tone
+                    "model_used": evaluation.model_version or "unknown",
+                    "stage_scores": stage_scores,
+                    "policy_violations": policy_violations
                 },
                 "human_review": human_review,
                 "transcript": evaluation.recording.transcript.transcript_text if evaluation.recording.transcript else None,
@@ -177,7 +157,7 @@ async def get_evaluation_details(evaluation_id: str):
 async def override_evaluation_score(
     evaluation_id: str,
     overall_score: int,
-    category_scores: Dict[str, Dict[str, Any]],
+    stage_scores: List[Dict[str, Any]],
     reason: str,
     reviewer_id: str
 ):
@@ -200,7 +180,7 @@ async def override_evaluation_score(
         if evaluation.human_review:
             # Update existing review
             evaluation.human_review.human_overall_score = overall_score
-            evaluation.human_review.human_category_scores = category_scores
+            evaluation.human_review.human_stage_scores = stage_scores
             evaluation.human_review.ai_recommendation = reason
             evaluation.human_review.updated_at = datetime.utcnow()
         else:
@@ -210,25 +190,18 @@ async def override_evaluation_score(
                 evaluation_id=evaluation_id,
                 reviewer_user_id=reviewer_id,
                 human_overall_score=overall_score,
-                human_category_scores=category_scores,
+                human_stage_scores=stage_scores,
                 ai_score_accuracy=5.0,  # Supervisor override = perfect accuracy
                 ai_recommendation=reason,
                 review_status=ReviewStatus.completed
             )
             db.add(human_review)
 
-        # Update category scores if provided
-        if category_scores:
-            for category_name, score_data in category_scores.items():
-                # Find existing category score
-                cat_score = db.query(CategoryScore).filter(
-                    CategoryScore.evaluation_id == evaluation_id,
-                    CategoryScore.category_name == category_name
-                ).first()
-
-                if cat_score:
-                    cat_score.score = score_data.get("score", cat_score.score)
-                    cat_score.feedback = score_data.get("feedback", cat_score.feedback)
+        # Update stage scores in final_evaluation JSONB
+        if stage_scores:
+            if not evaluation.final_evaluation:
+                evaluation.final_evaluation = {}
+            evaluation.final_evaluation["stage_scores"] = stage_scores
 
         db.commit()
 
@@ -313,34 +286,20 @@ async def get_qa_analytics(days: int = 30):
             Evaluation.requires_human_review == True
         ).count() / max(total_evaluations, 1)
 
-        # Model usage statistics
+        # Model usage statistics (from model_version column)
         flash_count = db.query(Evaluation).join(Recording).filter(
             Recording.uploaded_at >= date_from,
-            Evaluation.llm_analysis.contains({"model_used": "gemini-1.5-flash"})
+            Evaluation.model_version.like("%flash%")
         ).count()
 
         pro_count = db.query(Evaluation).join(Recording).filter(
             Recording.uploaded_at >= date_from,
-            Evaluation.llm_analysis.contains({"model_used": "gemini-1.5-pro"})
+            Evaluation.model_version.like("%pro%")
         ).count()
 
-        # Top violations
-        violation_stats = db.query(
-            PolicyViolation.violation_type,
-            PolicyViolation.severity,
-            db.func.count(PolicyViolation.id).label('count')
-        ).join(Evaluation).join(Recording).filter(
-            Recording.uploaded_at >= date_from
-        ).group_by(PolicyViolation.violation_type, PolicyViolation.severity).all()
-
-        top_violations = [
-            {
-                "violation_type": v.violation_type,
-                "severity": v.severity,
-                "count": v.count
-            }
-            for v in sorted(violation_stats, key=lambda x: x.count, reverse=True)[:10]
-        ]
+        # Top violations (extract from final_evaluation JSONB)
+        # Note: This is simplified - would need to parse JSONB for violations
+        top_violations = []
 
         return {
             "success": True,

@@ -60,43 +60,7 @@ class AuditLog(Base):
     created_at = Column(DateTime, default=datetime.utcnow)
 
 
-class EvaluationVersion(Base):
-    """
-    Version control for evaluations to track changes over time.
-    Phase 4: Include model version, timestamp, and reasoning snippet for audit defense.
-    """
-    __tablename__ = "evaluation_versions"
-
-    id = Column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
-    evaluation_id = Column(String(36), ForeignKey("evaluations.id"), nullable=False, index=True)
-
-    # Version metadata
-    version_number = Column(Integer, nullable=False)
-    created_at = Column(DateTime, default=datetime.utcnow, index=True)
-    created_by = Column(String(36), nullable=True)  # User who created this version
-
-    # Complete evaluation state at this version
-    overall_score = Column(Integer, nullable=False)
-    confidence_score = Column(Numeric(5, 2), nullable=True)
-    category_scores = Column(JSONB, nullable=False)
-    violations = Column(JSONB, nullable=True)
-    llm_analysis = Column(JSONB, nullable=True)
-
-    # Model and processing metadata
-    model_used = Column(String(50), nullable=True)
-    model_version = Column(String(50), nullable=True)
-    processing_pipeline_version = Column(String(20), nullable=True)  # e.g., "v2.1.3"
-
-    # Audit trail
-    change_reason = Column(Text, nullable=True)  # Why this version was created
-    previous_version_id = Column(String(36), nullable=True)
-
-    # Compliance and regulatory
-    regulatory_compliance = Column(JSONB, nullable=True)  # Compliance requirements met
-    audit_trail_hash = Column(String(64), nullable=True)  # Cryptographic hash for tamper detection
-
-    # Relationships
-    evaluation = relationship("Evaluation", back_populates="versions")
+# EvaluationVersion model removed - version history now stored in AuditLog
 
 
 class ComplianceReport(Base):
@@ -169,6 +133,7 @@ class DataRetentionPolicy(Base):
     active = Column(Boolean, default=True)
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
 
 
 

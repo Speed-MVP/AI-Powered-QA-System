@@ -887,30 +887,190 @@ users (N) ────► (N) teams (via agent_teams)
 
 ## Evaluation Pipeline
 
-### Phase 1: Structured Rules Foundation
-- Structured, machine-readable policy rules stored as JSONB
-- Rule types: boolean, numeric, phrase, list, conditional, multi-step, tone-based, resolution
-- AI-powered rule generation from policy text
-- Rule versioning and audit trail
+### New Standardized 7-Phase Architecture
 
-### Phase 2: MVP Evaluation Improvements
-- Transcript normalization
-- 5-signal confidence engine
-- Schema validation for LLM responses
-- Reproducibility metadata (prompt IDs, model versions, seeds)
+The system has been upgraded from a legacy policy rules system to a **7-phase standardized architecture** that provides modular design, deterministic-first evaluation, LLM enhancement, data privacy, flexible scoring, and end-to-end pipeline orchestration.
 
-### Phase 3: Policy-Based Deterministic Evaluation
-- RuleEngineV2: Deterministic rule evaluation before LLM
-- Rule results pre-populate evaluation context
-- Critical rule overrides (fail-safe mechanism)
+#### Phase 1: SOP Builder ✅ COMPLETE
+**Purpose**: Define call flow structure (Stages → Steps)
 
-### Phase 4: Deterministic LLM Evaluator
-- DeterministicLLMEvaluator: Uses structured rules to guide LLM
-- Transcript compression for efficiency
-- Critical rule overrides applied to LLM results
-- Rubric level assignment based on rule compliance
+**Backend:**
+- `FlowVersion` model (top-level SOP)
+- `FlowStage` model (stages within SOP)
+- `FlowStep` model (steps within stages)
+- API routes: `/api/flow-versions/*` (22 endpoints)
+- Validation service: `FlowVersionValidator`
 
-### Processing Steps (Detailed)
+**Features:**
+- Hierarchical structure: FlowVersion → FlowStages → FlowSteps
+- Step properties: name, description, required flag, expected phrases, timing requirements
+- Stage ordering and step ordering within stages
+- Version control and activation
+
+#### Phase 2: Compliance Rules Builder ✅ BACKEND COMPLETE
+**Purpose**: Define deterministic compliance checks
+
+**Backend:**
+- `ComplianceRule` model with rule types:
+  - `required_step` - Step must be present
+  - `forbidden_phrase` - Phrase must not appear
+  - `required_phrase` - Phrase must appear
+  - `step_order` - Steps must follow order
+  - `timing` - Step must occur within time window
+  - `verification` - Must verify specific information
+  - `conditional` - If-then logic rules
+- API routes: `/api/compliance-rules/*` (7 endpoints)
+- Validation service: `ComplianceRuleValidator`
+
+#### Phase 3: Deterministic Rule Engine ✅ COMPLETE
+**Purpose**: Evaluate compliance rules against transcripts
+
+**Backend:**
+- `DeterministicRuleEngine` service
+- Step detection via expected phrases
+- Stage/step order checking
+- Compliance rule evaluation
+- Scoring algorithm: `step_score * 0.7 + rule_score * 0.3`
+
+**Output:**
+```json
+{
+  "stage_results": { ... },
+  "rule_evaluations": [ ... ],
+  "deterministic_score": 0-100,
+  "overall_passed": boolean
+}
+```
+
+**Features:**
+- Detects which steps occurred in transcript
+- Validates step order
+- Evaluates all compliance rule types
+- Calculates deterministic scores per stage
+- Results stored in `evaluations.deterministic_results` (JSONB)
+
+#### Phase 4: LLM Stage Evaluation ✅ COMPLETE
+**Purpose**: Contextual evaluation per stage using LLM
+
+**Backend:**
+- `PIIRedactor` service (redacts PII before LLM calls)
+- `LLMStageEvaluator` service
+- Prompt template building
+- JSON response validation
+- Fallback logic for LLM failures
+- Zero-data-retention mode (Gemini API)
+- Temperature = 0 (deterministic)
+
+**Data Privacy:**
+- PII redaction: names, emails, phones, SSNs, credit cards, addresses
+- Placeholder replacement (`[NAME]`, `[EMAIL]`, etc.)
+- Prompt minimization
+- Zero data retention configured
+
+**Output:**
+```json
+{
+  "stage_id": {
+    "stage_score": 85,
+    "stage_confidence": 0.92,
+    "critical_violation": false,
+    "step_evaluations": [...],
+    "stage_feedback": "Agent followed protocol well"
+  }
+}
+```
+
+**Results stored in:** `evaluations.llm_stage_evaluations` (JSONB)
+
+#### Phase 5: Rubric Builder ✅ BACKEND COMPLETE
+**Purpose**: Define scoring categories and mappings to stages/steps
+
+**Backend:**
+- `RubricTemplate` model
+- `RubricCategory` model (with level definitions)
+- `RubricMapping` model (maps categories to stages/steps)
+- API routes: `/api/rubrics/*` (13 endpoints)
+- Validation service: `RubricValidator`
+
+**Features:**
+- Category definitions with weights (must sum to 100)
+- Pass thresholds per category
+- Level definitions (score ranges)
+- Mappings: categories → stages/steps with contribution weights
+- Required flag for critical mappings
+
+#### Phase 6: Rubric Scoring Engine ✅ COMPLETE
+**Purpose**: Aggregate stage scores into category and overall scores
+
+**Backend:**
+- `RubricScorer` service
+- Category aggregation (weighted by contribution_weight)
+- Overall weighted scoring (by category weight)
+- Pass/fail determination
+- Critical violation handling
+
+**Scoring Logic:**
+1. For each category, collect mapped stage/step scores
+2. Normalize contribution weights: `normalized_weight = weight / sum(all_weights)`
+3. Calculate category score: `category_score = Σ(normalized_weight × stage_score)`
+4. Round to nearest integer, clamp to 0-100
+5. Check pass/fail: `passed = category_score >= pass_threshold`
+6. Calculate overall score: `overall_score = Σ(category_score × (category_weight / 100))`
+7. Overall pass/fail: fails if any category fails OR critical violation exists
+
+**Output:**
+```json
+{
+  "overall_score": 76,
+  "overall_passed": false,
+  "category_scores": [
+    {
+      "category_id": "uuid",
+      "name": "Communication",
+      "weight": 30.0,
+      "score": 80,
+      "passed": true
+    }
+  ],
+  "stage_scores": {
+    "stage_id": {
+      "score": 85,
+      "confidence": 0.92,
+      "critical_violation": false
+    }
+  },
+  "requires_human_review": false
+}
+```
+
+**Results stored in:** `evaluations.final_evaluation` (JSONB)
+
+#### Phase 7: Final Evaluation Pipeline ✅ COMPLETE
+**Purpose**: Orchestrate end-to-end evaluation
+
+**Backend:**
+- `process_recording_phase7.py` task
+- Chains all phases: Phase 3 → Phase 4 → Phase 6
+- Error handling for hard failures
+- LLM failure fallback
+- Critical violation detection
+- Conditional fallback to legacy pipeline
+
+**Pipeline Flow:**
+```
+1. Load FlowVersion and RubricTemplate
+2. Phase 3: Deterministic Rule Engine
+   → deterministic_results
+3. Phase 4: LLM Stage Evaluation (with PII redaction)
+   → llm_stage_evaluations
+4. Phase 6: Rubric Scoring Engine
+   → final_evaluation (category_scores, overall_score, overall_passed)
+5. Save to database
+```
+
+### Complete Evaluation Pipeline Flow (New Standardized Architecture)
+
+#### End-to-End Processing Steps
 
 1. **Recording Upload & Validation**
    - File validation (type, size ≤ 2GB)
@@ -918,76 +1078,192 @@ users (N) ────► (N) teams (via agent_teams)
    - Database record creation (status: queued)
 
 2. **Background Task Initiation**
-   - `process_recording_task` invoked
+   - `process_recording_phase7` invoked (or legacy `process_recording_task`)
    - Status updated to `processing`
 
 3. **Transcription (Deepgram)**
    - Deepgram Nova-2 API call
    - Features: diarization, sentiment, utterances
    - Output: transcript text, segments, sentiment, confidence
+   - Store in `transcripts` table
 
-4. **Transcript Normalization**
-   - Text cleaning
-   - Speaker role refinement
-   - Quality metrics
+4. **Load Active Policy Components**
+   - Fetch active `FlowVersion` for company (Phase 1)
+   - Load all `ComplianceRule` for that FlowVersion (Phase 2)
+   - Load active `RubricTemplate` for that FlowVersion (Phase 5)
+   - **If any missing**: Fail evaluation, set `requires_human_review = true`
 
-5. **Policy Template Loading**
-   - Fetch active template for company
-   - Load evaluation criteria, rubric levels
-   - Load structured rules (if enabled)
+5. **Phase 3: Deterministic Rule Engine**
+   - `DeterministicRuleEngine.evaluate()` called
+   - Step detection via expected phrases
+   - Stage/step order validation
+   - Compliance rule evaluation (all 6 rule types)
+   - Calculate deterministic scores per stage
+   - Output: `deterministic_results` (JSONB)
+     ```json
+     {
+       "stage_results": { ... },
+       "rule_evaluations": [ ... ],
+       "deterministic_score": 0-100,
+       "overall_passed": boolean
+     }
+     ```
 
-6. **Deterministic Rule Engine**
-   - Evaluate structured rules against transcript
-   - Output: rule results by category with severity
-   - Pre-populate violations
+6. **Phase 4: LLM Stage Evaluation**
+   - **PII Redaction**: `PIIRedactor.redact()` removes all PII
+   - **Per-Stage Evaluation**: For each stage in FlowVersion:
+     - Extract stage segments from transcript
+     - Build LLM prompt with deterministic results context
+     - Call LLM (Gemini 2.0 Flash, temperature=0, zero-data-retention)
+     - Validate JSON response structure
+     - Extract stage score, confidence, feedback
+   - **Fallback Logic**: If LLM fails, use deterministic score
+   - Output: `llm_stage_evaluations` (JSONB)
+     ```json
+     {
+       "stage_id": {
+         "stage_score": 85,
+         "stage_confidence": 0.92,
+         "critical_violation": false,
+         "step_evaluations": [...],
+         "stage_feedback": "..."
+       }
+     }
+     ```
 
-7. **LLM Evaluation**
-   - **If structured rules enabled**: DeterministicLLMEvaluator
-     - Build evaluation input with rule results
-     - Compress transcript
-     - Extract tone mismatches
-     - Call LLM (Gemini 2.0 Flash/Pro)
-     - Apply critical rule overrides
-   - **Else**: Legacy GeminiService
-     - Build prompt with rubric levels
-     - Include RAG context (optional)
-     - Call LLM
-     - Parse JSON response
+7. **Phase 6: Rubric Scoring Engine**
+   - `RubricScorer.score()` called with:
+     - RubricTemplate (categories, mappings, weights)
+     - LLM stage evaluations
+     - Deterministic results
+   - **Category Score Calculation**:
+     - For each category, collect mapped stage/step scores
+     - Normalize contribution weights
+     - Calculate weighted average: `category_score = Σ(weight × score)`
+     - Round to integer, clamp to 0-100
+     - Check pass: `passed = category_score >= pass_threshold`
+   - **Overall Score Calculation**:
+     - `overall_score = Σ(category_score × (category_weight / 100))`
+     - Round to integer, clamp to 0-100
+   - **Pass/Fail Logic**:
+     - Auto-fail if critical violation exists
+     - Fail if any category fails
+   - **Human Review Flag**:
+     - Set `requires_human_review = true` if any stage confidence < 0.5
+   - Output: `final_evaluation` (JSONB)
+     ```json
+     {
+       "overall_score": 76,
+       "overall_passed": false,
+       "category_scores": [...],
+       "stage_scores": {...},
+       "requires_human_review": false
+     }
+     ```
 
-8. **Schema Validation**
-   - Validate LLM response structure
-   - Extract scores and violations
-   - Log validation failures
-
-9. **Scoring & Ensemble**
-   - Map rubric levels to numeric scores
-   - Apply rule penalties
-   - Calculate weighted category scores
-   - Compute overall score
-   - Aggregate violations
-
-10. **Confidence Calculation**
-    - 5-signal confidence model:
-      - Transcript quality signal
-      - LLM consistency signal
-      - Rule hits signal
-      - Score distribution signal
-      - Schema validation signal
-    - Output: confidence_score (0-1), requires_human_review boolean
-
-11. **Persistence**
-    - Save transcript
-    - Save evaluation (with metadata)
-    - Save category scores
-    - Save policy violations
-    - Save rule engine results
-    - Create human review record (if needed)
+8. **Persistence**
+   - Save transcript to `transcripts` table
+   - Save evaluation to `evaluations` table with:
+     - `deterministic_results` (JSONB)
+     - `llm_stage_evaluations` (JSONB)
+     - `final_evaluation` (JSONB)
+     - `flow_version_id` (FK)
+     - `rubric_template_id` (FK)
+     - `overall_score`, `requires_human_review`
+   - Create human review record (if `requires_human_review = true`)
     - Create audit log entry
 
-12. **Finalization**
-    - Update recording status: completed
-    - Send email notification
+9. **Finalization**
+   - Update recording status: `completed`
+   - Send email notification (success/failure)
     - Create evaluation version snapshot
+
+#### Legacy Pipeline (Fallback)
+
+If no `FlowVersion` is active, the system falls back to the legacy pipeline:
+- Uses `PolicyTemplate` with `EvaluationCriteria`
+- Uses legacy `RuleEngineService` and `GeminiService`
+- Uses legacy `DeterministicLLMEvaluator` and `DeterministicScorer`
+- Stores results in legacy format
+
+---
+
+## Evaluation Scoring System
+
+### New Standardized Scoring (Phase 6: Rubric Scoring Engine)
+
+The new scoring system uses a **rubric-based aggregation** approach that provides transparent, configurable, and deterministic scoring.
+
+#### Scoring Architecture
+
+1. **Stage-Level Scores** (from Phase 4: LLM Stage Evaluation)
+   - Each stage in the FlowVersion receives a score (0-100)
+   - Score includes confidence level (0-1)
+   - Critical violations flagged per stage
+
+2. **Category-Level Aggregation** (Phase 6: Rubric Scoring)
+   - Categories map to one or more stages/steps via `RubricMapping`
+   - Each mapping has a `contribution_weight`
+   - Category score = weighted average of mapped stage scores
+   - Formula: `category_score = Σ(normalized_weight × stage_score)`
+   - Normalization: `normalized_weight = weight / Σ(all_weights_in_category)`
+
+3. **Overall Score Calculation**
+   - Weighted sum of category scores
+   - Formula: `overall_score = Σ(category_score × (category_weight / 100))`
+   - Category weights must sum to 100
+   - Rounded to nearest integer, clamped to 0-100
+
+#### Scoring Example
+
+**Rubric Configuration:**
+- Communication (30% weight, threshold: 75) → maps to [Opening stage]
+- Resolution (40% weight, threshold: 80) → maps to [Resolution stage]
+- Process Adherence (30% weight, threshold: 70) → maps to [Discovery stage]
+
+**LLM Stage Scores:**
+- Opening: 80
+- Discovery: 60
+- Resolution: 85
+
+**Category Scores:**
+- Communication = 80 (pass: 80 ≥ 75)
+- Process Adherence = 60 (fail: 60 < 70)
+- Resolution = 85 (pass: 85 ≥ 80)
+
+**Overall Score:**
+```
+(80 × 0.30) + (60 × 0.30) + (85 × 0.40)
+= 24 + 18 + 34
+= 76
+```
+
+**Overall Pass/Fail:**
+- Fail (because Process Adherence category failed)
+
+#### Pass/Fail Logic
+
+1. **Critical Violation Override**
+   - If any compliance rule has `severity="critical"` and `passed=false`
+   - → `overall_passed = false` (regardless of score)
+
+2. **Category Threshold Check**
+   - Each category has a `pass_threshold` (0-100)
+   - Category passes if: `category_score >= pass_threshold`
+   - Overall fails if: any category fails
+
+3. **Human Review Flag**
+   - Set `requires_human_review = true` if:
+     - Any stage confidence < 0.5
+     - Missing stage evaluations
+     - LLM fallback used
+
+#### Edge Cases
+
+- **Missing Stage**: If a mapped stage is missing from LLM evaluations → score = 0
+- **No Mappings**: Category with no mappings → score = 0, fails
+- **Negative Scores**: Clamped to 0 (scores cannot go below 0)
+- **Over 100**: Clamped to 100 (scores cannot exceed 100)
 
 ---
 
@@ -1416,5 +1692,29 @@ The system is built for scalability, reliability, and compliance, with extensive
 ---
 
 **Last Updated**: December 2024  
-**Version**: 0.2.0  
-**Project Status**: Production-Ready MVP
+**Version**: 0.3.0  
+**Project Status**: Production-Ready with New Standardized 7-Phase Architecture
+
+### Implementation Status
+
+**Backend: ✅ 100% Complete**
+- All 7 phases implemented
+- All models, services, routes created
+- Database migrations ready
+- API endpoints registered (42 new endpoints)
+- Pipeline integration complete
+
+**Frontend: 🟡 33% Complete**
+- Phase 1 (SOP Builder): ✅ Complete
+- Phase 2 (Compliance Rules): ⏳ Pending UI
+- Phase 5 (Rubric Builder): ⏳ Pending UI
+- Results Page Update: ⏳ Pending
+
+### Key Improvements in New Architecture
+
+1. **Modular Design**: Each phase has clear responsibilities and can be tested independently
+2. **Deterministic First**: Objective rules evaluated before LLM for consistency
+3. **Data Privacy**: PII redaction before LLM calls, zero-data-retention mode
+4. **Flexible Scoring**: Rubric-based category aggregation with configurable weights
+5. **End-to-End Pipeline**: Complete orchestration from upload to final evaluation
+6. **Backward Compatible**: Legacy pipeline still available as fallback

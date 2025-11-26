@@ -17,5 +17,6 @@ class Company(Base):
     users = relationship("User", back_populates="company")
     recordings = relationship("Recording", back_populates="company")
     teams = relationship("Team", back_populates="company")
-    flow_versions = relationship("FlowVersion", back_populates="company")
+    qa_blueprints = relationship("QABlueprint", back_populates="company")
+    # FlowVersion relationship removed - using CompiledFlowVersion in Blueprint system instead
 

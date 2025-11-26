@@ -48,3 +48,4 @@ class LLMStageEvaluationResponse(BaseModel):
             raise ValueError('stage_confidence must be float between 0.0 and 1.0')
         return float(v)
 
+

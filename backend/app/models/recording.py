@@ -38,5 +38,4 @@ class Recording(Base):
     team = relationship("Team", back_populates="recordings")
     transcript = relationship("Transcript", uselist=False, back_populates="recording")
     evaluation = relationship("Evaluation", uselist=False, back_populates="recording")
-    rule_engine_results = relationship("RuleEngineResults", back_populates="recording", cascade="all, delete-orphan")  # MVP Evaluation Improvements
 

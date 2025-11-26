@@ -1,7 +1,7 @@
 from app.config import settings
 from sqlalchemy.orm import Session
 from app.database import SessionLocal
-# Legacy: EvaluationCriteria removed - this service is deprecated in favor of Phase 7 pipeline
+# EvaluationCriteria removed - this service is deprecated in favor of Phase 7 pipeline
 from app.models.evaluation import Evaluation
 from typing import Dict, Any, Optional, List
 import logging
@@ -26,11 +26,21 @@ except ImportError:
 
 from app.models.human_review import HumanReview, ReviewStatus
 from app.models.transcript import Transcript
-from app.models.category_score import CategoryScore
 
 
 class GeminiService:
+    _instance = None
+
+    def __new__(cls):
+        if cls._instance is None:
+            cls._instance = super(GeminiService, cls).__new__(cls)
+            cls._instance._initialized = False
+        return cls._instance
+
     def __init__(self):
+        if getattr(self, '_initialized', False):
+            return
+
         if not GEMINI_AVAILABLE:
             raise Exception("google-generativeai package not installed")
 
@@ -38,9 +48,10 @@ class GeminiService:
             genai.configure(api_key=settings.gemini_api_key)
 
             # List available models first to find correct names (optional, for debugging)
+            # Only log at DEBUG level to avoid spam
             try:
                 available_models = self.list_available_models()
-                logger.info(f"Available Gemini models: {available_models}")
+                logger.debug(f"Available Gemini models: {available_models}")
             except Exception as e:
                 logger.debug(f"Could not list available models (non-critical): {e}")
 
@@ -70,177 +81,20 @@ class GeminiService:
             self.flash_model = None
             self.pro_model = None
             self.api_key = None
+        
+        self._initialized = True
 
     def list_available_models(self):
         """List available Gemini models for debugging"""
         try:
             models = genai.list_models()
             gemini_models = [model.name for model in models if 'gemini' in model.name.lower()]
-            logger.info(f"Available Gemini models: {gemini_models}")
+            # Log at DEBUG level instead of INFO
+            logger.debug(f"Available Gemini models: {gemini_models}")
             return gemini_models
         except Exception as e:
             logger.error(f"Failed to list models: {e}")
             return []
-    
-    async def evaluate(self, transcript_text: str, policy_template_id: str, sentiment_analysis: Optional[List[Dict[str, Any]]] = None, rule_results: Optional[Dict[str, Any]] = None, use_hybrid: Optional[bool] = None) -> Dict[str, Any]:
-        """
-        Legacy service - deprecated in favor of Phase 7 pipeline.
-        This method should not be used anymore as PolicyTemplate system is removed.
-        """
-        raise Exception("GeminiService.evaluate() is deprecated. Use Phase 7 pipeline (process_recording_phase7) instead.")
-    
-    def _retrieve_similar_human_reviews(
-        self,
-        transcript_text: str,
-        policy_template_id: str,
-        db: Session,
-        max_examples: int = 3
-    ) -> List[Dict[str, Any]]:
-        """
-        Retrieve similar past human-reviewed evaluations for in-context learning.
-        Uses keyword-based similarity to find similar transcripts.
-        
-        Args:
-            transcript_text: Current transcript text
-            policy_template_id: Policy template ID
-            db: Database session
-            max_examples: Maximum number of examples to retrieve
-            
-        Returns:
-            List of human review examples with transcript snippets, AI scores, and human scores
-        """
-        try:
-            # Get completed human reviews for the same policy template
-            human_reviews = db.query(HumanReview).join(
-                Evaluation, HumanReview.evaluation_id == Evaluation.id
-            ).filter(
-                Evaluation.policy_template_id == policy_template_id,
-                HumanReview.review_status == ReviewStatus.completed,
-                HumanReview.human_overall_score.isnot(None)  # Only reviews with human scores
-            ).order_by(
-                HumanReview.updated_at.desc()  # Most recent first
-            ).limit(20).all()  # Get more candidates, then filter by similarity
-            
-            if not human_reviews:
-                logger.debug("No human-reviewed evaluations found for in-context learning")
-                return []
-            
-            # Extract keywords from current transcript for similarity matching
-            import re
-            if RAG_AVAILABLE:
-                try:
-                    rag_service = RAGService()
-                    current_keywords = rag_service._extract_keywords(transcript_text[:3000])
-                except Exception:
-                    # Fallback to simple keyword extraction
-                    words = re.findall(r'\b\w+\b', transcript_text.lower()[:3000])
-                    stop_words = {'the', 'a', 'an', 'and', 'or', 'but', 'in', 'on', 'at', 'to', 'for', 'of', 'with', 'by', 'is', 'was', 'are', 'were', 'be', 'been', 'have', 'has', 'had', 'do', 'does', 'did', 'will', 'would', 'should', 'could', 'may', 'might', 'must', 'can', 'this', 'that', 'these', 'those', 'i', 'you', 'he', 'she', 'it', 'we', 'they'}
-                    current_keywords = set([w for w in words if len(w) > 3 and w not in stop_words])[:30]
-            else:
-                # Simple keyword extraction
-                words = re.findall(r'\b\w+\b', transcript_text.lower()[:3000])
-                stop_words = {'the', 'a', 'an', 'and', 'or', 'but', 'in', 'on', 'at', 'to', 'for', 'of', 'with', 'by', 'is', 'was', 'are', 'were', 'be', 'been', 'have', 'has', 'had', 'do', 'does', 'did', 'will', 'would', 'should', 'could', 'may', 'might', 'must', 'can', 'this', 'that', 'these', 'those', 'i', 'you', 'he', 'she', 'it', 'we', 'they'}
-                current_keywords = set([w for w in words if len(w) > 3 and w not in stop_words])[:30]
-            
-            # Score each human review by similarity
-            scored_reviews = []
-            stop_words = {'the', 'a', 'an', 'and', 'or', 'but', 'in', 'on', 'at', 'to', 'for', 'of', 'with', 'by', 'is', 'was', 'are', 'were', 'be', 'been', 'have', 'has', 'had', 'do', 'does', 'did', 'will', 'would', 'should', 'could', 'may', 'might', 'must', 'can', 'this', 'that', 'these', 'those', 'i', 'you', 'he', 'she', 'it', 'we', 'they'}
-            
-            for review in human_reviews:
-                # Get transcript for this review
-                evaluation = db.query(Evaluation).filter(Evaluation.id == review.evaluation_id).first()
-                if not evaluation:
-                    continue
-                
-                transcript = db.query(Transcript).filter(Transcript.recording_id == evaluation.recording_id).first()
-                if not transcript or not transcript.transcript_text:
-                    continue
-                
-                # Extract keywords from past transcript
-                past_transcript = transcript.transcript_text[:3000]  # Limit length
-                if RAG_AVAILABLE:
-                    try:
-                        rag_service = RAGService()
-                        past_keywords = rag_service._extract_keywords(past_transcript)
-                    except Exception:
-                        words = re.findall(r'\b\w+\b', past_transcript.lower())
-                        past_keywords = set([w for w in words if len(w) > 3 and w not in stop_words])[:30]
-                else:
-                    words = re.findall(r'\b\w+\b', past_transcript.lower())
-                    past_keywords = set([w for w in words if len(w) > 3 and w not in stop_words])[:30]
-                
-                # Calculate Jaccard similarity
-                intersection = len(current_keywords.intersection(past_keywords))
-                union = len(current_keywords.union(past_keywords))
-                similarity = intersection / union if union > 0 else 0.0
-                
-                # Get AI category scores
-                ai_category_scores = {}
-                ai_scores = db.query(CategoryScore).filter(CategoryScore.evaluation_id == evaluation.id).all()
-                for score in ai_scores:
-                    ai_category_scores[score.category_name] = score.score
-                
-                # Get human category scores
-                human_category_scores = review.human_category_scores or {}
-                
-                # Calculate score difference (higher difference = more informative example)
-                score_difference = abs(evaluation.overall_score - (review.human_overall_score or evaluation.overall_score))
-                
-                scored_reviews.append({
-                    "review": review,
-                    "evaluation": evaluation,
-                    "transcript": transcript,
-                    "similarity": similarity,
-                    "score_difference": score_difference,
-                    "ai_category_scores": ai_category_scores,
-                    "human_category_scores": human_category_scores,
-                    "ai_overall_score": evaluation.overall_score,
-                    "human_overall_score": review.human_overall_score
-                })
-            
-            # Sort by similarity (descending) and score difference (descending) - prefer similar but informative examples
-            scored_reviews.sort(key=lambda x: (x["similarity"], x["score_difference"]), reverse=True)
-            
-            # Get top examples (filter by minimum similarity threshold)
-            min_similarity = 0.1  # At least 10% keyword overlap
-            top_examples = [ex for ex in scored_reviews if ex["similarity"] >= min_similarity][:max_examples]
-            
-            # If we don't have enough examples with similarity, just take the most recent ones
-            if len(top_examples) < max_examples:
-                top_examples = scored_reviews[:max_examples]
-            
-            # Format examples
-            examples = []
-            for example in top_examples:
-                transcript_snippet = example["transcript"].transcript_text[:1000]  # First 1000 chars
-                
-                # Format category scores comparison
-                category_comparison = []
-                all_categories = set(list(example["ai_category_scores"].keys()) + list(example["human_category_scores"].keys()))
-                for category in sorted(all_categories):
-                    ai_score = example["ai_category_scores"].get(category, "N/A")
-                    human_score = example["human_category_scores"].get(category, "N/A")
-                    if ai_score != human_score:
-                        category_comparison.append(f"  - {category}: AI={ai_score}, Human={human_score} (CORRECTED)")
-                    else:
-                        category_comparison.append(f"  - {category}: AI={ai_score}, Human={human_score}")
-                
-                examples.append({
-                    "transcript_snippet": transcript_snippet,
-                    "ai_overall_score": example["ai_overall_score"],
-                    "human_overall_score": example["human_overall_score"],
-                    "category_comparison": "\n".join(category_comparison) if category_comparison else "No category scores available",
-                    "ai_feedback": example["review"].ai_recommendation or "No feedback",
-                    "similarity": example["similarity"]
-                })
-            
-            logger.info(f"Retrieved {len(examples)} human review examples for in-context learning")
-            return examples
-            
-        except Exception as e:
-            logger.warning(f"Failed to retrieve human review examples: {e}")
-            return []
-    
     def _build_prompt(self, transcript: str, criteria: list, sentiment_analysis: Optional[List[Dict[str, Any]]] = None, rag_results: Optional[Dict[str, Any]] = None, rule_results: Optional[Dict[str, Any]] = None, human_review_examples: Optional[List[Dict[str, Any]]] = None) -> str:
         """Build LLM prompt with rubric-based evaluation - COST OPTIMIZED"""
 
@@ -327,9 +181,9 @@ class GeminiService:
                     human_examples_text += f"EXAMPLE {i} (Similarity: {example['similarity']:.1%}):\n"
                     human_examples_text += f"TRANSCRIPT SNIPPET:\n{example['transcript_snippet'][:800]}...\n\n"
                     human_examples_text += f"AI EVALUATION:\n  Overall Score: {example['ai_overall_score']}/100\n"
-                    human_examples_text += f"  Category Scores:\n{example['category_comparison']}\n\n"
+                    human_examples_text += f"  Stage Scores:\n{example['stage_comparison']}\n\n"
                     human_examples_text += f"HUMAN EVALUATION (GROUND TRUTH):\n  Overall Score: {example['human_overall_score']}/100\n"
-                    human_examples_text += f"  Category Scores:\n{example['category_comparison']}\n"
+                    human_examples_text += f"  Stage Scores:\n{example['stage_comparison']}\n"
                     if example.get('ai_feedback') and example['ai_feedback'] != "No feedback":
                         human_examples_text += f"  Human Feedback on AI: {example['ai_feedback']}\n"
                     human_examples_text += "\nLESSON: Compare the AI and Human evaluations above. Notice where the AI was correct and where it needed correction. "
@@ -760,10 +614,23 @@ Remember: Delivery matters as much as content. An agent who says the right words
                 raise
         
         try:
-            response = model_instance.generate_content(
-                prompt,
-                generation_config=generation_config
-            )
+            # Add timeout to prevent hanging (60 seconds default)
+            import concurrent.futures
+            import os
+            
+            timeout_seconds = int(os.getenv("GEMINI_API_TIMEOUT_SECONDS", "60"))
+            
+            with concurrent.futures.ThreadPoolExecutor(max_workers=1) as executor:
+                future = executor.submit(
+                    model_instance.generate_content,
+                    prompt,
+                    generation_config=generation_config
+                )
+                try:
+                    response = future.result(timeout=timeout_seconds)
+                except concurrent.futures.TimeoutError:
+                    logger.error(f"Gemini API call timed out after {timeout_seconds} seconds")
+                    raise Exception(f"Gemini API call timed out after {timeout_seconds} seconds")
         except Exception as e:
             logger.error(f"Gemini API call failed: {e}")
             raise Exception(f"Failed to generate content from Gemini API: {e}")

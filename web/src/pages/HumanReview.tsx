@@ -1,21 +1,24 @@
 import { useState, useEffect, useRef } from 'react'
 import { api } from '../lib/api'
-import { FaPlay, FaPause, FaVolumeUp, FaExclamationCircle, FaStar } from 'react-icons/fa'
+import { FaExclamationCircle } from 'react-icons/fa'
 
 interface PendingReview {
-  review_id: string
   evaluation_id: string
-  transcript_text: string
-  diarized_segments: Array<{
-    speaker: string
-    text: string
-    start: number
-    end: number
-  }>
-  audio_url: string | null
+  recording_id: string
+  recording_title: string
   ai_overall_score: number
-  ai_category_scores: Record<string, any>
-  ai_violations: any[]
+  ai_stage_scores: Array<{
+    stage_id?: string
+    stage_name?: string
+    name?: string
+    score: number
+    passed?: boolean
+    feedback?: string
+  }>
+  ai_violations: Array<any>
+  rule_engine_results: Record<string, any>
+  confidence_score: number
+  transcript_preview: string
   created_at: string
 }
 
@@ -24,17 +27,17 @@ export function HumanReview() {
   const [currentReview, setCurrentReview] = useState<PendingReview | null>(null)
   const [loading, setLoading] = useState(true)
   const [submitting, setSubmitting] = useState(false)
-  const [humanScores, setHumanScores] = useState<Record<string, number>>({})
+  const [humanStageScores, setHumanStageScores] = useState<Array<{
+    stage_id?: string
+    stage_name?: string
+    name?: string
+    score: number
+    feedback?: string
+  }>>([])
   const [overallScore, setOverallScore] = useState<number>(0)
   const [showScorePrompt, setShowScorePrompt] = useState(false)
-  const [aiAccuracy, setAiAccuracy] = useState<number>(3)
   const [message, setMessage] = useState<string>('')
-  const [isPlaying, setIsPlaying] = useState(false)
-  const [audioTime, setAudioTime] = useState(0)
-  const [audioDuration, setAudioDuration] = useState(0)
-  const [templateDetails, setTemplateDetails] = useState<any>(null)
   const [isDarkMode, setIsDarkMode] = useState(false)
-  const audioRef = useRef<HTMLAudioElement>(null)
 
   useEffect(() => {
     loadPendingReviews()
@@ -55,42 +58,21 @@ export function HumanReview() {
     return () => observer.disconnect()
   }, [])
 
-  // Calculate overall score automatically based on category scores
+  // Calculate overall score automatically based on stage scores
   useEffect(() => {
-    if (!templateDetails || !templateDetails.criteria) {
-      // Fallback: simple average if no template
-      const scores = Object.values(humanScores).filter(s => s > 0)
-      if (scores.length > 0) {
-        const avg = scores.reduce((a, b) => a + b, 0) / scores.length
-        setOverallScore(Math.round(avg))
-      } else {
-        setOverallScore(0)
-      }
+    if (humanStageScores.length === 0) {
+      setOverallScore(0)
       return
     }
 
-    // Calculate weighted average based on criteria weights
-    let totalWeightedScore = 0
-    let totalWeight = 0
-
-    templateDetails.criteria.forEach((criterion: any) => {
-      const score = humanScores[criterion.category_name] || 0
-      const weight = criterion.weight || 0
-      
-      if (score > 0 && weight > 0) {
-        totalWeightedScore += score * (weight / 100)
-        totalWeight += weight / 100
-      }
-    })
-
-    if (totalWeight > 0) {
-      const calculatedScore = Math.round(totalWeightedScore / totalWeight)
-      setOverallScore(calculatedScore)
+    const scores = humanStageScores.map(s => s.score).filter(s => s > 0)
+    if (scores.length > 0) {
+      const avg = scores.reduce((a, b) => a + b, 0) / scores.length
+      setOverallScore(Math.round(avg))
     } else {
-      // If no scores entered yet, show 0
       setOverallScore(0)
     }
-  }, [humanScores, templateDetails])
+  }, [humanStageScores])
 
   const loadPendingReviews = async () => {
     try {
@@ -99,21 +81,15 @@ export function HumanReview() {
       setPendingReviews(reviews)
       if (reviews.length > 0) {
         setCurrentReview(reviews[0])
-        // Initialize human scores with AI scores as starting point
-        const initialScores: Record<string, number> = {}
-        Object.entries(reviews[0].ai_category_scores).forEach(([category, data]: [string, any]) => {
-          initialScores[category] = data.score || 0
-        })
-        setHumanScores(initialScores)
+        // Initialize human stage scores with AI stage scores as starting point
+        setHumanStageScores(reviews[0].ai_stage_scores.map(stage => ({
+          stage_id: stage.stage_id,
+          stage_name: stage.stage_name || stage.name,
+          name: stage.name,
+          score: stage.score || 0,
+          feedback: stage.feedback || ''
+        })))
         setOverallScore(reviews[0].ai_overall_score)
-
-        // Fetch template details for detailed criteria display
-        try {
-          const evaluationDetails = await api.getEvaluationWithTemplate(reviews[0].evaluation_id)
-          setTemplateDetails(evaluationDetails.template)
-        } catch (error) {
-          console.error('Failed to load template details:', error)
-        }
       }
     } catch (error) {
       console.error('Failed to load pending reviews:', error)
@@ -123,55 +99,8 @@ export function HumanReview() {
     }
   }
 
-  const toggleAudio = () => {
-    if (!audioRef.current) return
-
-    if (isPlaying) {
-      audioRef.current.pause()
-    } else {
-      audioRef.current.play()
-    }
-  }
-
-  const handleAudioTimeUpdate = () => {
-    if (audioRef.current) {
-      setAudioTime(audioRef.current.currentTime)
-    }
-  }
-
-  const handleAudioLoadedMetadata = () => {
-    if (audioRef.current) {
-      setAudioDuration(audioRef.current.duration)
-    }
-  }
-
-  const handleAudioEnded = () => {
-    setIsPlaying(false)
-    setAudioTime(0)
-  }
-
-  const handleSeek = (e: React.ChangeEvent<HTMLInputElement>) => {
-    if (!audioRef.current) return
-    const newTime = parseFloat(e.target.value)
-    audioRef.current.currentTime = newTime
-    setAudioTime(newTime)
-  }
-
-  const formatTime = (time: number) => {
-    const minutes = Math.floor(time / 60)
-    const seconds = Math.floor(time % 60)
-    return `${minutes}:${seconds.toString().padStart(2, '0')}`
-  }
-
-  const formatTranscript = (segments: Array<{speaker: string, text: string, start: number, end: number}>) => {
-    if (!segments || segments.length === 0) {
-      return currentReview?.transcript_text || ''
-    }
-
-    return segments.map((segment, index) => {
-      const speaker = segment.speaker.toLowerCase().includes('agent') ? 'Agent' : 'Caller'
-      return `${speaker}: ${segment.text}`
-    }).join('\n\n')
+  const formatTranscript = () => {
+    return currentReview?.transcript_preview || ''
   }
 
   const submitReview = async () => {
@@ -179,41 +108,32 @@ export function HumanReview() {
 
     try {
       setSubmitting(true)
-      await api.submitHumanReview(currentReview.review_id, {
+      await api.submitHumanReview(currentReview.evaluation_id, {
         human_overall_score: overallScore,
-        human_category_scores: humanScores,
-        ai_score_accuracy: aiAccuracy
+        human_stage_scores: humanStageScores,
+        reviewer_notes: message || undefined
       })
 
       setMessage('Review submitted successfully!')
 
       // Remove current review and load next one
-      const remainingReviews = pendingReviews.filter(r => r.review_id !== currentReview.review_id)
+      const remainingReviews = pendingReviews.filter(r => r.evaluation_id !== currentReview.evaluation_id)
       setPendingReviews(remainingReviews)
 
       if (remainingReviews.length > 0) {
         setCurrentReview(remainingReviews[0])
-        const initialScores: Record<string, number> = {}
-        Object.entries(remainingReviews[0].ai_category_scores).forEach(([category, data]: [string, any]) => {
-          initialScores[category] = data.score || 0
-        })
-        setHumanScores(initialScores)
-        
-        // Fetch template details for the new review
-        try {
-          const evaluationDetails = await api.getEvaluationWithTemplate(remainingReviews[0].evaluation_id)
-          setTemplateDetails(evaluationDetails.template)
-        } catch (error) {
-          console.error('Failed to load template details:', error)
-          setTemplateDetails(null)
-        }
-        
-        // Overall score will be auto-calculated by useEffect
+        setHumanStageScores(remainingReviews[0].ai_stage_scores.map(stage => ({
+          stage_id: stage.stage_id,
+          stage_name: stage.stage_name || stage.name,
+          name: stage.name,
+          score: stage.score || 0,
+          feedback: stage.feedback || ''
+        })))
+        setOverallScore(remainingReviews[0].ai_overall_score)
       } else {
         setCurrentReview(null)
-        setHumanScores({})
+        setHumanStageScores([])
         setOverallScore(0)
-        setTemplateDetails(null)
       }
 
       setTimeout(() => setMessage(''), 3000)
@@ -226,31 +146,23 @@ export function HumanReview() {
   }
 
   const skipReview = async () => {
-    const remainingReviews = pendingReviews.filter(r => r.review_id !== currentReview?.review_id)
+    const remainingReviews = pendingReviews.filter(r => r.evaluation_id !== currentReview?.evaluation_id)
     setPendingReviews(remainingReviews)
 
     if (remainingReviews.length > 0) {
       setCurrentReview(remainingReviews[0])
-      const initialScores: Record<string, number> = {}
-      Object.entries(remainingReviews[0].ai_category_scores).forEach(([category, data]: [string, any]) => {
-        initialScores[category] = data.score || 0
-      })
-      setHumanScores(initialScores)
-      
-      // Fetch template details for the new review
-      try {
-        const evaluationDetails = await api.getEvaluationWithTemplate(remainingReviews[0].evaluation_id)
-        setTemplateDetails(evaluationDetails.template)
-      } catch (error) {
-        console.error('Failed to load template details:', error)
-        setTemplateDetails(null)
-      }
-      
-      // Overall score will be auto-calculated by useEffect
+      setHumanStageScores(remainingReviews[0].ai_stage_scores.map(stage => ({
+        stage_id: stage.stage_id,
+        stage_name: stage.stage_name || stage.name,
+        name: stage.name,
+        score: stage.score || 0,
+        feedback: stage.feedback || ''
+      })))
+      setOverallScore(remainingReviews[0].ai_overall_score)
     } else {
-      setCurrentReview(null)
-      setHumanScores({})
-      setOverallScore(0)
+        setCurrentReview(null)
+        setHumanStageScores([])
+        setOverallScore(0)
       setTemplateDetails(null)
     }
   }
@@ -307,92 +219,16 @@ export function HumanReview() {
             {/* Transcript Section */}
             <div className="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700">
               <div className="p-6 border-b border-gray-200 dark:border-gray-700">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <h2 className="text-xl font-semibold text-gray-900 dark:text-white">Call Transcript & Audio</h2>
-                    <p className="text-sm text-gray-600 dark:text-gray-400 mt-1">
-                      Review ID: {currentReview.review_id} | Created: {new Date(currentReview.created_at).toLocaleString()}
-                    </p>
-                  </div>
-                  {currentReview.audio_url && (
-                    <div className="mt-4 space-y-3">
-                      {/* Audio Progress Slider */}
-                      <div className="flex items-center space-x-3">
-                        <span className="text-xs text-gray-500 dark:text-gray-400 w-12 text-right">
-                          {formatTime(audioTime)}
-                        </span>
-                        <input
-                          type="range"
-                          min="0"
-                          max={audioDuration || 0}
-                          value={audioTime}
-                          onChange={handleSeek}
-                          step="0.1"
-                          className="flex-1 h-2 bg-gray-200 dark:bg-gray-700 rounded-lg appearance-none cursor-pointer slider"
-                          style={{
-                            background: audioDuration > 0 
-                              ? `linear-gradient(to right, #3b82f6 0%, #3b82f6 ${(audioTime / audioDuration) * 100}%, ${isDarkMode ? '#374151' : '#e5e7eb'} ${(audioTime / audioDuration) * 100}%, ${isDarkMode ? '#374151' : '#e5e7eb'} 100%)`
-                              : undefined
-                          }}
-                        />
-                        <span className="text-xs text-gray-500 dark:text-gray-400 w-12">
-                          {formatTime(audioDuration)}
-                        </span>
-                      </div>
-                      
-                      {/* Play/Pause Button */}
-                      <div className="flex items-center justify-center">
-                        <button
-                          onClick={toggleAudio}
-                          className="flex items-center justify-center w-12 h-12 bg-blue-500 hover:bg-blue-600 text-white rounded-full transition-colors shadow-lg hover:shadow-xl"
-                        >
-                          {isPlaying ? <FaPause className="w-5 h-5" /> : <FaPlay className="w-5 h-5 ml-0.5" />}
-                        </button>
-                      </div>
-                    </div>
-                  )}
-                </div>
-                {currentReview.audio_url && (
-                  <audio
-                    ref={audioRef}
-                    src={currentReview.audio_url}
-                    onTimeUpdate={handleAudioTimeUpdate}
-                    onLoadedMetadata={handleAudioLoadedMetadata}
-                    onEnded={handleAudioEnded}
-                    onPlay={() => setIsPlaying(true)}
-                    onPause={() => setIsPlaying(false)}
-                    className="hidden"
-                  />
-                )}
+                <h2 className="text-xl font-semibold text-gray-900 dark:text-white">Call Transcript</h2>
+                <p className="text-sm text-gray-600 dark:text-gray-400 mt-1">
+                  Evaluation ID: {currentReview.evaluation_id.slice(0, 8)}... | Created: {new Date(currentReview.created_at).toLocaleString()}
+                </p>
               </div>
               <div className="p-6 overflow-y-auto" style={{ maxHeight: '600px' }}>
-                <div className="space-y-4">
-                  {currentReview.diarized_segments && currentReview.diarized_segments.length > 0 ? (
-                    currentReview.diarized_segments.map((segment, index) => {
-                      const speaker = segment.speaker.toLowerCase().includes('agent') ? 'Agent' : 'Caller'
-                      const isAgent = speaker === 'Agent'
-                      return (
-                        <div key={index} className={`flex ${isAgent ? 'justify-end' : 'justify-start'}`}>
-                          <div className={`max-w-xs lg:max-w-md px-4 py-2 rounded-lg ${
-                            isAgent
-                              ? 'bg-blue-500 text-white'
-                              : 'bg-gray-200 dark:bg-gray-700 text-gray-900 dark:text-gray-100'
-                          }`}>
-                            <div className="text-xs font-medium mb-1 opacity-75">
-                              {speaker} • {formatTime(segment.start)}
-                            </div>
-                            <div className="text-sm">{segment.text}</div>
-                          </div>
-                        </div>
-                      )
-                    })
-                  ) : (
-                    <div className="prose dark:prose-invert max-w-none">
-                      <pre className="whitespace-pre-wrap text-sm text-gray-700 dark:text-gray-300 font-mono">
-                        {currentReview.transcript_text}
-                      </pre>
-                    </div>
-                  )}
+                <div className="prose dark:prose-invert max-w-none">
+                  <pre className="whitespace-pre-wrap text-sm text-gray-700 dark:text-gray-300 font-mono">
+                    {currentReview.transcript_preview}
+                  </pre>
                 </div>
               </div>
             </div>
@@ -422,12 +258,12 @@ export function HumanReview() {
                     </div>
                   </div>
                   <div className="space-y-2">
-                    <p className="text-sm font-medium text-blue-800 dark:text-blue-200 mb-2">Category Scores:</p>
-                    {Object.entries(currentReview.ai_category_scores).map(([category, data]: [string, any]) => (
-                      <div key={category} className="flex items-center justify-between text-sm">
-                        <span className="text-blue-700 dark:text-blue-300">{category}:</span>
+                    <p className="text-sm font-medium text-blue-800 dark:text-blue-200 mb-2">Stage Scores:</p>
+                    {currentReview.ai_stage_scores.map((stage: any, idx: number) => (
+                      <div key={stage.stage_id || idx} className="flex items-center justify-between text-sm">
+                        <span className="text-blue-700 dark:text-blue-300">{stage.stage_name || stage.name || `Stage ${idx + 1}`}:</span>
                         <span className="font-semibold text-blue-900 dark:text-blue-100">
-                          {data.score || 0}/100
+                          {stage.score || 0}/100
                         </span>
                       </div>
                     ))}
@@ -440,26 +276,32 @@ export function HumanReview() {
                     </div>
                   )}
                 </div>
-                {/* Category Scores with Detailed Criteria */}
+                {/* Stage Scores */}
                 <div>
                   <h3 className="text-lg font-medium text-gray-900 dark:text-white mb-4">
-                    Your Category Scores
+                    Your Stage Scores
                     <span className="text-sm font-normal text-gray-500 dark:text-gray-400 ml-2">
                       (Compare with AI scores above)
                     </span>
                   </h3>
-                  {!templateDetails ? (
-                    <div className="space-y-4">
-                      {Object.entries(currentReview.ai_category_scores).map(([category, data]: [string, any]) => (
-                        <div key={category} className="border border-gray-200 dark:border-gray-600 rounded-lg p-4">
+                  <div className="space-y-4">
+                    {currentReview.ai_stage_scores.map((aiStage: any, idx: number) => {
+                      const humanStage = humanStageScores.find(h => 
+                        (h.stage_id && aiStage.stage_id && h.stage_id === aiStage.stage_id) ||
+                        (h.stage_name && aiStage.stage_name && h.stage_name === aiStage.stage_name) ||
+                        (h.name && aiStage.name && h.name === aiStage.name)
+                      ) || humanStageScores[idx] || { score: 0, feedback: '' }
+                      
+                      return (
+                        <div key={aiStage.stage_id || idx} className="border border-gray-200 dark:border-gray-600 rounded-lg p-4">
                           <h4 className="text-md font-semibold text-gray-900 dark:text-white mb-3">
-                            {category}
+                            {aiStage.stage_name || aiStage.name || `Stage ${idx + 1}`}
                           </h4>
                           <div className="grid grid-cols-2 gap-4">
                             <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-700 rounded-lg p-3">
                               <div className="text-xs font-medium text-blue-700 dark:text-blue-300 mb-1">AI Score</div>
                               <div className="text-2xl font-bold text-blue-900 dark:text-blue-100">
-                                {data.score || 0}<span className="text-sm text-blue-600 dark:text-blue-400">/100</span>
+                                {aiStage.score || 0}<span className="text-sm text-blue-600 dark:text-blue-400">/100</span>
                               </div>
                             </div>
                             <div className="bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-700 rounded-lg p-3">
@@ -469,134 +311,46 @@ export function HumanReview() {
                                   type="number"
                                   min="0"
                                   max="100"
-                                  value={humanScores[category] || 0}
-                                  onChange={(e) => setHumanScores(prev => ({
-                                    ...prev,
-                                    [category]: parseInt(e.target.value) || 0
-                                  }))}
+                                  value={humanStage.score || 0}
+                                  onChange={(e) => {
+                                    const newScores = [...humanStageScores]
+                                    const existingIndex = newScores.findIndex(h => 
+                                      (h.stage_id && aiStage.stage_id && h.stage_id === aiStage.stage_id) ||
+                                      (h.stage_name && aiStage.stage_name && h.stage_name === aiStage.stage_name)
+                                    )
+                                    if (existingIndex >= 0) {
+                                      newScores[existingIndex] = {
+                                        ...newScores[existingIndex],
+                                        score: parseInt(e.target.value) || 0
+                                      }
+                                    } else {
+                                      newScores[idx] = {
+                                        stage_id: aiStage.stage_id,
+                                        stage_name: aiStage.stage_name || aiStage.name,
+                                        name: aiStage.name,
+                                        score: parseInt(e.target.value) || 0,
+                                        feedback: humanStage.feedback || ''
+                                      }
+                                    }
+                                    setHumanStageScores(newScores)
+                                  }}
                                   className="w-16 px-2 py-1 text-2xl font-bold border-0 bg-transparent focus:ring-2 focus:ring-green-500 rounded text-green-900 dark:text-green-100"
                                 />
                                 <span className="text-sm text-green-600 dark:text-green-400">/100</span>
                               </div>
                             </div>
                           </div>
-                          {data.feedback && (
+                          {aiStage.feedback && (
                             <div className="mt-3 p-3 bg-blue-50 dark:bg-blue-900/20 rounded-md">
                               <p className="text-sm text-blue-800 dark:text-blue-200">
-                                <strong>AI Feedback:</strong> {data.feedback}
+                                <strong>AI Feedback:</strong> {aiStage.feedback}
                               </p>
                             </div>
                           )}
-                        </div>
-                      ))}
-                    </div>
-                  ) : (
-                    <div className="space-y-6">
-                      {templateDetails.criteria?.map((criterion: any) => {
-                      const aiScoreData = currentReview.ai_category_scores[criterion.category_name]
-                      const humanScore = humanScores[criterion.category_name] || 0
-
-                      return (
-                        <div key={criterion.id} className="border border-gray-200 dark:border-gray-600 rounded-lg p-4">
-                          <div className="mb-3">
-                            <h4 className="text-md font-semibold text-gray-900 dark:text-white mb-2">
-                              {criterion.category_name}
-                            </h4>
-                            <div className="flex items-center space-x-4 text-xs text-gray-500 dark:text-gray-400">
-                              <span>Weight: {criterion.weight}%</span>
-                              <span>Passing: {criterion.passing_score}/100</span>
-                            </div>
-                          </div>
-
-                          {/* Score Comparison */}
-                          <div className="grid grid-cols-2 gap-4 mb-4">
-                            {/* AI Score */}
-                            <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-700 rounded-lg p-3">
-                              <div className="text-xs font-medium text-blue-700 dark:text-blue-300 mb-1">
-                                AI Score
-                              </div>
-                              <div className="text-2xl font-bold text-blue-900 dark:text-blue-100">
-                                {aiScoreData?.score || 0}
-                                <span className="text-sm text-blue-600 dark:text-blue-400">/100</span>
-                              </div>
-                            </div>
-
-                            {/* Human Score */}
-                            <div className="bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-700 rounded-lg p-3">
-                              <div className="text-xs font-medium text-green-700 dark:text-green-300 mb-1">
-                                Your Score
-                              </div>
-                              <div className="flex items-center space-x-2">
-                                <input
-                                  type="number"
-                                  min="0"
-                                  max="100"
-                                  value={humanScore}
-                                  onChange={(e) => setHumanScores(prev => ({
-                                    ...prev,
-                                    [criterion.category_name]: parseInt(e.target.value) || 0
-                                  }))}
-                                  className="w-16 px-2 py-1 text-2xl font-bold border-0 bg-transparent focus:ring-2 focus:ring-green-500 rounded text-green-900 dark:text-green-100"
-                                />
-                                <span className="text-sm text-green-600 dark:text-green-400">/100</span>
-                              </div>
-                            </div>
-                          </div>
-
-                          {/* Score Difference Indicator */}
-                          {humanScore !== (aiScoreData?.score || 0) && (
-                            <div className={`mb-3 p-2 rounded-md text-xs ${
-                              Math.abs(humanScore - (aiScoreData?.score || 0)) > 10
-                                ? 'bg-yellow-50 dark:bg-yellow-900/20 text-yellow-800 dark:text-yellow-200'
-                                : 'bg-gray-50 dark:bg-gray-700 text-gray-700 dark:text-gray-300'
-                            }`}>
-                              <strong>Difference:</strong> {humanScore > (aiScoreData?.score || 0) ? '+' : ''}
-                              {humanScore - (aiScoreData?.score || 0)} points from AI score
-                            </div>
-                          )}
-
-                          {/* AI Feedback */}
-                          {aiScoreData?.feedback && (
-                            <div className="mb-3 p-3 bg-blue-50 dark:bg-blue-900/20 rounded-md">
-                              <p className="text-sm text-blue-800 dark:text-blue-200">
-                                <strong>AI Feedback:</strong> {aiScoreData.feedback}
-                              </p>
-                            </div>
-                          )}
-
-                          {/* Rubric Levels */}
-                          <div className="space-y-2">
-                            <h5 className="text-sm font-medium text-gray-700 dark:text-gray-300">Scoring Guide:</h5>
-                            {criterion.rubric_levels?.map((level: any) => (
-                              <div key={level.id} className={`p-3 rounded-md border-l-4 ${
-                                humanScore >= level.min_score && humanScore <= level.max_score
-                                  ? 'border-l-green-500 bg-green-50 dark:bg-green-900/20'
-                                  : 'border-l-gray-300 dark:border-l-gray-600'
-                              }`}>
-                                <div className="flex items-center justify-between">
-                                  <h6 className="text-sm font-medium text-gray-900 dark:text-white">
-                                    {level.level_name} ({level.min_score}-{level.max_score})
-                                  </h6>
-                                  {humanScore >= level.min_score && humanScore <= level.max_score && (
-                                    <span className="text-green-600 dark:text-green-400 text-sm font-medium">Current Score</span>
-                                  )}
-                                </div>
-                                <p className="text-sm text-gray-600 dark:text-gray-400 mt-1">
-                                  {level.description}
-                                </p>
-                                {level.examples && (
-                                  <p className="text-xs text-gray-500 dark:text-gray-500 mt-1 italic">
-                                    Examples: {level.examples}
-                                  </p>
-                                )}
-                              </div>
-                            ))}
-                          </div>
                         </div>
                       )
                     })}
-                    </div>
-                  )}
+                  </div>
                 </div>
 
                 {/* Overall Score */}
@@ -604,7 +358,7 @@ export function HumanReview() {
                   <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
                     Overall Score (Auto-calculated)
                     <span className="text-xs font-normal text-gray-500 dark:text-gray-400 ml-2">
-                      Based on weighted category scores
+                      Based on average of stage scores
                     </span>
                   </label>
                   <div className="flex items-center space-x-3">
@@ -624,49 +378,11 @@ export function HumanReview() {
                       Override
                     </button>
                   </div>
-                  {templateDetails && (
-                    <p className="text-xs text-gray-500 dark:text-gray-400 mt-2">
-                      Calculated from: {templateDetails.criteria?.filter((c: any) => (humanScores[c.category_name] || 0) > 0).map((c: any) => `${c.category_name} (${c.weight}%)`).join(', ') || 'No scores entered yet'}
-                    </p>
-                  )}
+                  <p className="text-xs text-gray-500 dark:text-gray-400 mt-2">
+                    Calculated from: {humanStageScores.filter(s => s.score > 0).map(s => `${s.stage_name || s.name || 'Stage'} (${s.score})`).join(', ') || 'No scores entered yet'}
+                  </p>
                 </div>
 
-                {/* AI Accuracy Rating */}
-                <div className="bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800 rounded-lg p-4">
-                  <div className="mb-3">
-                    <label className="block text-sm font-semibold text-gray-900 dark:text-white mb-2">
-                      Rate the AI's Evaluation Accuracy
-                    </label>
-                    <p className="text-xs text-gray-600 dark:text-gray-400 mb-3">
-                      Based on the AI's evaluation shown above (overall score: {currentReview.ai_overall_score}/100, 
-                      category scores, and detected violations), how accurate do you think the AI was?
-                    </p>
-                  </div>
-                  <div className="space-y-3">
-                    <div className="flex items-center space-x-2">
-                      {[1, 2, 3, 4, 5].map(rating => (
-                        <button
-                          key={rating}
-                          onClick={() => setAiAccuracy(rating)}
-                          className={`flex items-center justify-center w-12 h-12 rounded-full border-2 transition-all ${
-                            aiAccuracy === rating
-                              ? 'bg-blue-500 border-blue-500 text-white scale-110'
-                              : 'border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 hover:border-blue-400 hover:scale-105'
-                          }`}
-                        >
-                          {rating === aiAccuracy ? <FaStar className="w-4 h-4" /> : rating}
-                        </button>
-                      ))}
-                    </div>
-                    <div className="text-sm">
-                      {aiAccuracy === 1 && <p className="text-red-600 dark:text-red-400">Poor: AI evaluation was completely inaccurate or missed major issues</p>}
-                      {aiAccuracy === 2 && <p className="text-orange-600 dark:text-orange-400">Below Average: AI missed several important details or scored incorrectly</p>}
-                      {aiAccuracy === 3 && <p className="text-yellow-600 dark:text-yellow-400">Acceptable: AI evaluation was reasonable but had some errors</p>}
-                      {aiAccuracy === 4 && <p className="text-green-600 dark:text-green-400">Good: AI evaluation was mostly accurate with minor issues</p>}
-                      {aiAccuracy === 5 && <p className="text-green-700 dark:text-green-500 font-medium">Excellent: AI evaluation was highly accurate and comprehensive</p>}
-                    </div>
-                  </div>
-                </div>
 
                 {/* Violations */}
                 {currentReview.ai_violations && currentReview.ai_violations.length > 0 && (

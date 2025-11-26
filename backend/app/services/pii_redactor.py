@@ -19,7 +19,8 @@ class PIIRedactor:
     def __init__(self):
         # Compile regex patterns for PII detection
         self.patterns = {
-            "name": re.compile(r'\b([A-Z][a-z]+(?:\s+[A-Z][a-z]+)+)\b', re.IGNORECASE),
+            # Name pattern: Matches Title Case words (e.g. John Doe). Removed IGNORECASE to prevent matching sentences.
+            "name": re.compile(r'\b([A-Z][a-z]+(?:\s+[A-Z][a-z]+)+)\b'),
             "email": re.compile(r'\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Z|a-z]{2,}\b'),
             "phone": re.compile(r'\b(?:\+?1[-.\s]?)?\(?[0-9]{3}\)?[-.\s]?[0-9]{3}[-.\s]?[0-9]{4}\b'),
             "credit_card": re.compile(r'\b(?:\d{4}[-\s]?){3}\d{4}\b'),

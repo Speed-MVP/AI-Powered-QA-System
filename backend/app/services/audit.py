@@ -4,7 +4,7 @@ Phase 4: Scale & Optimization
 """
 
 from app.database import SessionLocal
-from app.models.audit import AuditLog, AuditEventType, EvaluationVersion, ComplianceReport, DataRetentionPolicy
+from app.models.audit import AuditLog, AuditEventType, ComplianceReport, DataRetentionPolicy
 from typing import Dict, Any, Optional, List
 import logging
 import hashlib
@@ -100,73 +100,67 @@ class AuditService:
         db = SessionLocal()
         try:
             from app.models.evaluation import Evaluation
-            from app.models.category_score import CategoryScore
-            # Legacy: PolicyViolation removed - violations are now stored in deterministic_results JSONB
 
             evaluation = db.query(Evaluation).filter(Evaluation.id == evaluation_id).first()
             if not evaluation:
                 raise ValueError(f"Evaluation {evaluation_id} not found")
 
-            # Get next version number
-            existing_versions = db.query(EvaluationVersion).filter(
-                EvaluationVersion.evaluation_id == evaluation_id
-            ).order_by(EvaluationVersion.version_number.desc()).first()
+            # Get version number from audit logs (since EvaluationVersion table is removed)
+            existing_logs = db.query(AuditLog).filter(
+                AuditLog.entity_type == "evaluation",
+                AuditLog.entity_id == evaluation_id
+            ).order_by(AuditLog.timestamp.desc()).all()
+            
+            # Find latest version number from logs
+            existing_version_numbers = [
+                log.new_values.get("version_number") 
+                for log in existing_logs 
+                if log.new_values and log.new_values.get("version_number")
+            ]
+            
+            version_number = (max(existing_version_numbers) + 1) if existing_version_numbers else 1
 
-            version_number = (existing_versions.version_number + 1) if existing_versions else 1
-
-            # Collect category scores
-            category_scores = {}
-            for score in evaluation.category_scores:
-                category_scores[score.category_name] = {
-                    "score": score.score,
-                    "feedback": score.feedback
-                }
-
-            # Collect violations
-            violations = []
-            for violation in evaluation.policy_violations:
-                violations.append({
-                    "category_name": violation.criteria.category_name if violation.criteria else "Unknown",
-                    "type": violation.violation_type,
-                    "description": violation.description,
-                    "severity": violation.severity
-                })
-
-            # Create version snapshot
-            version = EvaluationVersion(
-                evaluation_id=evaluation_id,
-                version_number=version_number,
-                created_by=created_by,
-                overall_score=evaluation.overall_score,
-                confidence_score=evaluation.confidence_score,
-                category_scores=category_scores,
-                violations=violations,
-                llm_analysis=evaluation.llm_analysis,
-                model_used=evaluation.llm_analysis.get("model_used", "unknown") if evaluation.llm_analysis else None,
-                model_version=evaluation.llm_analysis.get("model_version", "unknown") if evaluation.llm_analysis else None,
-                processing_pipeline_version=self.pipeline_version,
-                change_reason=change_reason,
-                previous_version_id=existing_versions.id if existing_versions else None
-            )
+            # Collect stage scores from final_evaluation JSONB (Blueprint structure)
+            final_eval = evaluation.final_evaluation or {}
+            stage_scores = final_eval.get("stage_scores", [])
+            policy_violations = final_eval.get("policy_violations", [])
 
             # Generate audit trail hash for tamper detection
             version_data = {
                 "evaluation_id": evaluation_id,
                 "version_number": version_number,
                 "overall_score": evaluation.overall_score,
-                "category_scores": category_scores,
-                "violations": violations,
-                "timestamp": version.created_at.isoformat()
+                "stage_scores": stage_scores,
+                "policy_violations": policy_violations,
+                "llm_stage_evaluations": evaluation.llm_stage_evaluations or {},
+                "timestamp": datetime.utcnow().isoformat()
             }
-            version.audit_trail_hash = hashlib.sha256(
+            
+            audit_trail_hash = hashlib.sha256(
                 json.dumps(version_data, sort_keys=True).encode()
             ).hexdigest()
 
-            db.add(version)
-            db.commit()
+            # Store version snapshot in AuditLog (EvaluationVersion table removed)
+            self.log_evaluation_event(
+                event_type=AuditEventType.evaluation_updated,
+                evaluation_id=evaluation_id,
+                user_id=created_by,
+                new_values={
+                    "version_number": version_number,
+                    "overall_score": evaluation.overall_score,
+                    "stage_scores": stage_scores,
+                    "policy_violations": policy_violations,
+                    "audit_trail_hash": audit_trail_hash,
+                    "action": "version_created"
+                },
+                description=f"Evaluation version {version_number} created",
+                reason=change_reason,
+                model_version=evaluation.model_version,
+                confidence_score=evaluation.confidence_score
+            )
 
             logger.info(f"Evaluation version {version_number} created for evaluation {evaluation_id}")
-            return version.id
+            return f"version_{version_number}_{evaluation_id}"
 
         except Exception as e:
             db.rollback()
@@ -245,13 +239,11 @@ class AuditService:
     def get_evaluation_history(self, evaluation_id: str) -> List[Dict[str, Any]]:
         """
         Get complete version history for an evaluation with audit trail.
+        Note: EvaluationVersion table removed - using AuditLog for version history.
         """
         db = SessionLocal()
         try:
-            versions = db.query(EvaluationVersion).filter(
-                EvaluationVersion.evaluation_id == evaluation_id
-            ).order_by(EvaluationVersion.version_number).all()
-
+            # Get all audit logs for this evaluation
             audit_logs = db.query(AuditLog).filter(
                 AuditLog.entity_type == "evaluation",
                 AuditLog.entity_id == evaluation_id
@@ -259,21 +251,9 @@ class AuditService:
 
             history = []
 
-            # Add version snapshots
-            for version in versions:
-                history.append({
-                    "type": "version",
-                    "version_number": version.version_number,
-                    "timestamp": version.created_at.isoformat(),
-                    "overall_score": version.overall_score,
-                    "confidence_score": version.confidence_score,
-                    "model_used": version.model_used,
-                    "change_reason": version.change_reason,
-                    "audit_trail_hash": version.audit_trail_hash
-                })
-
-            # Add audit events
+            # Add audit events (including version snapshots stored in new_values)
             for log in audit_logs:
+                new_values = log.new_values or {}
                 history.append({
                     "type": "audit_event",
                     "event_type": log.event_type.value,
@@ -283,7 +263,12 @@ class AuditService:
                     "description": log.description,
                     "reason": log.reason,
                     "model_version": log.model_version,
-                    "confidence_score": float(log.confidence_score) if log.confidence_score else None
+                    "confidence_score": float(log.confidence_score) if log.confidence_score else None,
+                    "version_number": new_values.get("version_number"),
+                    "audit_trail_hash": new_values.get("audit_trail_hash"),
+                    "overall_score": new_values.get("overall_score"),
+                    "stage_scores": new_values.get("stage_scores"),
+                    "policy_violations": new_values.get("policy_violations")
                 })
 
             # Sort by timestamp
@@ -297,50 +282,61 @@ class AuditService:
     def validate_audit_integrity(self, evaluation_id: str) -> Dict[str, Any]:
         """
         Validate audit trail integrity by checking hashes and version consistency.
+        Note: EvaluationVersion table removed - using AuditLog for validation.
         """
         db = SessionLocal()
         try:
-            versions = db.query(EvaluationVersion).filter(
-                EvaluationVersion.evaluation_id == evaluation_id
-            ).order_by(EvaluationVersion.version_number).all()
+            import hashlib
+            import json
+            
+            # Get all version logs from AuditLog
+            version_logs = db.query(AuditLog).filter(
+                AuditLog.entity_type == "evaluation",
+                AuditLog.entity_id == evaluation_id,
+                AuditLog.action == "version_created"
+            ).order_by(AuditLog.timestamp).all()
 
             validation_results = {
                 "evaluation_id": evaluation_id,
-                "total_versions": len(versions),
+                "total_versions": len(version_logs),
                 "integrity_check": True,
                 "issues": []
             }
 
-            for i, version in enumerate(versions):
-                # Recalculate hash
+            for log in version_logs:
+                # Recalculate hash from stored data
+                new_values = log.new_values or {}
                 version_data = {
                     "evaluation_id": evaluation_id,
-                    "version_number": version.version_number,
-                    "overall_score": version.overall_score,
-                    "category_scores": version.category_scores,
-                    "violations": version.violations,
-                    "timestamp": version.created_at.isoformat()
+                    "version_number": new_values.get("version_number"),
+                    "overall_score": new_values.get("overall_score"),
+                    "stage_scores": new_values.get("stage_scores", []),
+                    "policy_violations": new_values.get("policy_violations", []),
+                    "timestamp": log.timestamp.isoformat()
                 }
 
                 calculated_hash = hashlib.sha256(
                     json.dumps(version_data, sort_keys=True).encode()
                 ).hexdigest()
 
-                if calculated_hash != version.audit_trail_hash:
+                stored_hash = new_values.get("audit_trail_hash")
+                if stored_hash and stored_hash != calculated_hash:
                     validation_results["integrity_check"] = False
                     validation_results["issues"].append({
-                        "version": version.version_number,
+                        "version_number": new_values.get("version_number"),
                         "issue": "Hash mismatch - data may have been tampered with",
-                        "stored_hash": version.audit_trail_hash,
+                        "stored_hash": stored_hash,
                         "calculated_hash": calculated_hash
                     })
 
                 # Check version number sequence
-                if version.version_number != i + 1:
+                expected_version = i + 1
+                actual_version = new_values.get("version_number")
+                if actual_version and actual_version != expected_version:
                     validation_results["integrity_check"] = False
                     validation_results["issues"].append({
-                        "version": version.version_number,
-                        "issue": f"Version number gap or sequence error (expected {i + 1})"
+                        "version_number": actual_version,
+                        "issue": f"Version number gap or sequence error (expected {expected_version})"
                     })
 
             return validation_results

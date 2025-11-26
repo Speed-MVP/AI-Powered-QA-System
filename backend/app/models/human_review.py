@@ -1,7 +1,6 @@
 """
 Human Review Model
 Human Review is for score overrides, audit, and compliance only.
-NOT used for training, fine-tuning, or model improvement.
 """
 
 from sqlalchemy import Column, String, DateTime, ForeignKey, Text, Numeric, Integer, Boolean, Enum
@@ -25,16 +24,11 @@ class HumanReview(Base):
     Human-reviewed evaluations for score overrides, audit, and compliance.
     
     Purpose:
-    - Score override: Reviewer can modify stage/category/final scores
+    - Score override: Reviewer can modify stage and final scores
     - Audit trail: Track why scores were changed
     - Compliance: Enterprise requirement for human override capabilities
     - Dispute resolution: Agents can dispute, supervisors can override
     
-    NOT used for:
-    - Training data
-    - Fine-tuning
-    - Model improvement
-    - Supervised learning
     """
     __tablename__ = "human_reviews"
 
@@ -45,7 +39,7 @@ class HumanReview(Base):
     review_status = Column(Enum(ReviewStatus), nullable=True, default=ReviewStatus.pending)
 
     # Human evaluation data
-    human_scores = Column(JSONB, nullable=True)  # category -> score (e.g., {"greeting": 80, "empathy": 60})
+    human_stage_scores = Column(JSONB, nullable=True)  # List of stage scores: [{"stage_id": "...", "score": 80}, ...]
     human_violations = Column(JSONB, nullable=True)  # list of violations with evidence
     ai_scores = Column(JSONB, nullable=True)  # snapshot of AI scores for comparison
     delta = Column(JSONB, nullable=True)  # computed ai->human differences
@@ -54,7 +48,6 @@ class HumanReview(Base):
     # Additional fields used by the code
     ai_score_accuracy = Column(Numeric(3, 1), nullable=True)
     human_overall_score = Column(Integer, nullable=True)
-    human_category_scores = Column(JSONB, nullable=True)
     ai_recommendation = Column(Text, nullable=True)
 
     created_at = Column(DateTime, default=datetime.utcnow, index=True)

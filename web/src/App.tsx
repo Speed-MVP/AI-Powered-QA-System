@@ -13,10 +13,9 @@ import { TeamsListPage } from '@/pages/TeamsListPage'
 import { AgentsListPage } from '@/pages/AgentsListPage'
 import { AuditTrailPage } from '@/pages/AuditTrailPage'
 import { SupervisorDashboard } from '@/pages/SupervisorDashboard'
-import { SOPBuilder } from '@/pages/SOPBuilder'
-import { ComplianceRulesBuilder } from '@/pages/ComplianceRulesBuilder'
-import { RubricBuilder } from '@/pages/RubricBuilder'
-import { TemplatesPage } from '@/pages/TemplatesPage'
+import BlueprintsList from '@/pages/BlueprintsList'
+import BlueprintEditor from '@/pages/BlueprintEditor'
+import SandboxPage from '@/pages/SandboxPage'
 import { AuthProvider, useAuth } from '@/contexts/AuthContext'
 import { useSEO, pageSEO } from '@/hooks/useSEO'
 
@@ -104,46 +103,12 @@ function AppRoutes() {
             </SEOWrapper>
           }
         />
-        <Route
-          path="sop-builder"
-          element={
-            <SEOWrapper seoConfig={pageSEO.dashboard}>
-              <ProtectedRoute>
-                <SOPBuilder />
-              </ProtectedRoute>
-            </SEOWrapper>
-          }
-        />
-        <Route
-          path="compliance-rules"
-          element={
-            <SEOWrapper seoConfig={pageSEO.dashboard}>
-              <ProtectedRoute>
-                <ComplianceRulesBuilder />
-              </ProtectedRoute>
-            </SEOWrapper>
-          }
-        />
-        <Route
-          path="rubric-builder"
-          element={
-            <SEOWrapper seoConfig={pageSEO.dashboard}>
-              <ProtectedRoute>
-                <RubricBuilder />
-              </ProtectedRoute>
-            </SEOWrapper>
-          }
-        />
-        <Route
-          path="policy-templates"
-          element={
-            <SEOWrapper seoConfig={pageSEO.dashboard}>
-              <ProtectedRoute>
-                <TemplatesPage />
-              </ProtectedRoute>
-            </SEOWrapper>
-          }
-        />
+        {/* Removed routes:
+            - /sop-builder -> Use /blueprints instead
+            - /compliance-rules -> Use /blueprints instead
+            - /rubric-builder -> Use /blueprints instead  
+            - /policy-templates -> Use /blueprints instead
+        */}
         <Route
           path="human-review"
           element={
@@ -190,6 +155,36 @@ function AppRoutes() {
             <SEOWrapper seoConfig={pageSEO.dashboard}>
               <ProtectedRoute>
                 <SupervisorDashboard />
+              </ProtectedRoute>
+            </SEOWrapper>
+          }
+        />
+        <Route
+          path="blueprints"
+          element={
+            <SEOWrapper seoConfig={pageSEO.dashboard}>
+              <ProtectedRoute>
+                <BlueprintsList />
+              </ProtectedRoute>
+            </SEOWrapper>
+          }
+        />
+        <Route
+          path="blueprints/:id"
+          element={
+            <SEOWrapper seoConfig={pageSEO.dashboard}>
+              <ProtectedRoute>
+                <BlueprintEditor />
+              </ProtectedRoute>
+            </SEOWrapper>
+          }
+        />
+        <Route
+          path="blueprints/:blueprintId/sandbox"
+          element={
+            <SEOWrapper seoConfig={pageSEO.dashboard}>
+              <ProtectedRoute>
+                <SandboxPage />
               </ProtectedRoute>
             </SEOWrapper>
           }

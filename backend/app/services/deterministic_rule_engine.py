@@ -1,13 +1,11 @@
 """
 Phase 3: Deterministic Rule Engine
-Evaluates FlowVersion steps and ComplianceRules deterministically per Phase 3 spec.
+Evaluates CompiledFlowVersion steps and ComplianceRules deterministically per Phase 3 spec.
 """
 
 from typing import Dict, List, Any, Optional, Tuple
-from app.models.flow_version import FlowVersion
-from app.models.flow_stage import FlowStage
-from app.models.flow_step import FlowStep
-from app.models.compliance_rule import ComplianceRule, RuleType, Severity
+from app.models.compiled_artifacts import CompiledFlowVersion, CompiledFlowStage, CompiledFlowStep, CompiledComplianceRule
+from app.models.compiled_artifacts import RuleType, Severity
 import re
 import logging
 
@@ -35,15 +33,20 @@ class DeterministicRuleEngine:
     
     def detect_step(
         self,
-        step: FlowStep,
+        step: CompiledFlowStep,
         segments: List[Dict[str, Any]]
     ) -> Tuple[bool, Optional[float], List[Dict[str, Any]]]:
         """
         Detect if a step occurred in transcript segments.
         Returns (detected, earliest_timestamp, evidence_snippets)
         """
+        logger.info(f"DEBUG_STEP_DETECT: step={step.name}, phrases={len(step.expected_phrases or [])}, segments={len(segments)}")
+        if segments:
+            logger.info(f"DEBUG_STEP_DETECT: first segment speaker={segments[0].get('speaker', 'unknown')}, text_preview={segments[0].get('text', '')[:100]}")
+
         if not step.expected_phrases or len(step.expected_phrases) == 0:
             # Step has no expected phrases - cannot detect deterministically
+            logger.warning(f"DEBUG_STEP_DETECT: step {step.name} has no expected phrases configured")
             return False, None, []
         
         evidence = []
@@ -79,35 +82,39 @@ class DeterministicRuleEngine:
     
     def evaluate_steps(
         self,
-        flow_version: FlowVersion,
+        flow_version: CompiledFlowVersion,
         segments: List[Dict[str, Any]]
     ) -> Dict[str, Any]:
         """
-        Evaluate all steps in FlowVersion.
+        Evaluate all steps in CompiledFlowVersion.
         Returns stage_results dict per Phase 3 spec.
         """
         stage_results = {}
         
-        for stage in sorted(flow_version.stages, key=lambda s: s.order):
+        for stage in sorted(flow_version.stages, key=lambda s: s.ordering_index):
             step_results = []
             order_violations = []
             timing_violations = []
             
             # Detect each step
             step_timestamps = {}
-            for step in sorted(stage.steps, key=lambda s: s.order):
+            for step in sorted(stage.steps, key=lambda s: s.ordering_index):
                 detected, timestamp, evidence = self.detect_step(step, segments)
+                
+                # Check requirements from metadata (CompiledFlowStep doesn't have required/timing attributes)
+                metadata = step.extra_metadata or {}
+                is_required = metadata.get("behavior_type") in ["required", "critical"]
                 
                 step_result = {
                     "step_id": step.id,
-                    "passed": detected if not step.required else detected,  # Required steps must be detected
+                    "passed": detected,  # Basic detection status
                     "detected": detected,
                     "timestamp": timestamp,
                     "evidence": evidence,
                     "reason_if_failed": None
                 }
                 
-                if step.required and not detected:
+                if is_required and not detected:
                     step_result["reason_if_failed"] = "required_step_missing"
                     step_result["passed"] = False
                 
@@ -118,7 +125,7 @@ class DeterministicRuleEngine:
             detected_steps = [(s["step_id"], s["timestamp"]) for s in step_results if s["detected"] and s["timestamp"] is not None]
             detected_steps.sort(key=lambda x: x[1])  # Sort by timestamp
             
-            # Verify order matches step.order
+            # Verify order matches step.ordering_index
             for i, (step_id, timestamp) in enumerate(detected_steps):
                 step = next((s for s in stage.steps if s.id == step_id), None)
                 if step:
@@ -126,31 +133,12 @@ class DeterministicRuleEngine:
                     for j, (other_step_id, other_timestamp) in enumerate(detected_steps):
                         if j < i:  # Earlier in time
                             other_step = next((s for s in stage.steps if s.id == other_step_id), None)
-                            if other_step and other_step.order > step.order:
+                            if other_step and other_step.ordering_index > step.ordering_index:
                                 order_violations.append(
-                                    f"Step {step.name} (order {step.order}) appeared after step {other_step.name} (order {other_step.order})"
+                                    f"Step {step.name} (order {step.ordering_index}) appeared after step {other_step.name} (order {other_step.ordering_index})"
                                 )
             
-            # Check timing requirements
-            call_start = 0.0
-            for step_result in step_results:
-                step = next((s for s in stage.steps if s.id == step_result["step_id"]), None)
-                if step and step.timing_requirement:
-                    timing_req = step.timing_requirement
-                    if isinstance(timing_req, dict) and timing_req.get("enabled"):
-                        seconds = timing_req.get("seconds", 0)
-                        timestamp = step_result.get("timestamp")
-                        
-                        if timestamp is not None:
-                            if timestamp - call_start > seconds:
-                                timing_violations.append(
-                                    f"{step.name} must occur within {seconds}s"
-                                )
-                        elif step.required:
-                            # Required step with timing requirement but not detected
-                            timing_violations.append(
-                                f"{step.name} must occur within {seconds}s"
-                            )
+            # Timing requirements are handled by ComplianceRules, not Step attributes
             
             stage_results[stage.id] = {
                 "step_results": step_results,
@@ -162,7 +150,7 @@ class DeterministicRuleEngine:
     
     def check_stage_order(
         self,
-        flow_version: FlowVersion,
+        flow_version: CompiledFlowVersion,
         stage_results: Dict[str, Any]
     ) -> List[str]:
         """Check that stages appear in correct order"""
@@ -177,7 +165,7 @@ class DeterministicRuleEngine:
                 stage_timestamps[stage_id] = min(timestamps)
         
         # Check order
-        stages_by_order = sorted(flow_version.stages, key=lambda s: s.order)
+        stages_by_order = sorted(flow_version.stages, key=lambda s: s.ordering_index)
         for i, stage in enumerate(stages_by_order):
             if stage.id not in stage_timestamps:
                 continue
@@ -190,15 +178,16 @@ class DeterministicRuleEngine:
                     later_time = stage_timestamps[later_stage.id]
                     if later_time < stage_time:
                         violations.append(
-                            f"Stage {later_stage.name} (order {later_stage.order}) appeared before stage {stage.name} (order {stage.order})"
+                            f"Stage {later_stage.name} (order {later_stage.ordering_index}) appeared before stage {stage.name} (order {stage.ordering_index})"
                         )
         
         return violations
     
     def evaluate_compliance_rules(
         self,
-        compliance_rules: List[ComplianceRule],
-        flow_version: FlowVersion,
+        compliance_rules: List[CompiledComplianceRule],
+        transcript_text: str,
+        flow_version: CompiledFlowVersion,
         segments: List[Dict[str, Any]],
         stage_results: Dict[str, Any]
     ) -> List[Dict[str, Any]]:
@@ -212,12 +201,13 @@ class DeterministicRuleEngine:
         step_timestamps = {}
         for stage_id, results in stage_results.items():
             for step_result in results.get("step_results", []):
-                if step_result.get("timestamp"):
+                if step_result.get("timestamp") is not None:
                     step_timestamps[step_result["step_id"]] = step_result["timestamp"]
         
-        # Get full transcript text
-        transcript_text = " ".join([s.get("text", "") for s in segments])
-        normalized_transcript = self.normalize_text(transcript_text)
+        logger.info(f"DEBUG_RULE_ENGINE: Populated step_timestamps for {len(step_timestamps)} steps: {list(step_timestamps.keys())}")
+        
+        # Use the provided normalized transcript text
+        normalized_transcript = transcript_text
         
         for rule in compliance_rules:
             if not rule.active:
@@ -246,7 +236,23 @@ class DeterministicRuleEngine:
             scope_text = " ".join([s.get("text", "") for s in scope_segments])
             normalized_scope = self.normalize_text(scope_text)
             
-            if rule.rule_type == RuleType.required_phrase:
+            if rule.rule_type == RuleType.required_step:
+                # Check if target step was detected
+                target_step_id = getattr(rule, 'target', None)
+                if target_step_id and target_step_id in step_timestamps:
+                    evaluation["passed"] = True
+                    # Add evidence
+                    evaluation["evidence"].append({
+                        "type": "step_detected",
+                        "step_id": target_step_id,
+                        "timestamp": step_timestamps[target_step_id]
+                    })
+                else:
+                    logger.info(f"DEBUG_RULE_ENGINE: Required step rule failed. Target: {target_step_id}, Available: {list(step_timestamps.keys())}")
+                    evaluation["passed"] = False
+                    evaluation["violation_reason"] = "Required step not detected"
+
+            elif rule.rule_type == RuleType.required_phrase:
                 phrases = params.get("phrases", [])
                 match_type = params.get("match_type", "contains")
                 found = False
@@ -292,6 +298,7 @@ class DeterministicRuleEngine:
                     
                     if match_type == "contains":
                         if normalized_phrase in normalized_scope:
+                            logger.warning(f"FORBIDDEN_PHRASE_MATCH: rule_id={rule.id}, phrase='{phrase}', normalized_phrase='{normalized_phrase}', scope_preview='{normalized_scope[:200]}...'")
                             evaluation["passed"] = False
                             evaluation["violation_reason"] = f"Forbidden phrase found: {phrase}"
                             # Find evidence
@@ -369,7 +376,7 @@ class DeterministicRuleEngine:
                         evaluation["passed"] = False
                         evaluation["violation_reason"] = f"Target occurred {target_timestamp - reference_time:.1f}s after reference (limit: {within_seconds}s)"
             
-            elif rule.rule_type == RuleType.verification_rule:
+            elif rule.rule_type.value == "verification_rule":
                 verification_step_id = params.get("verification_step_id")
                 required_count = params.get("required_question_count", 0)
                 must_complete_before = params.get("must_complete_before_step_id")
@@ -387,7 +394,7 @@ class DeterministicRuleEngine:
                     evaluation["violation_reason"] = "Verification occurred after resolution step"
                 # TODO: Count actual KBA questions
             
-            elif rule.rule_type == RuleType.conditional_rule:
+            elif rule.rule_type.value == "conditional_rule":
                 condition = params.get("condition", {})
                 required_actions = params.get("required_actions", [])
                 
@@ -412,6 +419,12 @@ class DeterministicRuleEngine:
                     if len(actions_met) == 0:
                         evaluation["passed"] = False
                         evaluation["violation_reason"] = "Required actions not met"
+            
+            else:
+                # Unknown rule type - log warning and mark as not applicable
+                logger.warning(f"Unknown rule type: {rule.rule_type.value if hasattr(rule.rule_type, 'value') else rule.rule_type}")
+                evaluation["passed"] = True  # Default to passed for unknown types
+                evaluation["violation_reason"] = None
             
             rule_evaluations.append(evaluation)
         
@@ -456,10 +469,11 @@ class DeterministicRuleEngine:
     
     def evaluate(
         self,
-        flow_version: FlowVersion,
-        compliance_rules: List[ComplianceRule],
+        flow_version: CompiledFlowVersion,
+        compliance_rules: List[CompiledComplianceRule],
         transcript_text: str,
-        segments: List[Dict[str, Any]]
+        segments: List[Dict[str, Any]],
+        normalized_transcript: str = None
     ) -> Dict[str, Any]:
         """
         Main evaluation method per Phase 3 spec.
@@ -475,6 +489,7 @@ class DeterministicRuleEngine:
         # Evaluate compliance rules
         rule_evaluations = self.evaluate_compliance_rules(
             compliance_rules,
+            normalized_transcript or transcript_text,
             flow_version,
             segments,
             stage_results

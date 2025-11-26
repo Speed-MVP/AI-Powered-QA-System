@@ -78,3 +78,4 @@ def downgrade() -> None:
     # Downgrade not implemented - fine-tuning system removed permanently
     pass
 
+

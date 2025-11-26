@@ -1,6 +1,6 @@
 from app.schemas.user import UserCreate, UserResponse, LoginRequest, TokenResponse
 from app.schemas.recording import RecordingCreate, RecordingResponse, RecordingListResponse
-from app.schemas.evaluation import EvaluationResponse, CategoryScoreResponse
+from app.schemas.evaluation import EvaluationResponse
 from app.schemas.team import TeamCreate, TeamUpdate, TeamResponse
 from app.schemas.agent import AgentCreate, AgentUpdate, AgentResponse, AgentTeamMembershipResponse
 from app.schemas.import_job import ImportJobResponse
@@ -15,7 +15,6 @@ __all__ = [
     "RecordingResponse",
     "RecordingListResponse",
     "EvaluationResponse",
-    "CategoryScoreResponse",
     "TeamCreate",
     "TeamUpdate",
     "TeamResponse",

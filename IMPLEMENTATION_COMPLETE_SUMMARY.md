@@ -204,7 +204,7 @@ uvicorn app.main:app --reload
 
 ## Important Notes
 
-1. **Backward Compatibility**: The system falls back to legacy pipeline if no FlowVersion exists
+1. **Blueprint-Only System**: The system exclusively uses the Blueprint evaluation pipeline. Legacy systems have been completely removed.
 2. **PII Redaction**: All LLM calls use PII redaction automatically
 3. **Zero-Data-Retention**: Configured via temperature=0; may need API-level config for full compliance
 4. **Stage Boundary Detection**: Currently simplified - uses all segments. Can be enhanced with step timestamp detection
@@ -217,12 +217,11 @@ Audio Upload
     ↓
 Transcription (Deepgram)
     ↓
-[If FlowVersion exists] → Phase 7 Pipeline:
-    ├─ Deterministic Rule Engine (Phase 3)
-    ├─ LLM Stage Evaluator per stage (Phase 4)
-    ├─ Rubric Scorer (Phase 6)
+Blueprint Evaluation Pipeline:
+    ├─ Detection Engine (Phase 5)
+    ├─ LLM Stage Evaluator per stage (Phase 6)
+    ├─ Scoring Engine (Phase 7)
     └─ Final Evaluation
-[Else] → Legacy Pipeline (backward compatibility)
 ```
 
 ## All Backend Components Ready ✅
@@ -232,4 +231,5 @@ The backend is fully implemented and ready for:
 - API testing
 - Frontend integration
 - Production deployment
+
 

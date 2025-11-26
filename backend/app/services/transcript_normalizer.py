@@ -50,7 +50,7 @@ class TranscriptNormalizer:
     def normalize_transcript(
         self,
         raw_transcript: str,
-        diarized_segments: List[Dict[str, Any]],
+        diarized_segments: Optional[List[Dict[str, Any]]] = None,
         rule_results: Optional[Dict[str, Any]] = None
     ) -> Tuple[str, List[Dict[str, Any]], Dict[str, Any]]:
         """
@@ -64,6 +64,15 @@ class TranscriptNormalizer:
         Returns:
             Tuple of (normalized_text, processed_segments, metadata)
         """
+        if diarized_segments is None:
+            diarized_segments = [{
+                "speaker": "agent",
+                "text": raw_transcript,
+                "start": 0.0,
+                "end": float(len(raw_transcript.split())) or 0.0,
+                "confidence": 1.0
+            }]
+
         logger.info(f"Starting transcript normalization - segments: {len(diarized_segments)}")
 
         # Step 1: Clean individual segments

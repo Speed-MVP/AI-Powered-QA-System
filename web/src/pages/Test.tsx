@@ -1,6 +1,6 @@
 import { useCallback, useState, useEffect, useRef } from 'react'
 import { useDropzone } from 'react-dropzone'
-import { FaCloudUploadAlt, FaCheckCircle, FaSpinner, FaFileAudio, FaPlay, FaChartBar, FaCog, FaExclamationCircle, FaTrash, FaRedo, FaVolumeUp, FaPause, FaHistory, FaTimes, FaUser, FaInfoCircle } from 'react-icons/fa'
+import { FaCloudUploadAlt, FaCheckCircle, FaSpinner, FaFileAudio, FaPlay, FaChartBar, FaCog, FaExclamationCircle, FaTrash, FaVolumeUp, FaPause, FaHistory, FaTimes, FaUser, FaInfoCircle } from 'react-icons/fa'
 import { Link } from 'react-router-dom'
 import { api } from '@/lib/api'
 import { ConfirmModal } from '@/components/modals'
@@ -10,7 +10,7 @@ interface UploadedFile {
   name: string
   size: number
   file: File
-  status: 'uploading' | 'uploaded' | 'processing' | 'completed' | 'error'
+  status: 'uploading' | 'processing' | 'completed' | 'error'
   progress: number
   error?: string
   recordingId?: string
@@ -25,30 +25,28 @@ interface ProcessingResult {
     end: number
   }> | null
   overallScore: number
-  resolutionDetected: boolean
-  resolutionConfidence: number
-  customerTone?: {
-    primary_emotion: string
-    confidence: number
-    description: string
-    emotional_journey?: Array<{
-      segment: string
-      emotion: string
-      intensity: string
-      evidence: string
-    }>
-  }
-  categoryScores: {
-    category: string
+  overallPassed: boolean
+  stageScores?: Array<{
+    stage_id: string
+    stage_name: string
     score: number
-    feedback: string
-  }[]
-  violations: {
+    passed: boolean
+    feedback?: string
+    behaviors?: Array<{
+      behavior_id: string
+      behavior_name: string
+      satisfaction_level: string
+      confidence: number
+      evidence?: any[]
+    }>
+  }>
+  policyViolations?: Array<{
     type: string
     severity: 'critical' | 'major' | 'minor'
     description: string
+    rule_id?: string
     timestamp?: number
-  }[]
+  }>
 }
 
 interface RecordingHistory {
@@ -79,6 +77,7 @@ export function Test() {
   const [notification, setNotification] = useState<{ type: 'success' | 'error' | 'info'; message: string } | null>(null)
   const notificationTimeout = useRef<ReturnType<typeof setTimeout> | null>(null)
   const [confirmModal, setConfirmModal] = useState<{ isOpen: boolean; title: string; message: string; onConfirm: () => void } | null>(null)
+  const [selectedBlueprint, setSelectedBlueprint] = useState<{ id: string; name: string } | null>(null)
 
   const showNotification = (type: 'success' | 'error' | 'info', message: string, duration = 5000) => {
     if (notificationTimeout.current) {
@@ -140,9 +139,25 @@ export function Test() {
     }
   }
 
+  // Load active blueprint
+  const loadActiveBlueprint = async () => {
+    try {
+      const blueprints = await api.listBlueprints({ status: 'published', limit: 1 })
+      if (blueprints && blueprints.length > 0) {
+        setSelectedBlueprint({
+          id: blueprints[0].id,
+          name: blueprints[0].name
+        })
+      }
+    } catch (error: any) {
+      console.error('Failed to load active blueprint:', error)
+    }
+  }
+
   // Load history on mount
   useEffect(() => {
     loadHistory()
+    loadActiveBlueprint()
   }, [])
 
   // Load audio URL for playback and auto-play
@@ -430,81 +445,6 @@ export function Test() {
     })
   }
 
-  // Reevaluate recording
-  const handleReevaluate = async (recordingId: string) => {
-    setConfirmModal({
-      isOpen: true,
-      title: 'Re-evaluate Recording',
-      message: 'This will re-evaluate the recording. Continue?',
-      onConfirm: async () => {
-        setConfirmModal(null)
-        try {
-          await api.reevaluateRecording(recordingId)
-          showNotification('info', 'Re-evaluation started. Results will update once processing completes.')
-          // Begin polling immediately (don't rely on stale history state)
-          setIsProcessing(true)
-          setResult(null)
-          setSelectedRecordingId(recordingId)
-          await loadHistory()
-          // Poll for results
-          const poll = async () => {
-            try {
-              const updated = await api.getRecording(recordingId)
-              if (updated.status === 'completed') {
-                // Load results
-                const evaluation = await api.getEvaluation(recordingId)
-                const transcriptData = await api.getTranscript(recordingId)
-                
-                const processingResult: ProcessingResult = {
-                  transcript: transcriptData.transcript_text,
-                  diarizedSegments: transcriptData.diarized_segments || null,
-                  overallScore: evaluation.overall_score,
-                  resolutionDetected: evaluation.resolution_detected,
-                  resolutionConfidence: evaluation.resolution_confidence,
-                  categoryScores: evaluation.category_scores.map(cs => ({
-                    category: cs.category_name,
-                    score: cs.score,
-                    feedback: cs.feedback || ''
-                  })),
-                  violations: [] // Phase 7: Violations are now handled through compliance rules in deterministic_results
-                }
-                
-                setResult(processingResult)
-                setIsProcessing(false)
-                await loadHistory()
-              } else if (updated.status === 'failed') {
-                showNotification('error', 'Re-evaluation failed: ' + (updated.error_message || 'Unknown error'))
-                setIsProcessing(false)
-                await loadHistory()
-              } else {
-                // Continue polling
-                setTimeout(poll, 5000)
-              }
-            } catch (error: any) {
-              console.error('Polling error:', error)
-              setIsProcessing(false)
-            }
-          }
-          poll()
-        } catch (error: any) {
-          console.error('Failed to reevaluate:', error)
-          
-          // Check for connection errors
-          let errorMessage = error.message || 'Unknown error'
-          
-          if (error.message?.includes('Failed to fetch') || error.message?.includes('network')) {
-            errorMessage = 'Cannot connect to backend server. Please make sure the backend is running on http://localhost:8000'
-          } else if (error.message?.includes('CORS')) {
-            errorMessage = 'CORS error: Backend server may not be running or CORS is not configured correctly.'
-          } else if (error.message?.includes('500')) {
-            errorMessage = 'Server error: ' + (error.message || 'Internal server error occurred')
-          }
-          
-          showNotification('error', `Failed to start re-evaluation: ${errorMessage}`)
-        }
-      },
-    })
-  }
 
   // Removed: loadRecordingResults (navigation now handled via Link to /results/:recordingId)
 
@@ -534,18 +474,21 @@ export function Test() {
         f.id === fileId ? { ...f, progress: 100 } : f
         ))
 
-      // Update file status
-      setFiles(prev => prev.map(f => 
-        f.id === fileId 
-          ? { 
-              ...f, 
-              status: 'uploaded' as const, 
+      // Update file status and start automatic processing
+      setFiles(prev => prev.map(f =>
+        f.id === fileId
+          ? {
+              ...f,
+              status: 'processing' as const,
               progress: 100,
               recordingId: recording.id
-            } 
+            }
           : f
       ))
-      
+
+      // Start automatic polling for results (no manual process button needed)
+      await pollRecordingStatus(recording.id, fileId)
+
       // Reload history to show new recording
       await loadHistory()
     } catch (error: any) {
@@ -587,25 +530,33 @@ export function Test() {
               console.warn('Could not fetch transcript:', transcriptError)
             }
             
+            // Transform evaluation data to ProcessingResult format (Blueprint-based)
+            // API returns stage_scores and policy_violations directly (from final_evaluation JSONB)
+            const stageScoresRaw = evaluation.stage_scores || evaluation.final_evaluation?.stage_scores || []
+            const policyViolations = evaluation.policy_violations || evaluation.final_evaluation?.policy_violations || []
+            
+            // Ensure stageScores is an array (could be object or array)
+            const stageScoresArray = Array.isArray(stageScoresRaw) 
+              ? stageScoresRaw 
+              : (typeof stageScoresRaw === 'object' && stageScoresRaw !== null)
+              ? Object.keys(stageScoresRaw).map(key => ({
+                  stage_id: key,
+                  stage_name: stageScoresRaw[key].name || stageScoresRaw[key].stage_name || `Stage ${key}`,
+                  score: stageScoresRaw[key].score || 0,
+                  passed: stageScoresRaw[key].passed,
+                  feedback: stageScoresRaw[key].feedback,
+                  behaviors: stageScoresRaw[key].behaviors
+                }))
+              : []
+            
             // Transform evaluation data to ProcessingResult format
             const processingResult: ProcessingResult = {
               transcript,
               diarizedSegments,
               overallScore: evaluation.overall_score,
-              resolutionDetected: evaluation.resolution_detected,
-              resolutionConfidence: evaluation.resolution_confidence,
-              customerTone: evaluation.customer_tone ? {
-                primary_emotion: evaluation.customer_tone.primary_emotion,
-                confidence: evaluation.customer_tone.confidence,
-                description: evaluation.customer_tone.description,
-                emotional_journey: evaluation.customer_tone.emotional_journey
-              } : undefined,
-              categoryScores: evaluation.category_scores.map(cs => ({
-                category: cs.category_name,
-                score: cs.score,
-                feedback: cs.feedback || ''
-              })),
-              violations: [] // Phase 7: Violations are now handled through compliance rules in deterministic_results
+              overallPassed: evaluation.overall_passed || false,
+              stageScores: stageScoresArray,
+              policyViolations: policyViolations
             }
             
             setResult(processingResult)
@@ -678,28 +629,6 @@ export function Test() {
     }
   }
 
-  const handleProcess = async (file: UploadedFile) => {
-    if (!file.recordingId) {
-      setFiles(prev => prev.map(f => 
-        f.id === file.id 
-          ? { ...f, status: 'error' as const, error: 'No recording ID found' }
-          : f
-      ))
-      return
-    }
-
-    setSelectedFile(file)
-    setResult(null)
-    setIsProcessing(true)
-    setFiles(prev => prev.map(f => 
-      f.id === file.id 
-        ? { ...f, status: 'processing' as const }
-        : f
-    ))
-    
-    // Start polling for results
-    await pollRecordingStatus(file.recordingId, file.id)
-  }
 
   return (
     <div className="min-h-screen bg-slate-50 dark:bg-slate-900">
@@ -721,7 +650,7 @@ export function Test() {
                   Test and validate your QA evaluation system
                 </p>
                 <p className="text-xs text-slate-500 dark:text-slate-500 mt-1">
-                  <span className="font-semibold">Setup Flow:</span> SOP Builder → Compliance Rules → Rubric Builder → Activate
+                  <span className="font-semibold">Setup Flow:</span> Blueprint Builder → Publish → Sandbox Testing
                 </p>
               </div>
             </div>
@@ -743,53 +672,49 @@ export function Test() {
               <div className="flex items-center space-x-2 border-l border-slate-300 dark:border-slate-600 pl-4 ml-2">
                 <span className="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wide mr-1">Setup:</span>
                 
-                {/* Step 1: SOP Builder */}
+                {/* Step 1: Blueprint Builder */}
                 <Link
-                  to="/sop-builder"
+                  to="/blueprints"
                   className="inline-flex items-center px-3 py-2 border border-transparent text-sm font-medium rounded-md text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 relative group"
-                  title="Step 1: Define your call flow stages and steps"
+                  title="Step 1: Define your QA blueprint with stages and behaviors"
                 >
                   <span className="absolute -left-2 -top-2 w-5 h-5 bg-blue-800 rounded-full flex items-center justify-center text-xs font-bold text-white border-2 border-white dark:border-slate-800">
                     1
                   </span>
                   <FaCog className="w-4 h-4 mr-2" />
-                  <span className="hidden sm:inline">SOP Builder</span>
-                  <span className="sm:hidden">SOP</span>
+                  <span className="hidden sm:inline">Blueprint Builder</span>
+                  <span className="sm:hidden">Blueprint</span>
                 </Link>
                 
                 {/* Arrow */}
                 <span className="text-slate-400 dark:text-slate-500 text-xs">→</span>
                 
-                {/* Step 2: Compliance Rules */}
-                <Link
-                  to="/compliance-rules"
-                  className="inline-flex items-center px-3 py-2 border border-transparent text-sm font-medium rounded-md text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 relative group"
-                  title="Step 2: Define mandatory compliance rules"
+                {/* Step 2: Publish Blueprint */}
+                <span className="inline-flex items-center px-3 py-2 border border-transparent text-sm font-medium rounded-md text-slate-400 bg-slate-200 dark:bg-slate-700 dark:text-slate-500 cursor-not-allowed relative group"
+                  title="Step 2: Publish your blueprint from the Blueprint Builder"
                 >
-                  <span className="absolute -left-2 -top-2 w-5 h-5 bg-blue-800 rounded-full flex items-center justify-center text-xs font-bold text-white border-2 border-white dark:border-slate-800">
+                  <span className="absolute -left-2 -top-2 w-5 h-5 bg-slate-400 rounded-full flex items-center justify-center text-xs font-bold text-white border-2 border-white dark:border-slate-800">
                     2
                   </span>
                   <FaCog className="w-4 h-4 mr-2" />
-                  <span className="hidden sm:inline">Compliance Rules</span>
-                  <span className="sm:hidden">Rules</span>
-                </Link>
+                  <span className="hidden sm:inline">Publish Blueprint</span>
+                  <span className="sm:hidden">Publish</span>
+                </span>
                 
                 {/* Arrow */}
                 <span className="text-slate-400 dark:text-slate-500 text-xs">→</span>
                 
-                {/* Step 3: Rubric Builder */}
-                <Link
-                  to="/rubric-builder"
-                  className="inline-flex items-center px-3 py-2 border border-transparent text-sm font-medium rounded-md text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 relative group"
-                  title="Step 3: Define scoring categories and mappings"
+                {/* Step 3: Sandbox Testing */}
+                <span className="inline-flex items-center px-3 py-2 border border-transparent text-sm font-medium rounded-md text-slate-400 bg-slate-200 dark:bg-slate-700 dark:text-slate-500 cursor-not-allowed relative group"
+                  title="Step 3: Test your published blueprint in the sandbox"
                 >
-                  <span className="absolute -left-2 -top-2 w-5 h-5 bg-blue-800 rounded-full flex items-center justify-center text-xs font-bold text-white border-2 border-white dark:border-slate-800">
+                  <span className="absolute -left-2 -top-2 w-5 h-5 bg-slate-400 rounded-full flex items-center justify-center text-xs font-bold text-white border-2 border-white dark:border-slate-800">
                     3
                   </span>
                   <FaCog className="w-4 h-4 mr-2" />
-                  <span className="hidden sm:inline">Rubric Builder</span>
-                  <span className="sm:hidden">Rubric</span>
-                </Link>
+                  <span className="hidden sm:inline">Sandbox Testing</span>
+                  <span className="sm:hidden">Sandbox</span>
+                </span>
               </div>
             </div>
           </div>
@@ -888,10 +813,10 @@ export function Test() {
               </div>
               <div className="ml-4">
                 <dt className="text-sm font-medium text-slate-600 dark:text-slate-400 truncate">
-                  Active Template
+                  Active Blueprint
                 </dt>
                 <dd className="text-lg font-semibold text-slate-900 dark:text-white">
-                  {/* Legacy PolicyTemplate removed - use FlowVersion + RubricTemplate instead */}
+                  {selectedBlueprint ? selectedBlueprint.name : 'No Blueprint Selected'}
                 </dd>
               </div>
             </div>
@@ -976,13 +901,6 @@ export function Test() {
                               <FaChartBar className="w-4 h-4 mr-1" />
                               Results
                             </Link>
-                            <button
-                              onClick={() => handleReevaluate(recording.id)}
-                              className="inline-flex items-center px-3 py-1.5 border border-slate-300 dark:border-slate-600 rounded-md text-sm font-medium text-slate-700 dark:text-slate-200 bg-white dark:bg-slate-700 hover:bg-slate-50 dark:hover:bg-slate-600"
-                            >
-                              <FaRedo className="w-4 h-4 mr-1" />
-                              Retest
-                            </button>
                           </>
                         )}
                         <button
@@ -1187,15 +1105,6 @@ export function Test() {
                                 </span>
                               </div>
                             )}
-                            {file.status === 'uploaded' && (
-                              <button
-                                onClick={() => handleProcess(file)}
-                                className="px-3 py-1.5 bg-blue-600 text-white text-sm rounded-md hover:bg-blue-700 flex items-center space-x-1"
-                              >
-                                <FaPlay className="w-3 h-3" />
-                                <span>Process</span>
-                              </button>
-                            )}
                             {file.status === 'processing' && (
                               <div className="flex items-center space-x-2 text-orange-600 dark:text-orange-400">
                                 <FaSpinner className="w-4 h-4 animate-spin" />
@@ -1295,19 +1204,19 @@ export function Test() {
                       <div className="grid grid-cols-2 gap-4 max-w-md mx-auto">
                         <div className="text-center">
                           <div className={`inline-flex items-center px-3 py-1 rounded-full text-sm font-medium ${
-                            result.resolutionDetected
+                            result.overallPassed
                               ? 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300'
                               : 'bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-300'
                           }`}>
-                            {result.resolutionDetected ? 'Resolved' : 'Unresolved'}
+                            {result.overallPassed ? 'Passed' : 'Failed'}
                           </div>
-                          <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">Issue Status</p>
+                          <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">Overall Result</p>
                         </div>
                         <div className="text-center">
-                          <div className="inline-flex items-center px-3 py-1 rounded-full text-sm font-medium bg-slate-100 text-slate-800 dark:bg-slate-700 dark:text-slate-200">
-                            {(result.resolutionConfidence * 100).toFixed(0)}% Confidence
+                          <div className="inline-flex items-center px-3 py-1 rounded-full text-sm font-medium bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-300">
+                            {result.stageScores?.length || 0} Stages
                           </div>
-                          <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">Resolution Confidence</p>
+                          <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">Stages Evaluated</p>
                         </div>
                       </div>
                     </div>
@@ -1389,59 +1298,82 @@ export function Test() {
                   </div>
                 )}
 
-                {/* Category Performance */}
+                {/* Stage Performance (Blueprint-based) */}
                 <div className="bg-white dark:bg-slate-800 rounded-lg border border-slate-200 dark:border-slate-700">
                   <div className="px-6 py-4 border-b border-slate-200 dark:border-slate-700">
                     <h3 className="text-lg font-semibold text-slate-900 dark:text-white">
-                      Category Performance
+                      Stage Performance
                     </h3>
                   </div>
                   <div className="p-6">
                     <div className="space-y-4">
-                      {result.categoryScores.map((category, idx) => (
-                        <div key={idx} className="p-4 bg-slate-50 dark:bg-slate-700/50 rounded-lg border border-slate-200 dark:border-slate-600">
-                          <div className="flex items-center justify-between mb-3">
-                            <span className="font-medium text-slate-900 dark:text-white">
-                              {category.category}
-                            </span>
-                            <div className="flex items-center space-x-2">
-                              <span className="text-lg font-bold text-slate-900 dark:text-white">
-                                {category.score}
+                      {(result.stageScores && result.stageScores.length > 0) ? (
+                        result.stageScores.map((stage, idx) => (
+                          <div key={idx} className="p-4 bg-slate-50 dark:bg-slate-700/50 rounded-lg border border-slate-200 dark:border-slate-600">
+                            <div className="flex items-center justify-between mb-3">
+                              <span className="font-medium text-slate-900 dark:text-white">
+                                {stage.stage_name || stage.name || `Stage ${idx + 1}`}
                               </span>
-                              <span className="text-sm text-slate-600 dark:text-slate-400">/100</span>
+                              <div className="flex items-center space-x-2">
+                                <div className={`inline-flex items-center px-2 py-1 rounded text-xs font-medium ${
+                                  stage.passed
+                                    ? 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300'
+                                    : 'bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-300'
+                                }`}>
+                                  {stage.passed ? 'Passed' : 'Failed'}
+                                </div>
+                                <span className="text-lg font-bold text-slate-900 dark:text-white">
+                                  {stage.score}
+                                </span>
+                                <span className="text-sm text-slate-600 dark:text-slate-400">/100</span>
+                              </div>
                             </div>
+                            <div className="w-full bg-slate-200 dark:bg-slate-600 rounded-full h-2 mb-3">
+                              <div
+                                className={`h-2 rounded-full transition-all ${
+                                  stage.score >= 90 ? 'bg-green-500' :
+                                  stage.score >= 70 ? 'bg-blue-500' :
+                                  stage.score >= 50 ? 'bg-yellow-500' : 'bg-red-500'
+                                }`}
+                                style={{ width: `${stage.score}%` }}
+                              />
+                            </div>
+                            {stage.feedback && (
+                              <p className="text-sm text-slate-600 dark:text-slate-400 mb-2">
+                                {stage.feedback}
+                              </p>
+                            )}
+                            {stage.behaviors && stage.behaviors.length > 0 && (
+                              <div className="mt-3 pt-3 border-t border-slate-200 dark:border-slate-600">
+                                <p className="text-xs font-medium text-slate-700 dark:text-slate-300 mb-2">Behaviors:</p>
+                                <div className="space-y-1">
+                                  {stage.behaviors.map((behavior, bIdx) => (
+                                    <div key={bIdx} className="text-xs text-slate-600 dark:text-slate-400">
+                                      • {behavior.behavior_name}: {behavior.satisfaction_level} ({Math.round(behavior.confidence * 100)}% confidence)
+                                    </div>
+                                  ))}
+                                </div>
+                              </div>
+                            )}
                           </div>
-                          <div className="w-full bg-slate-200 dark:bg-slate-600 rounded-full h-2 mb-3">
-                            <div
-                              className={`h-2 rounded-full transition-all ${
-                                category.score >= 90 ? 'bg-green-500' :
-                                category.score >= 70 ? 'bg-blue-500' :
-                                category.score >= 50 ? 'bg-yellow-500' : 'bg-red-500'
-                              }`}
-                              style={{ width: `${category.score}%` }}
-                            />
-                          </div>
-                          <p className="text-sm text-slate-600 dark:text-slate-400">
-                            {category.feedback}
-                          </p>
-                        </div>
-                      ))}
+                        ))
+                      ) : null}
                     </div>
                   </div>
                 </div>
 
-                {/* Issues Found */}
-                {result.violations.length > 0 && (
+                {/* Policy Violations */}
+                {result.policyViolations && result.policyViolations.length > 0 && (
                   <div className="bg-white dark:bg-slate-800 rounded-lg border border-slate-200 dark:border-slate-700">
                     <div className="px-6 py-4 border-b border-slate-200 dark:border-slate-700">
                       <h3 className="text-lg font-semibold text-slate-900 dark:text-white flex items-center space-x-2">
                         <FaExclamationCircle className="w-5 h-5 text-red-600" />
-                        <span>Issues Identified</span>
+                        <span>Policy Violations</span>
                       </h3>
                     </div>
                     <div className="p-6">
                       <div className="space-y-3">
-                        {result.violations.map((violation, idx) => (
+                        {result.policyViolations.map((violation, idx) => (
                           <div
                             key={idx}
                             className="p-4 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg"
@@ -1449,7 +1381,7 @@ export function Test() {
                             <div className="flex items-start justify-between mb-2">
                               <div className="flex items-center space-x-2">
                                 <span className="text-sm font-medium text-red-900 dark:text-red-200">
-                                  {violation.type}
+                                  {violation.type || 'Policy Violation'}
                                 </span>
                                 <span
                                   className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${
@@ -1573,6 +1505,4 @@ export function Test() {
     </div>
   )
 }
-
-// Legacy TemplateInfo component removed - PolicyTemplate system no longer exists
 

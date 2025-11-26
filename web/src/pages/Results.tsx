@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
-import { useParams, Link, useNavigate } from 'react-router-dom'
+import { useParams, Link } from 'react-router-dom'
 import { api } from '@/lib/api'
-import { FaArrowLeft, FaChartBar, FaExclamationCircle, FaPlay, FaPause, FaSpinner, FaVolumeUp, FaChevronDown, FaChevronRight, FaFileCsv, FaFileAlt, FaCheckCircle, FaTimesCircle, FaShieldAlt, FaBrain, FaRobot } from 'react-icons/fa'
+import { FaArrowLeft, FaChartBar, FaExclamationCircle, FaPlay, FaPause, FaSpinner, FaVolumeUp, FaFileCsv, FaFileAlt, FaCheckCircle, FaTimesCircle } from 'react-icons/fa'
 import { ConfirmModal, AlertModal } from '@/components/modals'
 
 type EvaluationResponse = Awaited<ReturnType<typeof api.getEvaluation>>
@@ -10,7 +10,6 @@ type RecordingResponse = Awaited<ReturnType<typeof api.getRecording>>
 
 export function Results() {
   const { recordingId } = useParams<{ recordingId: string }>()
-  const navigate = useNavigate()
   const audioRef = useRef<HTMLAudioElement | null>(null)
   const abortControllerRef = useRef<AbortController | null>(null)
   const isLoadingRef = useRef(false)
@@ -24,8 +23,6 @@ export function Results() {
   const [transcript, setTranscript] = useState<TranscriptResponse | null>(null)
   const [audioUrl, setAudioUrl] = useState<string | null>(null)
   const [isPlaying, setIsPlaying] = useState(false)
-  const [showAnalysis, setShowAnalysis] = useState(false)
-  const [creatingReview, setCreatingReview] = useState(false)
   const [confirmModal, setConfirmModal] = useState<{ isOpen: boolean; title: string; message: string; onConfirm: () => void } | null>(null)
   const [alertModal, setAlertModal] = useState<{ isOpen: boolean; title: string; message: string; type: 'success' | 'error' | 'info' } | null>(null)
 
@@ -82,15 +79,6 @@ export function Results() {
         setEvaluation(evalRes)
         if (transcriptRes) setTranscript(transcriptRes)
         if (dl?.download_url) setAudioUrl(dl.download_url)
-
-        // Load policy template metadata via templates API (with caching)
-        try {
-          const now = Date.now()
-          let templates: TemplatesResponse
-          
-        } catch {
-          // non-fatal
-        }
       } catch (e: any) {
         // Don't set error if request was aborted
         if (!abortController.signal.aborted) {
@@ -159,59 +147,7 @@ export function Results() {
     }
   }
 
-  const handleReevaluate = () => {
-    if (!recordingId) return
-    setConfirmModal({
-      isOpen: true,
-      title: 'Re-evaluate Recording',
-      message: 'This will re-evaluate the recording. Continue?',
-      onConfirm: async () => {
-        setConfirmModal(null)
-        try {
-          await api.reevaluateRecording(recordingId)
-          setAlertModal({
-            isOpen: true,
-            title: 'Re-evaluation Started',
-            message: 'Re-evaluation started. Please return later or refresh to check status.',
-            type: 'success',
-          })
-          setTimeout(() => navigate('/demo'), 2000)
-        } catch (e: any) {
-          setAlertModal({
-            isOpen: true,
-            title: 'Error',
-            message: 'Failed to start re-evaluation: ' + (e.message || 'Unknown error'),
-            type: 'error',
-          })
-        }
-      },
-    })
-  }
 
-  const createTestHumanReview = async () => {
-    if (!evaluation) return
-
-    try {
-      setCreatingReview(true)
-      await api.createTestHumanReview(evaluation.id)
-      setAlertModal({
-        isOpen: true,
-        title: 'Success',
-        message: 'Test human review created! Check the Human Review page to see it in the queue.',
-        type: 'success',
-      })
-    } catch (error: any) {
-      console.error('Failed to create test human review:', error)
-      setAlertModal({
-        isOpen: true,
-        title: 'Error',
-        message: 'Failed to create test human review. Make sure this evaluation doesn\'t already have a pending review.',
-        type: 'error',
-      })
-    } finally {
-      setCreatingReview(false)
-    }
-  }
 
   // Exports
   const downloadTranscriptTxt = () => {
@@ -231,26 +167,40 @@ export function Results() {
   }
 
   const downloadScoresCsv = () => {
-    // Check for Phase 7 final_evaluation first, then fall back to legacy category_scores
-    const categoryScores = evaluation?.final_evaluation?.category_scores || evaluation?.category_scores
-    if (!categoryScores?.length) return
+    const stageScores = evaluation?.stage_scores
     
+    // Convert stage_scores to rows
     const rows = [
-      ['Category', 'Score', 'Weight', 'Passed', 'Feedback'],
-      ...categoryScores.map((cs: any) => [
-        cs.name || cs.category_name,
-        String(cs.score),
-        cs.weight ? `${cs.weight}%` : '',
-        cs.passed !== undefined ? (cs.passed ? 'Yes' : 'No') : '',
-        (cs.feedback || '').replace(/\n/g, ' ')
-      ])
+      ['Stage', 'Score', 'Weight', 'Passed', 'Feedback'],
     ]
+    
+    if (stageScores && Array.isArray(stageScores) && stageScores.length > 0) {
+      rows.push(...stageScores.map((stage: any) => [
+        stage.stage_name || stage.name || 'Unknown Stage',
+        String(stage.score || 0),
+        stage.weight ? `${stage.weight}%` : '',
+        stage.passed !== undefined ? (stage.passed ? 'Yes' : 'No') : '',
+        (stage.feedback || '').replace(/\n/g, ' ')
+      ]))
+    } else if (stageScores && typeof stageScores === 'object' && !Array.isArray(stageScores)) {
+      // Handle object format
+      rows.push(...Object.entries(stageScores).map(([stageId, stage]: [string, any]) => [
+        stage.stage_name || stage.name || stageId,
+        String(stage.score || 0),
+        stage.weight ? `${stage.weight}%` : '',
+        stage.passed !== undefined ? (stage.passed ? 'Yes' : 'No') : '',
+        (stage.feedback || '').replace(/\n/g, ' ')
+      ]))
+    } else {
+      return // No scores to export
+    }
+    
     const csv = rows.map(r => r.map(field => `"${String(field).replace(/"/g, '""')}"`).join(',')).join('\n')
     const blob = new Blob([csv], { type: 'text/csv;charset=utf-8' })
     const url = URL.createObjectURL(blob)
     const a = document.createElement('a')
     a.href = url
-    a.download = `${recording?.file_name || 'results'}_category_scores.csv`
+    a.download = `${recording?.file_name || 'results'}_scores.csv`
     document.body.appendChild(a)
     a.click()
     a.remove()
@@ -258,10 +208,17 @@ export function Results() {
   }
 
   const downloadViolationsCsv = () => {
-    if (!evaluation?.policy_violations?.length) return
+    const violations = evaluation?.policy_violations || []
+    if (!violations.length) return
+    
     const rows = [
-      ['Violation Type', 'Severity', 'Description', 'Criteria ID'],
-      ...evaluation.policy_violations.map(v => [v.violation_type, v.severity, v.description.replace(/\n/g, ' '), v.criteria_id])
+      ['Type', 'Severity', 'Description', 'Rule ID'],
+      ...violations.map((v: any) => [
+        v.type || v.violation_type || '',
+        v.severity || 'minor',
+        (v.description || '').replace(/\n/g, ' '),
+        v.rule_id || v.criteria_id || ''
+      ])
     ]
     const csv = rows.map(r => r.map(field => `"${String(field).replace(/"/g, '""')}"`).join(',')).join('\n')
     const blob = new Blob([csv], { type: 'text/csv;charset=utf-8' })
@@ -315,7 +272,9 @@ export function Results() {
               </button>
               <button
                 onClick={downloadScoresCsv}
-                disabled={!(evaluation?.final_evaluation?.category_scores?.length || evaluation?.category_scores?.length)}
+                disabled={!(
+                  (evaluation?.stage_scores && evaluation.stage_scores.length > 0)
+                )}
                 className="inline-flex items-center px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-md text-sm font-medium text-slate-700 dark:text-slate-200 bg-white dark:bg-slate-700 hover:bg-slate-50 dark:hover:bg-slate-600 disabled:opacity-50"
               >
                 <FaFileCsv className="w-4 h-4 mr-2" />
@@ -323,19 +282,15 @@ export function Results() {
               </button>
               <button
                 onClick={downloadViolationsCsv}
-                disabled={!evaluation?.policy_violations?.length}
+                disabled={!(
+                  (evaluation?.policy_violations && evaluation.policy_violations.length > 0)
+                )}
                 className="inline-flex items-center px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-md text-sm font-medium text-slate-700 dark:text-slate-200 bg-white dark:bg-slate-700 hover:bg-slate-50 dark:hover:bg-slate-600 disabled:opacity-50"
               >
                 <FaFileCsv className="w-4 h-4 mr-2" />
                 Violations CSV
               </button>
             </div>
-            <button
-              onClick={handleReevaluate}
-              className="inline-flex items-center px-3 py-2 border border-transparent text-sm font-medium rounded-md text-white bg-blue-600 hover:bg-blue-700"
-            >
-              Retest
-            </button>
           </div>
         </div>
 
@@ -425,9 +380,9 @@ export function Results() {
                 </div>
                 <div className="p-6 text-center">
                   <div className={`inline-flex items-center justify-center w-24 h-24 rounded-full mb-4 ${
-                    evaluation?.final_evaluation?.overall_passed === false
+                    evaluation?.overall_passed === false
                       ? 'bg-gradient-to-br from-red-500 to-red-600'
-                      : evaluation?.final_evaluation?.overall_passed === true
+                      : evaluation?.overall_passed === true
                       ? 'bg-gradient-to-br from-green-500 to-green-600'
                       : 'bg-gradient-to-br from-blue-500 to-indigo-600'
                   }`}>
@@ -439,148 +394,72 @@ export function Results() {
                     <FaChartBar className="w-4 h-4 mr-2 text-blue-600" />
                     Quality Score
                   </p>
-                  {evaluation?.final_evaluation && (
+                  {evaluation?.requires_human_review && (
                     <div className="mt-2">
-                      <span className={`inline-flex items-center px-3 py-1 rounded-full text-sm font-medium ${
-                        evaluation.final_evaluation.overall_passed
-                          ? 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300'
-                          : 'bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-300'
-                      }`}>
-                        {evaluation.final_evaluation.overall_passed ? 'Passed' : 'Failed'}
-                      </span>
-                      {evaluation.final_evaluation.requires_human_review && (
-                        <p className="text-xs text-orange-600 dark:text-orange-400 mt-2 flex items-center justify-center gap-1">
-                          <FaExclamationCircle className="w-3 h-3" />
-                          Requires Human Review
-                        </p>
-                      )}
+                      <p className="text-xs text-orange-600 dark:text-orange-400 flex items-center justify-center gap-1">
+                        <FaExclamationCircle className="w-3 h-3" />
+                        Requires Human Review
+                      </p>
                     </div>
-                  )}
-                  {evaluation && (
-                    <button
-                      onClick={createTestHumanReview}
-                      disabled={creatingReview}
-                      className="mt-4 px-4 py-2 bg-orange-500 hover:bg-orange-600 disabled:bg-orange-400 text-white text-sm rounded-lg transition-colors flex items-center justify-center"
-                    >
-                      {creatingReview ? (
-                        <>
-                          <FaSpinner className="animate-spin w-4 h-4 mr-2" />
-                          Creating...
-                        </>
-                      ) : (
-                        <>
-                          <FaExclamationCircle className="w-4 h-4 mr-2" />
-                          Test Human Review
-                        </>
-                      )}
-                    </button>
                   )}
                   <div className="grid grid-cols-2 gap-4 max-w-md mx-auto mt-4">
                     <div className="text-center">
                       <div className={`inline-flex items-center px-3 py-1 rounded-full text-sm font-medium ${
-                        evaluation?.resolution_detected
+                        evaluation?.overall_passed
                           ? 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300'
                           : 'bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-300'
                       }`}>
-                        {evaluation?.resolution_detected ? 'Resolved' : 'Unresolved'}
+                        {evaluation?.overall_passed ? 'Passed' : 'Failed'}
                       </div>
-                      <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">Issue Status</p>
+                      <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">Overall Result</p>
                     </div>
                     <div className="text-center">
-                      <div className="inline-flex items-center px-3 py-1 rounded-full text-sm font-medium bg-slate-100 text-slate-800 dark:bg-slate-700 dark:text-slate-200">
-                        {evaluation ? `${(evaluation.resolution_confidence * 100).toFixed(0)}%` : '--'} Confidence
+                      <div className="inline-flex items-center px-3 py-1 rounded-full text-sm font-medium bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-300">
+                        {evaluation?.confidence_score ? `${(evaluation.confidence_score * 100).toFixed(0)}%` : '--'} Confidence
                       </div>
-                      <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">Resolution Confidence</p>
+                      <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">Evaluation Confidence</p>
                     </div>
                   </div>
                 </div>
               </div>
-
-              {evaluation?.customer_tone && (
-                <div className="bg-white dark:bg-slate-800 rounded-lg border border-slate-200 dark:border-slate-700">
-                  <div className="px-6 py-4 border-b border-slate-200 dark:border-slate-700">
-                    <h2 className="text-lg font-semibold text-slate-900 dark:text-white">
-                      Customer Analysis
-                    </h2>
-                  </div>
-                  <div className="p-6">
-                    <div className="mb-3">
-                      <div className="flex items-center space-x-3">
-                        <span className="text-sm font-medium text-slate-700 dark:text-slate-300">
-                          Primary Emotion
-                        </span>
-                        <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-slate-100 text-slate-800 dark:bg-slate-700 dark:text-slate-300">
-                          {evaluation.customer_tone.primary_emotion}
-                        </span>
-                      </div>
-                      <p className="text-sm text-slate-600 dark:text-slate-400 mt-2">
-                        {evaluation.customer_tone.description}
-                      </p>
-                      <div className="text-xs text-slate-500 dark:text-slate-400 mt-1">
-                        Analysis Confidence: {(evaluation.customer_tone.confidence * 100).toFixed(0)}%
-                      </div>
-                    </div>
-                    {evaluation.customer_tone.emotional_journey && evaluation.customer_tone.emotional_journey.length > 0 && (
-                      <div>
-                        <h4 className="text-sm font-semibold text-slate-700 dark:text-slate-300 mb-3">
-                          Call Journey
-                        </h4>
-                        <div className="space-y-2">
-                          {evaluation.customer_tone.emotional_journey.map((j, i) => (
-                            <div key={i} className="flex items-center justify-between p-2 bg-slate-50 dark:bg-slate-700/50 rounded border border-slate-200 dark:border-slate-600">
-                              <div className="flex items-center space-x-2">
-                                <span className="text-xs font-medium text-slate-600 dark:text-slate-400 uppercase">{j.segment}</span>
-                                <span className="text-xs px-2 py-0.5 rounded bg-slate-100 text-slate-700 dark:bg-slate-700 dark:text-slate-300">
-                                  {j.emotion}
-                                </span>
-                              </div>
-                              <span className="text-xs text-slate-500 dark:text-slate-400">{j.intensity}</span>
-                            </div>
-                          ))}
-                        </div>
-                      </div>
-                    )}
-                  </div>
-                </div>
-              )}
             </div>
 
             <div className="xl:col-span-2 space-y-8">
-              {/* Phase 7: Final Evaluation Display */}
-              {evaluation?.final_evaluation ? (
-                <>
-                  {/* Category Scores from Final Evaluation */}
-                  <div className="bg-white dark:bg-slate-800 rounded-lg border border-slate-200 dark:border-slate-700">
-                    <div className="px-6 py-4 border-b border-slate-200 dark:border-slate-700">
-                      <h3 className="text-lg font-semibold text-slate-900 dark:text-white flex items-center gap-2">
-                        <FaChartBar className="w-5 h-5" />
-                        Category Performance
-                      </h3>
-                    </div>
-                    <div className="p-6">
-                      {evaluation.final_evaluation.category_scores?.length ? (
+              {/* Stage Scores (Blueprint-based) */}
+              {evaluation?.stage_scores && Array.isArray(evaluation.stage_scores) && evaluation.stage_scores.length > 0 ? (
+                    <div className="bg-white dark:bg-slate-800 rounded-lg border border-slate-200 dark:border-slate-700">
+                      <div className="px-6 py-4 border-b border-slate-200 dark:border-slate-700">
+                        <h3 className="text-lg font-semibold text-slate-900 dark:text-white flex items-center gap-2">
+                          <FaChartBar className="w-5 h-5" />
+                          Stage Performance
+                        </h3>
+                      </div>
+                      <div className="p-6">
                         <div className="space-y-4">
-                          {evaluation.final_evaluation.category_scores.map((cat: any, idx: number) => (
-                            <div key={cat.category_id || idx} className="p-4 bg-slate-50 dark:bg-slate-700/50 rounded-lg border border-slate-200 dark:border-slate-600">
+                          {evaluation.stage_scores.map((stage: any, idx: number) => (
+                            <div key={stage.stage_id || stage.stage_name || idx} className="p-4 bg-slate-50 dark:bg-slate-700/50 rounded-lg border border-slate-200 dark:border-slate-600">
                               <div className="flex items-center justify-between mb-3">
                                 <div className="flex items-center gap-2">
-                                  <span className="font-medium text-slate-900 dark:text-white">{cat.name}</span>
-                                  <span className="text-xs px-2 py-0.5 rounded bg-slate-200 dark:bg-slate-600 text-slate-700 dark:text-slate-300">
-                                    {cat.weight}% weight
+                                  <span className="font-medium text-slate-900 dark:text-white">
+                                    {stage.stage_name || stage.name || `Stage ${idx + 1}`}
                                   </span>
-                                  {cat.passed ? (
-                                    <FaCheckCircle className="w-4 h-4 text-green-600 dark:text-green-400" />
-                                  ) : (
-                                    <FaTimesCircle className="w-4 h-4 text-red-600 dark:text-red-400" />
+                                  {stage.passed !== undefined && (
+                                    stage.passed ? (
+                                      <FaCheckCircle className="w-4 h-4 text-green-600 dark:text-green-400" />
+                                    ) : (
+                                      <FaTimesCircle className="w-4 h-4 text-red-600 dark:text-red-400" />
+                                    )
                                   )}
                                 </div>
                                 <div className="flex items-center space-x-2">
                                   <span className={`text-lg font-bold ${
-                                    cat.passed 
+                                    stage.passed 
                                       ? 'text-green-600 dark:text-green-400' 
-                                      : 'text-red-600 dark:text-red-400'
+                                      : stage.passed === false
+                                      ? 'text-red-600 dark:text-red-400'
+                                      : 'text-slate-600 dark:text-slate-400'
                                   }`}>
-                                    {cat.score}
+                                    {stage.score || 0}
                                   </span>
                                   <span className="text-sm text-slate-600 dark:text-slate-400">/100</span>
                                 </div>
@@ -588,243 +467,70 @@ export function Results() {
                               <div className="w-full bg-slate-200 dark:bg-slate-600 rounded-full h-2 mb-2">
                                 <div
                                   className={`h-2 rounded-full transition-all ${
-                                    cat.passed ? 'bg-green-500' : 'bg-red-500'
+                                    (stage.score || 0) >= 90 ? 'bg-green-500' :
+                                    (stage.score || 0) >= 70 ? 'bg-blue-500' :
+                                    (stage.score || 0) >= 50 ? 'bg-yellow-500' : 'bg-red-500'
                                   }`}
-                                  style={{ width: `${cat.score}%` }}
+                                  style={{ width: `${Math.min(stage.score || 0, 100)}%` }}
                                 />
                               </div>
-                            </div>
-                          ))}
-                        </div>
-                      ) : (
-                        <p className="text-sm text-slate-600 dark:text-slate-400">No category scores found.</p>
-                      )}
-                    </div>
-                  </div>
-
-                  {/* Stage Scores Breakdown */}
-                  {evaluation.final_evaluation.stage_scores && Object.keys(evaluation.final_evaluation.stage_scores).length > 0 && (
-                    <div className="bg-white dark:bg-slate-800 rounded-lg border border-slate-200 dark:border-slate-700">
-                      <div className="px-6 py-4 border-b border-slate-200 dark:border-slate-700">
-                        <h3 className="text-lg font-semibold text-slate-900 dark:text-white flex items-center gap-2">
-                          <FaRobot className="w-5 h-5" />
-                          Stage Evaluations
-                        </h3>
-                      </div>
-                      <div className="p-6">
-                        <div className="space-y-4">
-                          {Object.entries(evaluation.final_evaluation.stage_scores).map(([stageId, stageData]: [string, any]) => {
-                            const llmStageEval = evaluation.llm_stage_evaluations?.[stageId]
-                            return (
-                              <div key={stageId} className="p-4 bg-slate-50 dark:bg-slate-700/50 rounded-lg border border-slate-200 dark:border-slate-600">
-                                <div className="flex items-center justify-between mb-3">
-                                  <div className="flex items-center gap-2">
-                                    <span className="font-medium text-slate-900 dark:text-white">
-                                      {llmStageEval?.stage_name || `Stage ${stageId.slice(0, 8)}`}
-                                    </span>
-                                    {stageData.critical_violation && (
-                                      <span className="text-xs px-2 py-0.5 rounded bg-red-100 dark:bg-red-900/30 text-red-800 dark:text-red-300">
-                                        Critical
-                                      </span>
-                                    )}
-                                  </div>
-                                  <div className="flex items-center space-x-2">
-                                    <span className="text-lg font-bold text-slate-900 dark:text-white">{stageData.score}</span>
-                                    <span className="text-sm text-slate-600 dark:text-slate-400">/100</span>
-                                    <span className="text-xs text-slate-500 dark:text-slate-400">
-                                      {(stageData.confidence * 100).toFixed(0)}% conf
-                                    </span>
-                                  </div>
-                                </div>
-                                <div className="w-full bg-slate-200 dark:bg-slate-600 rounded-full h-2 mb-3">
-                                  <div
-                                    className="h-2 rounded-full transition-all bg-blue-500"
-                                    style={{ width: `${stageData.score}%` }}
-                                  />
-                                </div>
-                                
-                                {/* Step Evaluations */}
-                                {llmStageEval?.step_evaluations?.length > 0 && (
-                                  <div className="mt-3 space-y-2">
-                                    <h4 className="text-sm font-semibold text-slate-700 dark:text-slate-300 mb-2">Steps:</h4>
-                                    {llmStageEval.step_evaluations.map((stepEval: any, stepIdx: number) => (
-                                      <div key={stepEval.step_id || stepIdx} className="p-2 bg-white dark:bg-slate-800 rounded border border-slate-200 dark:border-slate-600">
-                                        <div className="flex items-center justify-between">
-                                          <div className="flex items-center gap-2">
-                                            {stepEval.passed ? (
-                                              <FaCheckCircle className="w-3 h-3 text-green-600 dark:text-green-400" />
-                                            ) : (
-                                              <FaTimesCircle className="w-3 h-3 text-red-600 dark:text-red-400" />
-                                            )}
-                                            <span className="text-sm text-slate-700 dark:text-slate-300">
-                                              {stepEval.step_name || `Step ${stepEval.step_id?.slice(0, 8)}`}
-                                            </span>
-                                          </div>
-                                          <span className={`text-xs px-2 py-0.5 rounded ${
-                                            stepEval.passed
-                                              ? 'bg-green-100 dark:bg-green-900/30 text-green-800 dark:text-green-300'
-                                              : 'bg-red-100 dark:bg-red-900/30 text-red-800 dark:text-red-300'
-                                          }`}>
-                                            {stepEval.passed ? 'Passed' : 'Failed'}
-                                          </span>
-                                        </div>
-                                        {stepEval.rationale && (
-                                          <p className="text-xs text-slate-600 dark:text-slate-400 mt-1">{stepEval.rationale}</p>
-                                        )}
-                                        {stepEval.evidence?.length > 0 && (
-                                          <div className="mt-2 text-xs text-slate-500 dark:text-slate-400">
-                                            <span className="font-medium">Evidence:</span>
-                                            <ul className="list-disc list-inside ml-2 mt-1">
-                                              {stepEval.evidence.map((ev: any, evIdx: number) => (
-                                                <li key={evIdx}>
-                                                  {ev.type === 'transcript_snippet' && ev.text && (
-                                                    <span className="italic">"{ev.text}"</span>
-                                                  )}
-                                                  {ev.type === 'rule_evidence' && ev.rule_id && (
-                                                    <span>Rule {ev.rule_id.slice(0, 8)}</span>
-                                                  )}
-                                                </li>
-                                              ))}
-                                            </ul>
-                                          </div>
-                                        )}
+                              {stage.feedback && (
+                                <p className="text-sm text-slate-600 dark:text-slate-400 mt-2">{stage.feedback}</p>
+                              )}
+                              {stage.behaviors && stage.behaviors.length > 0 && (
+                                <div className="mt-3 pt-3 border-t border-slate-200 dark:border-slate-600">
+                                  <p className="text-xs font-medium text-slate-700 dark:text-slate-300 mb-2">Behaviors:</p>
+                                  <div className="space-y-1">
+                                    {stage.behaviors.map((behavior: any, bIdx: number) => (
+                                      <div key={bIdx} className="text-xs text-slate-600 dark:text-slate-400">
+                                        • {behavior.behavior_name}: {behavior.satisfaction_level} ({Math.round((behavior.confidence || 0) * 100)}% confidence)
                                       </div>
                                     ))}
                                   </div>
-                                )}
-                                
-                                {/* Stage Feedback */}
-                                {llmStageEval?.stage_feedback?.length > 0 && (
-                                  <div className="mt-3">
-                                    <h4 className="text-sm font-semibold text-slate-700 dark:text-slate-300 mb-2">Feedback:</h4>
-                                    <ul className="list-disc list-inside text-sm text-slate-600 dark:text-slate-400 space-y-1">
-                                      {llmStageEval.stage_feedback.map((fb: string, fbIdx: number) => (
-                                        <li key={fbIdx}>{fb}</li>
-                                      ))}
-                                    </ul>
-                                  </div>
-                                )}
-                              </div>
-                            )
-                          })}
-                        </div>
-                      </div>
-                    </div>
-                  )}
-
-                  {/* Deterministic Rule Results */}
-                  {evaluation.deterministic_results?.rule_evaluations?.length > 0 && (
-                    <div className="bg-white dark:bg-slate-800 rounded-lg border border-slate-200 dark:border-slate-700">
-                      <div className="px-6 py-4 border-b border-slate-200 dark:border-slate-700">
-                        <h3 className="text-lg font-semibold text-slate-900 dark:text-white flex items-center gap-2">
-                          <FaShieldAlt className="w-5 h-5" />
-                          Compliance Rules
-                        </h3>
-                      </div>
-                      <div className="p-6">
-                        <div className="space-y-3">
-                          {evaluation.deterministic_results.rule_evaluations.map((rule: any, idx: number) => (
-                            <div key={rule.rule_id || idx} className={`p-3 rounded-lg border ${
-                              rule.passed
-                                ? 'bg-green-50 dark:bg-green-900/20 border-green-200 dark:border-green-800'
-                                : `bg-red-50 dark:bg-red-900/20 border-red-200 dark:border-red-800`
-                            }`}>
-                              <div className="flex items-center justify-between">
-                                <div className="flex items-center gap-2">
-                                  {rule.passed ? (
-                                    <FaCheckCircle className="w-4 h-4 text-green-600 dark:text-green-400" />
-                                  ) : (
-                                    <FaTimesCircle className="w-4 h-4 text-red-600 dark:text-red-400" />
-                                  )}
-                                  <span className="font-medium text-slate-900 dark:text-white">{rule.rule_title || rule.rule_id}</span>
-                                  <span className={`text-xs px-2 py-0.5 rounded ${
-                                    rule.severity === 'critical'
-                                      ? 'bg-red-200 dark:bg-red-800 text-red-900 dark:text-red-200'
-                                      : rule.severity === 'major'
-                                      ? 'bg-orange-200 dark:bg-orange-800 text-orange-900 dark:text-orange-200'
-                                      : 'bg-yellow-200 dark:bg-yellow-800 text-yellow-900 dark:text-yellow-200'
-                                  }`}>
-                                    {rule.severity || 'minor'}
-                                  </span>
                                 </div>
-                                <span className={`text-sm font-medium ${
-                                  rule.passed
-                                    ? 'text-green-700 dark:text-green-300'
-                                    : 'text-red-700 dark:text-red-300'
-                                }`}>
-                                  {rule.passed ? 'Passed' : 'Failed'}
-                                </span>
-                              </div>
-                              {rule.evidence && (
-                                <p className="text-sm text-slate-600 dark:text-slate-400 mt-2">{rule.evidence}</p>
                               )}
                             </div>
                           ))}
                         </div>
                       </div>
                     </div>
-                  )}
-                </>
-              ) : (
-                /* Legacy Category Scores Display */
-                <div className="bg-white dark:bg-slate-800 rounded-lg border border-slate-200 dark:border-slate-700">
-                  <div className="px-6 py-4 border-b border-slate-200 dark:border-slate-700">
-                    <h3 className="text-lg font-semibold text-slate-900 dark:text-white">Category Performance</h3>
-                  </div>
-                  <div className="p-6">
-                    {evaluation?.category_scores?.length ? (
-                      <div className="space-y-4">
-                        {evaluation.category_scores.map((c) => (
-                          <div key={c.id} className="p-4 bg-slate-50 dark:bg-slate-700/50 rounded-lg border border-slate-200 dark:border-slate-600">
-                            <div className="flex items-center justify-between mb-3">
-                              <span className="font-medium text-slate-900 dark:text-white">{c.category_name}</span>
-                              <div className="flex items-center space-x-2">
-                                <span className="text-lg font-bold text-slate-900 dark:text-white">{c.score}</span>
-                                <span className="text-sm text-slate-600 dark:text-slate-400">/100</span>
-                              </div>
-                            </div>
-                            <div className="w-full bg-slate-200 dark:bg-slate-600 rounded-full h-2 mb-3">
-                              <div
-                                className="h-2 rounded-full transition-all bg-blue-500"
-                                style={{ width: `${c.score}%` }}
-                              />
-                            </div>
-                            {c.feedback && (
-                              <p className="text-sm text-slate-600 dark:text-slate-400">{c.feedback}</p>
-                            )}
-                          </div>
-                        ))}
-                      </div>
-                    ) : (
-                      <p className="text-sm text-slate-600 dark:text-slate-400">No category scores found.</p>
-                    )}
-                  </div>
-                </div>
-              )}
+                  ) : null}
 
-              {evaluation?.policy_violations?.length ? (
+              {/* Policy Violations (Blueprint-based) */}
+              {evaluation?.policy_violations && evaluation.policy_violations.length > 0 ? (
                 <div className="bg-white dark:bg-slate-800 rounded-lg border border-slate-200 dark:border-slate-700">
                   <div className="px-6 py-4 border-b border-slate-200 dark:border-slate-700">
                     <h3 className="text-lg font-semibold text-slate-900 dark:text-white flex items-center space-x-2">
                       <FaExclamationCircle className="w-5 h-5 text-red-600" />
-                      <span>Issues Identified</span>
+                      <span>Policy Violations</span>
                     </h3>
                   </div>
                   <div className="p-6">
                     <div className="space-y-3">
-                      {evaluation.policy_violations.map((v) => (
-                        <div key={v.id} className="p-4 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg">
+                      {evaluation.policy_violations.map((v: any, idx: number) => (
+                        <div key={v.id || v.rule_id || idx} className="p-4 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg">
                           <div className="flex items-start justify-between mb-2">
                             <div className="flex items-center space-x-2">
                               <span className="text-sm font-medium text-red-900 dark:text-red-200">
-                                {v.violation_type}
+                                {v.type || v.violation_type || 'Policy Violation'}
                               </span>
-                              <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-red-100 text-red-800 dark:bg-red-900/50 dark:text-red-200">
-                                {v.severity}
+                              <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${
+                                (v.severity || 'minor') === 'critical'
+                                  ? 'bg-red-100 text-red-800 dark:bg-red-900/50 dark:text-red-200'
+                                  : (v.severity || 'minor') === 'major'
+                                  ? 'bg-orange-100 text-orange-800 dark:bg-orange-900/50 dark:text-orange-200'
+                                  : 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900/50 dark:text-yellow-200'
+                              }`}>
+                                {v.severity || 'minor'}
                               </span>
                             </div>
                           </div>
                           <p className="text-sm text-red-700 dark:text-red-300">{v.description}</p>
+                          {v.timestamp && (
+                            <p className="text-xs text-red-600 dark:text-red-400 mt-1">
+                              Time: {new Date(v.timestamp * 1000).toLocaleTimeString()}
+                            </p>
+                          )}
                         </div>
                       ))}
                     </div>
@@ -832,24 +538,6 @@ export function Results() {
                 </div>
               ) : null}
 
-              {evaluation?.llm_analysis && (
-                <div className="bg-white dark:bg-slate-800 rounded-lg border border-slate-200 dark:border-slate-700">
-                  <button
-                    onClick={() => setShowAnalysis(!showAnalysis)}
-                    className="w-full px-6 py-4 border-b border-slate-200 dark:border-slate-700 flex items-center justify-between text-left"
-                  >
-                    <h3 className="text-lg font-semibold text-slate-900 dark:text-white">LLM Analysis Details</h3>
-                    {showAnalysis ? <FaChevronDown className="w-4 h-4 text-slate-500" /> : <FaChevronRight className="w-4 h-4 text-slate-500" />}
-                  </button>
-                  {showAnalysis && (
-                    <div className="p-6">
-                      <pre className="text-xs bg-slate-900 text-slate-100 rounded p-4 overflow-auto max-h-96">
-                        {JSON.stringify(evaluation.llm_analysis, null, 2)}
-                      </pre>
-                    </div>
-                  )}
-                </div>
-              )}
 
               <div className="bg-white dark:bg-slate-800 rounded-lg border border-slate-200 dark:border-slate-700">
                 <div className="px-6 py-4 border-b border-slate-200 dark:border-slate-700">
@@ -935,4 +623,6 @@ export function Results() {
     </div>
   )
 }
+
+
 
