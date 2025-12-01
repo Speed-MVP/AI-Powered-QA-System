@@ -255,14 +255,16 @@ class DeterministicRuleEngine:
             elif rule.rule_type == RuleType.required_phrase:
                 phrases = params.get("phrases", [])
                 match_type = params.get("match_type", "contains")
-                found = False
+                found_phrase: Optional[str] = None
+                missing_phrases: List[str] = []
                 
                 for phrase in phrases:
                     normalized_phrase = self.normalize_text(phrase)
+                    phrase_found = False
                     
                     if match_type == "contains":
                         if normalized_phrase in normalized_scope:
-                            found = True
+                            phrase_found = True
                             # Find evidence
                             for segment in scope_segments:
                                 if normalized_phrase in self.normalize_text(segment.get("text", "")):
@@ -274,20 +276,25 @@ class DeterministicRuleEngine:
                                         "match_type": "contains"
                                     })
                                     break
-                            break
                     elif match_type == "exact":
-                        # Exact match logic
                         if normalized_phrase == normalized_scope or normalized_phrase in normalized_scope.split():
-                            found = True
-                            break
+                            phrase_found = True
                     elif match_type == "regex":
                         if re.search(phrase, scope_text, re.IGNORECASE):
-                            found = True
-                            break
+                            phrase_found = True
+                    
+                    if phrase_found:
+                        found_phrase = phrase
+                        break
+                    else:
+                        missing_phrases.append(phrase)
                 
-                if not found:
+                if not found_phrase:
                     evaluation["passed"] = False
-                    evaluation["violation_reason"] = "Required phrase not found"
+                    if missing_phrases:
+                        evaluation["violation_reason"] = f"Required phrase missing: {', '.join(missing_phrases)}"
+                    else:
+                        evaluation["violation_reason"] = "Required phrase not found"
             
             elif rule.rule_type == RuleType.forbidden_phrase:
                 phrases = params.get("phrases", [])

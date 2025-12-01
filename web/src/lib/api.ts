@@ -255,7 +255,17 @@ class ApiClient {
   }
 
   // Evaluation endpoints
-  async getEvaluation(recordingId: string) {
+  async getEvaluation(
+    recordingId: string,
+    options?: { include_explanation?: boolean }
+  ) {
+    const params = new URLSearchParams()
+    if (options?.include_explanation) {
+      params.append('include_explanation', 'true')
+    }
+
+    const query = params.toString()
+
     return this.request<{
       evaluation_id: string
       recording_id: string
@@ -286,9 +296,12 @@ class ApiClient {
         rule_id?: string
         timestamp?: number
       }>
+      // Optional explainability fields when include_explanation=true
+      explanation?: any
+      confidence_breakdown?: any
       created_at: string
       status: string
-    }>(`/api/evaluations/${recordingId}`)
+    }>(`/api/evaluations/${recordingId}${query ? `?${query}` : ''}`)
   }
 
   async getTranscript(recordingId: string) {

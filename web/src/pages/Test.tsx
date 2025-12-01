@@ -26,6 +26,7 @@ interface ProcessingResult {
   }> | null
   overallScore: number
   overallPassed: boolean
+  confidenceScore?: number
   stageScores?: Array<{
     stage_id: string
     stage_name: string
@@ -47,6 +48,8 @@ interface ProcessingResult {
     rule_id?: string
     timestamp?: number
   }>
+  explanation?: any
+  confidenceBreakdown?: any
 }
 
 interface RecordingHistory {
@@ -138,6 +141,9 @@ export function Test() {
       setLoadingHistory(false)
     }
   }
+
+  const explanation = result?.explanation as any | undefined
+  const confidenceBreakdown = result?.confidenceBreakdown as any | undefined
 
   // Load active blueprint
   const loadActiveBlueprint = async () => {
@@ -515,9 +521,9 @@ export function Test() {
         const recording = await api.getRecording(recordingId)
         
         if (recording.status === 'completed') {
-          // Get evaluation results
+          // Get evaluation results (include explanation + confidence)
           try {
-            const evaluation = await api.getEvaluation(recordingId)
+            const evaluation: any = await api.getEvaluation(recordingId, { include_explanation: true })
             
             // Get transcript with diarized segments
             let transcript = 'Transcript not available'
@@ -555,8 +561,11 @@ export function Test() {
               diarizedSegments,
               overallScore: evaluation.overall_score,
               overallPassed: evaluation.overall_passed || false,
+              confidenceScore: evaluation.confidence_score,
               stageScores: stageScoresArray,
-              policyViolations: policyViolations
+              policyViolations: policyViolations,
+              explanation: evaluation.explanation || evaluation.final_evaluation?.explanation,
+              confidenceBreakdown: evaluation.confidence_breakdown || evaluation.final_evaluation?.confidence_breakdown
             }
             
             setResult(processingResult)
@@ -1201,7 +1210,7 @@ export function Test() {
                       <p className="text-slate-600 dark:text-slate-400 mb-4">
                         Overall performance assessment
                       </p>
-                      <div className="grid grid-cols-2 gap-4 max-w-md mx-auto">
+                      <div className="grid grid-cols-2 gap-4 max-w-md mx-auto mb-4">
                         <div className="text-center">
                           <div className={`inline-flex items-center px-3 py-1 rounded-full text-sm font-medium ${
                             result.overallPassed
@@ -1214,91 +1223,68 @@ export function Test() {
                         </div>
                         <div className="text-center">
                           <div className="inline-flex items-center px-3 py-1 rounded-full text-sm font-medium bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-300">
-                            {result.stageScores?.length || 0} Stages
+                            {result.confidenceScore != null
+                              ? `${(result.confidenceScore * 100).toFixed(0)}% Confidence`
+                              : 'Confidence N/A'}
                           </div>
-                          <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">Stages Evaluated</p>
+                          <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">Evaluation Confidence</p>
                         </div>
                       </div>
+
+                      {explanation?.overall_explanation && (
+                        <div className="mt-2 text-left max-w-2xl mx-auto text-sm text-slate-700 dark:text-slate-300">
+                          {explanation.overall_explanation.breakdown}
+                        </div>
+                      )}
                     </div>
                   </div>
                 </div>
 
-                {/* Customer Analysis */}
-                {result.customerTone && (
+                {/* Confidence Signals (based on confidenceBreakdown) */}
+                {confidenceBreakdown?.signals && (
                   <div className="bg-white dark:bg-slate-800 rounded-lg border border-slate-200 dark:border-slate-700">
-                    <div className="px-6 py-4 border-b border-slate-200 dark:border-slate-700">
-                      <h3 className="text-lg font-semibold text-slate-900 dark:text-white flex items-center space-x-2">
-                        <FaUser className="w-5 h-5 text-purple-600" />
-                        <span>Customer Analysis</span>
+                    <div className="px-6 py-4 border-b border-slate-200 dark:border-slate-700 flex items-center justify-between">
+                      <h3 className="text-lg font-semibold text-slate-900 dark:text-white">
+                        Confidence Signals
                       </h3>
+                      <p className="text-xs text-slate-500 dark:text-slate-400">
+                        Explains how much the system trusts this evaluation.
+                      </p>
                     </div>
-                    <div className="p-6">
-                      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                        <div>
-                          <div className="flex items-center space-x-3 mb-3">
-                            <span className="text-sm font-medium text-slate-700 dark:text-slate-300">
-                              Primary Emotion
-                            </span>
-                            <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
-                              result.customerTone.primary_emotion === 'angry' || result.customerTone.primary_emotion === 'frustrated'
-                                ? 'bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-300'
-                                : result.customerTone.primary_emotion === 'satisfied' || result.customerTone.primary_emotion === 'happy'
-                                ? 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300'
-                                : result.customerTone.primary_emotion === 'neutral' || result.customerTone.primary_emotion === 'calm'
-                                ? 'bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-300'
-                                : result.customerTone.primary_emotion === 'disappointed' || result.customerTone.primary_emotion === 'confused'
-                                ? 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-300'
-                                : 'bg-slate-100 text-slate-800 dark:bg-slate-700 dark:text-slate-300'
-                            }`}>
-                              {result.customerTone.primary_emotion.charAt(0).toUpperCase() + result.customerTone.primary_emotion.slice(1)}
-                            </span>
-                          </div>
-                          <p className="text-sm text-slate-600 dark:text-slate-400 mb-4">
-                            {result.customerTone.description}
-                          </p>
-                          <div className="text-xs text-slate-500 dark:text-slate-400">
-                            Analysis Confidence: {(result.customerTone.confidence * 100).toFixed(0)}%
-                          </div>
-                        </div>
-
-                        {result.customerTone.emotional_journey && result.customerTone.emotional_journey.length > 0 && (
-                          <div>
-                            <h4 className="text-sm font-semibold text-slate-700 dark:text-slate-300 mb-3">
-                              Call Journey
-                            </h4>
-                            <div className="space-y-2">
-                              {result.customerTone.emotional_journey.map((journey, idx) => (
-                                <div key={idx} className="flex items-center justify-between p-2 bg-slate-50 dark:bg-slate-700/50 rounded border border-slate-200 dark:border-slate-600">
-                                  <div className="flex items-center space-x-2">
-                                    <span className="text-xs font-medium text-slate-600 dark:text-slate-400 uppercase">
-                                      {journey.segment}
-                                    </span>
-                                    <span className={`text-xs px-2 py-0.5 rounded ${
-                                      journey.emotion === 'angry' || journey.emotion === 'frustrated'
-                                        ? 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-300'
-                                        : journey.emotion === 'satisfied' || journey.emotion === 'happy'
-                                        ? 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-300'
-                                        : journey.emotion === 'neutral' || journey.emotion === 'calm'
-                                        ? 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300'
-                                        : 'bg-slate-100 text-slate-700 dark:bg-slate-700 dark:text-slate-300'
-                                    }`}>
-                                      {journey.emotion}
-                                    </span>
-                                  </div>
-                                  <span className="text-xs text-slate-500 dark:text-slate-400">
-                                    {journey.intensity}
-                                  </span>
-                                </div>
-                              ))}
+                    <div className="p-6 space-y-2 text-xs">
+                      <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                        {Object.entries(confidenceBreakdown.signals).map(([name, value]: [string, any]) => (
+                          <div
+                            key={name}
+                            className="p-2 bg-slate-50 dark:bg-slate-900/40 rounded border border-slate-200 dark:border-slate-700"
+                          >
+                            <div className="flex justify-between mb-1">
+                              <span className="font-medium text-slate-800 dark:text-slate-100">
+                                {name.replace(/_/g, ' ')}
+                              </span>
+                              <span className="text-slate-600 dark:text-slate-300">
+                                {Math.round((value as number) * 100)}%
+                              </span>
+                            </div>
+                            <div className="w-full bg-slate-200 dark:bg-slate-700 rounded-full h-1.5">
+                              <div
+                                className="h-1.5 rounded-full bg-blue-500"
+                                style={{ width: `${Math.min(100, Math.max(0, (value as number) * 100))}%` }}
+                              />
                             </div>
                           </div>
-                        )}
+                        ))}
                       </div>
+                      {confidenceBreakdown.reasoning && (
+                        <p className="mt-2 text-slate-600 dark:text-slate-400">
+                          {confidenceBreakdown.reasoning}
+                        </p>
+                      )}
                     </div>
                   </div>
                 )}
 
-                {/* Stage Performance (Blueprint-based) */}
+                {/* Stage Performance (Blueprint-based, explanation-driven when available) */}
                 <div className="bg-white dark:bg-slate-800 rounded-lg border border-slate-200 dark:border-slate-700">
                   <div className="px-6 py-4 border-b border-slate-200 dark:border-slate-700">
                     <h3 className="text-lg font-semibold text-slate-900 dark:text-white">
@@ -1307,57 +1293,111 @@ export function Test() {
                   </div>
                   <div className="p-6">
                     <div className="space-y-4">
-                      {(result.stageScores && result.stageScores.length > 0) ? (
-                        result.stageScores.map((stage, idx) => (
-                          <div key={idx} className="p-4 bg-slate-50 dark:bg-slate-700/50 rounded-lg border border-slate-200 dark:border-slate-600">
-                            <div className="flex items-center justify-between mb-3">
-                              <span className="font-medium text-slate-900 dark:text-white">
-                                {stage.stage_name || stage.name || `Stage ${idx + 1}`}
-                              </span>
-                              <div className="flex items-center space-x-2">
-                                <div className={`inline-flex items-center px-2 py-1 rounded text-xs font-medium ${
-                                  stage.passed
-                                    ? 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300'
-                                    : 'bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-300'
-                                }`}>
-                                  {stage.passed ? 'Passed' : 'Failed'}
-                                </div>
-                                <span className="text-lg font-bold text-slate-900 dark:text-white">
-                                  {stage.score}
+                      {explanation?.stage_explanations && Array.isArray(explanation.stage_explanations)
+                        ? explanation.stage_explanations.map((stage: any, idx: number) => (
+                            <div key={stage.stage_id || idx} className="p-4 bg-slate-50 dark:bg-slate-700/50 rounded-lg border border-slate-200 dark:border-slate-600">
+                              <div className="flex items-center justify-between mb-3">
+                                <span className="font-medium text-slate-900 dark:text-white">
+                                  {stage.stage_name || `Stage ${idx + 1}`}
                                 </span>
-                                <span className="text-sm text-slate-600 dark:text-slate-400">/100</span>
-                              </div>
-                            </div>
-                            <div className="w-full bg-slate-200 dark:bg-slate-600 rounded-full h-2 mb-3">
-                              <div
-                                className={`h-2 rounded-full transition-all ${
-                                  stage.score >= 90 ? 'bg-green-500' :
-                                  stage.score >= 70 ? 'bg-blue-500' :
-                                  stage.score >= 50 ? 'bg-yellow-500' : 'bg-red-500'
-                                }`}
-                                style={{ width: `${stage.score}%` }}
-                              />
-                            </div>
-                            {stage.feedback && (
-                              <p className="text-sm text-slate-600 dark:text-slate-400 mb-2">
-                                {stage.feedback}
-                              </p>
-                            )}
-                            {stage.behaviors && stage.behaviors.length > 0 && (
-                              <div className="mt-3 pt-3 border-t border-slate-200 dark:border-slate-600">
-                                <p className="text-xs font-medium text-slate-700 dark:text-slate-300 mb-2">Behaviors:</p>
-                                <div className="space-y-1">
-                                  {stage.behaviors.map((behavior, bIdx) => (
-                                    <div key={bIdx} className="text-xs text-slate-600 dark:text-slate-400">
-                                      • {behavior.behavior_name}: {behavior.satisfaction_level} ({Math.round(behavior.confidence * 100)}% confidence)
-                                    </div>
-                                  ))}
+                                <div className="flex items-center space-x-2">
+                                  <span className="text-xs font-medium text-slate-500 dark:text-slate-400 mr-2">
+                                    Stage Score
+                                  </span>
+                                  <span className="text-lg font-bold text-slate-900 dark:text-white">
+                                    {stage.score}
+                                  </span>
+                                  <span className="text-sm text-slate-600 dark:text-slate-400">/100</span>
                                 </div>
                               </div>
-                            )}
-                          </div>
-                        ))
-                      ) : null}
+                              <div className="w-full bg-slate-200 dark:bg-slate-600 rounded-full h-2 mb-3">
+                                <div
+                                  className={`h-2 rounded-full transition-all ${
+                                    stage.score >= 90 ? 'bg-green-500' :
+                                    stage.score >= 70 ? 'bg-blue-500' :
+                                    stage.score >= 50 ? 'bg-yellow-500' : 'bg-red-500'
+                                  }`}
+                                  style={{ width: `${stage.score}%` }}
+                                />
+                              </div>
+                              {stage.explanation && (
+                                <p className="text-sm text-slate-600 dark:text-slate-400 mb-2">
+                                  {stage.explanation}
+                                </p>
+                              )}
+                              {stage.behavior_breakdown && stage.behavior_breakdown.length > 0 && (
+                                <div className="mt-3 pt-3 border-t border-slate-200 dark:border-slate-600">
+                                  <p className="text-xs font-medium text-slate-700 dark:text-slate-300 mb-2">Behaviors & reasons:</p>
+                                  <div className="space-y-2">
+                                    {stage.behavior_breakdown.map((behavior: any, bIdx: number) => (
+                                      <div key={behavior.behavior_id || bIdx} className="text-xs text-slate-600 dark:text-slate-400">
+                                        <div className="flex items-center justify-between">
+                                          <span className="font-semibold">
+                                            {behavior.behavior}
+                                          </span>
+                                          <span className="text-[10px] uppercase tracking-wide text-slate-500 dark:text-slate-400">
+                                            {behavior.satisfaction_level} · {Math.round((behavior.confidence || 0) * 100)}% conf
+                                          </span>
+                                        </div>
+                                        {behavior.reason && (
+                                          <p className="mt-0.5">
+                                            {behavior.reason}
+                                          </p>
+                                        )}
+                                      </div>
+                                    ))}
+                                  </div>
+                                </div>
+                              )}
+                            </div>
+                          ))
+                        : (result.stageScores && result.stageScores.length > 0
+                            ? result.stageScores.map((stage, idx) => (
+                                <div key={idx} className="p-4 bg-slate-50 dark:bg-slate-700/50 rounded-lg border border-slate-200 dark:border-slate-600">
+                                  <div className="flex items-center justify-between mb-3">
+                                    <span className="font-medium text-slate-900 dark:text-white">
+                                      {stage.stage_name || stage.name || `Stage ${idx + 1}`}
+                                    </span>
+                                    <div className="flex items-center space-x-2">
+                                      <span className="text-xs font-medium text-slate-500 dark:text-slate-400 mr-2">
+                                        Stage Score
+                                      </span>
+                                      <span className="text-lg font-bold text-slate-900 dark:text-white">
+                                        {stage.score}
+                                      </span>
+                                      <span className="text-sm text-slate-600 dark:text-slate-400">/100</span>
+                                    </div>
+                                  </div>
+                                  <div className="w-full bg-slate-200 dark:bg-slate-600 rounded-full h-2 mb-3">
+                                    <div
+                                      className={`h-2 rounded-full transition-all ${
+                                        stage.score >= 90 ? 'bg-green-500' :
+                                        stage.score >= 70 ? 'bg-blue-500' :
+                                        stage.score >= 50 ? 'bg-yellow-500' : 'bg-red-500'
+                                      }`}
+                                      style={{ width: `${stage.score}%` }}
+                                    />
+                                  </div>
+                                  {stage.feedback && (
+                                    <p className="text-sm text-slate-600 dark:text-slate-400 mb-2">
+                                      {stage.feedback}
+                                    </p>
+                                  )}
+                                  {stage.behaviors && stage.behaviors.length > 0 && (
+                                    <div className="mt-3 pt-3 border-t border-slate-200 dark:border-slate-600">
+                                      <p className="text-xs font-medium text-slate-700 dark:text-slate-300 mb-2">Behaviors:</p>
+                                      <div className="space-y-1">
+                                        {stage.behaviors.map((behavior, bIdx) => (
+                                          <div key={bIdx} className="text-xs text-slate-600 dark:text-slate-400">
+                                            • {behavior.behavior_name}: {behavior.satisfaction_level} ({Math.round(behavior.confidence * 100)}% confidence)
+                                          </div>
+                                        ))}
+                                      </div>
+                                    </div>
+                                  )}
+                                </div>
+                              ))
+                            : null)}
                     </div>
                   </div>
                 </div>
