@@ -4,7 +4,7 @@ Orchestrates the complete evaluation pipeline: Detection → LLM → Scoring
 """
 
 import logging
-from typing import Dict, Any, Optional
+from typing import Dict, Any, Optional, List
 from sqlalchemy.orm import Session
 from app.models.compiled_artifacts import CompiledFlowVersion, CompiledFlowStage, CompiledComplianceRule
 from app.models.recording import Recording
@@ -16,10 +16,31 @@ from app.services.embedding_service import EmbeddingService
 from app.services.pii_redactor import PIIRedactor
 from app.services.transcript_compressor import TranscriptCompressor
 from app.services.deterministic_rule_engine import DeterministicRuleEngine
+from app.services.confidence_engine import ConfidenceEngine
+from app.services.explainability_engine import ExplainabilityEngine
 from app.services.monitoring import monitoring_service
 import time
 
 logger = logging.getLogger(__name__)
+
+
+def normalize_segments(segments: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    """
+    Normalize segments to enforce required fields ('start', 'end', 'text', 'speaker').
+    Raises if timestamps are missing to avoid implicit fallbacks.
+    """
+    normalized = []
+    for seg in segments:
+        if "start" not in seg or "end" not in seg:
+            raise ValueError("Transcript segment missing required start/end timestamps")
+        normalized.append({
+            "text": seg.get("text", ""),
+            "speaker": seg.get("speaker", "unknown"),
+            "start": seg.get("start"),
+            "end": seg.get("end"),
+            "confidence": seg.get("confidence"),
+        })
+    return normalized
 
 
 class EvaluationPipeline:
@@ -33,6 +54,8 @@ class EvaluationPipeline:
         self.pii_redactor = PIIRedactor()
         self.transcript_compressor = TranscriptCompressor()
         self.rule_engine = DeterministicRuleEngine()
+        self.confidence_engine = ConfidenceEngine()
+        self.explainability_engine = ExplainabilityEngine()
     
     def evaluate_recording(
         self,
@@ -83,22 +106,23 @@ class EvaluationPipeline:
             
             if not compiled_flow_version:
                 raise ValueError(f"Compiled flow version {compiled_flow_version_id} not found")
+            if not compiled_flow_version.stages or len(compiled_flow_version.stages) == 0:
+                raise ValueError("Compiled flow version has no stages; cannot evaluate")
             
-            # 3. Prepare transcript segments
-            transcript_segments = transcript.diarized_segments or []
-            if not transcript_segments:
-                # Fallback: create segments from transcript text
-                transcript_segments = [{
-                    "text": transcript.transcript_text or "",
-                    "speaker": "agent",
-                    "start": 0,
-                    "end": 0,
-                    "confidence": 1.0
-                }]
+            # 3. Prepare and normalize transcript segments
+            raw_segments = transcript.diarized_segments or []
+            if not raw_segments:
+                raise ValueError("Transcript missing diarized segments")
+            
+            # Normalize all segments to have consistent timestamp field names
+            transcript_segments = normalize_segments(raw_segments)
+            logger.debug(f"Normalized {len(transcript_segments)} transcript segments")
             
             # 4. Prepare behaviors from compiled blueprint
             behaviors = []
             for stage in compiled_flow_version.stages:
+                if not stage.steps or len(stage.steps) == 0:
+                    raise ValueError(f"Stage {stage.id} has no steps; cannot evaluate")
                 for step in stage.steps:
                     behaviors.append({
                         "id": step.id,
@@ -255,30 +279,29 @@ class EvaluationPipeline:
                 for stage_id, stage_eval in llm_stage_evaluations.items():
                     step_results = []
                     for behavior in stage_eval.get("behaviors", []):
-                        # Find corresponding detection result for timestamp
                         detection_result = next((
                             b for b in detection_results.get("behaviors", [])
                             if b.get("behavior_id") == behavior.get("behavior_id")
                         ), None)
                         
-                        timestamp = detection_result.get("start_time") if detection_result else None
+                        timestamp = None
+                        if detection_result:
+                            timestamp = detection_result.get("start")
+                        
                         detected = behavior.get("satisfaction_level") != "none"
                         
-                        # If detected by LLM but not deterministically (e.g. semantic match),
-                        # try to find timestamp in LLM evidence or use fallback to ensure compliance rules pass
                         if detected and timestamp is None:
-                            # Check evidence for timestamp
                             evidence_list = behavior.get("evidence", [])
                             if isinstance(evidence_list, list):
                                 for item in evidence_list:
-                                    if isinstance(item, dict) and item.get("start") is not None:
-                                        timestamp = item.get("start")
-                                        break
-                            
-                            # Fallback if still None: use 0.001 to indicate "present but time unknown"
-                            # This ensures it gets added to step_timestamps in rule engine
+                                    if isinstance(item, dict):
+                                        ts = item.get("start")
+                                        if ts is not None:
+                                            timestamp = ts
+                                            break
                             if timestamp is None:
                                 timestamp = 0.001
+                                logger.debug(f"Using fallback timestamp for detected behavior: {behavior.get('behavior_name')}")
                         
                         step_results.append({
                             "step_id": behavior.get("behavior_id"),
@@ -339,24 +362,12 @@ class EvaluationPipeline:
                     
                     rule_adapters.append(rule_adapter)
                 
-                # Normalize segment field names for rule engine (expects start_time/end_time)
-                normalized_segments = []
-                for seg in transcript_segments:
-                    normalized_seg = seg.copy()
-                    # Convert 'start' to 'start_time' if needed
-                    if "start" in normalized_seg and "start_time" not in normalized_seg:
-                        normalized_seg["start_time"] = normalized_seg.get("start")
-                    # Convert 'end' to 'end_time' if needed
-                    if "end" in normalized_seg and "end_time" not in normalized_seg:
-                        normalized_seg["end_time"] = normalized_seg.get("end")
-                    normalized_segments.append(normalized_seg)
-                
-                # Evaluate compliance rules
+                # Evaluate compliance rules (segments are already normalized at the start of pipeline)
                 rule_evaluations = self.rule_engine.evaluate_compliance_rules(
                     compliance_rules=rule_adapters,
                     transcript_text=transcript.transcript_text or "",
                     flow_version=compiled_flow_version,
-                    segments=normalized_segments,
+                    segments=transcript_segments,  # Already normalized
                     stage_results=stage_results
                 )
                 
@@ -410,12 +421,46 @@ class EvaluationPipeline:
                 policy_rule_results=policy_rule_results,
                 company_config=company_config or {}
             )
-            
+
+            # 10. Compute enhanced confidence score
+            try:
+                transcript_conf = transcript.transcription_confidence
+            except Exception:
+                transcript_conf = None
+
+            confidence_score, confidence_breakdown = self.confidence_engine.compute_confidence_score(
+                transcript_confidence=transcript_conf,
+                detection_results=detection_results,
+                llm_stage_evaluations=llm_stage_evaluations,
+                rule_results=policy_rule_results or {},
+                stage_scores=final_evaluation.get("stage_scores", []) or [],
+                schema_valid=True,  # At this point schema has already been validated upstream
+            )
+
+            # Attach confidence to final evaluation snapshot
+            final_evaluation["confidence_score"] = confidence_score
+            final_evaluation["confidence_breakdown"] = confidence_breakdown
+
+            # 11. Build explainability snapshot
+            try:
+                explanation = self.explainability_engine.build_explanation(
+                    final_evaluation=final_evaluation,
+                    detection_results=detection_results,
+                    llm_stage_evaluations=llm_stage_evaluations,
+                    confidence_breakdown=confidence_breakdown,
+                )
+            except Exception as expl_err:
+                logger.error("Failed to build explanation snapshot: %s", expl_err, exc_info=True)
+                explanation = None
+
+            if explanation is not None:
+                final_evaluation["explanation"] = explanation
+
             pipeline_duration = time.time() - pipeline_start
             
             # Record metrics
             # monitoring_service.record_scoring_metric(...)
-            
+
             return {
                 "deterministic_results": detection_results,
                 "llm_stage_evaluations": llm_stage_evaluations,

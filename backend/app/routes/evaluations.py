@@ -3,16 +3,17 @@ Evaluation API Routes - Phase 9
 Endpoints for Blueprint-based evaluations
 """
 
-from fastapi import APIRouter, Depends, HTTPException, BackgroundTasks
+from fastapi import APIRouter, Depends, HTTPException, BackgroundTasks, Query
 from sqlalchemy.orm import Session
 from typing import Optional
 import logging
 
 from app.database import get_db
 from app.models.user import User
-from app.models.evaluation import Evaluation
+from app.models.evaluation import Evaluation, EvaluationStatus
 from app.models.recording import Recording, RecordingStatus
 from app.models.transcript import Transcript
+from app.models.qa_blueprint import QABlueprint, BlueprintStatus
 from app.middleware.auth import get_current_user
 from app.middleware.permissions import require_company_access
 from app.services.cloud_tasks import cloud_tasks_service
@@ -22,37 +23,22 @@ logger = logging.getLogger(__name__)
 router = APIRouter(tags=["evaluations"])
 
 
-@router.get("/{id}")
+@router.get("/{evaluation_id}")
 async def get_evaluation(
-    id: str,
+    evaluation_id: str,
+    include_explanation: bool = Query(
+        False,
+        description="Include detailed explanation and confidence breakdown in response",
+    ),
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
-    """Get evaluation by evaluation_id or recording_id"""
-    # Try as evaluation_id first
+    """Get evaluation by evaluation_id (no recording_id fallback)"""
     evaluation = db.query(Evaluation).filter(
-        Evaluation.id == id
+        Evaluation.id == evaluation_id
     ).first()
     
-    # If not found, try as recording_id
     if not evaluation:
-        evaluation = db.query(Evaluation).filter(
-            Evaluation.recording_id == id
-        ).first()
-    
-    if not evaluation:
-        # Check if it was a recording ID and if the recording exists
-        recording = db.query(Recording).filter(Recording.id == id).first()
-        if recording:
-            if recording.status == RecordingStatus.failed:
-                # If recording failed, return 400 with error message
-                error_msg = recording.error_message or "Processing failed"
-                raise HTTPException(status_code=400, detail=f"Recording processing failed: {error_msg}")
-            elif recording.status == RecordingStatus.processing:
-                raise HTTPException(status_code=404, detail="Evaluation in progress")
-            elif recording.status == RecordingStatus.queued:
-                raise HTTPException(status_code=404, detail="Recording queued for processing")
-
         raise HTTPException(status_code=404, detail="Evaluation not found")
     
     require_company_access(evaluation.company_id, current_user)
@@ -72,7 +58,7 @@ async def get_evaluation(
             "confidence": transcript.transcription_confidence
         }
     
-    return {
+    response = {
         "evaluation_id": evaluation.id,
         "recording_id": evaluation.recording_id,
         "blueprint_id": evaluation.blueprint_id,
@@ -87,56 +73,47 @@ async def get_evaluation(
         "transcript": transcript_data
     }
 
+    # Optionally include explanation and confidence breakdown from final_evaluation
+    if include_explanation and evaluation.final_evaluation:
+        explanation = evaluation.final_evaluation.get("explanation")
+        confidence_breakdown = evaluation.final_evaluation.get("confidence_breakdown")
+        if explanation is not None:
+            response["explanation"] = explanation
+        if confidence_breakdown is not None:
+            response["confidence_breakdown"] = confidence_breakdown
 
-@router.get("/{id}/transcript")
+    return response
+
+
+@router.get("/{evaluation_id}/transcript")
 async def get_evaluation_transcript(
-    id: str,
+    evaluation_id: str,
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
-    """Get transcript for an evaluation/recording"""
-    # Try as evaluation_id first
+    """Get transcript for an evaluation (no recording_id fallback)"""
     evaluation = db.query(Evaluation).filter(
-        Evaluation.id == id
+        Evaluation.id == evaluation_id
     ).first()
     
-    recording_id = None
-    company_id = None
-    
-    if evaluation:
-        recording_id = evaluation.recording_id
-        company_id = evaluation.company_id
-    else:
-        # Try as recording_id
-        recording = db.query(Recording).filter(
-            Recording.id == id
-        ).first()
-        
-        if recording:
-            recording_id = recording.id
-            company_id = recording.company_id
-        else:
-            raise HTTPException(status_code=404, detail="Evaluation or recording not found")
+    if not evaluation:
+        raise HTTPException(status_code=404, detail="Evaluation not found")
             
-    require_company_access(company_id, current_user)
+    require_company_access(evaluation.company_id, current_user)
     
     transcript = db.query(Transcript).filter(
-        Transcript.recording_id == recording_id
+        Transcript.recording_id == evaluation.recording_id
     ).first()
     
     if not transcript:
         raise HTTPException(status_code=404, detail="Transcript not found")
         
-    # Align response shape with frontend expectations (api.getTranscript)
-    # while keeping extras for future use.
     return {
         "id": transcript.id,
         "recording_id": transcript.recording_id,
-        # Primary fields expected by web client
         "transcript_text": transcript.transcript_text,
         "diarized_segments": transcript.diarized_segments,
         "confidence": transcript.transcription_confidence,
-        # Additional metadata (not currently used by web client but useful)
         "sentiment": transcript.sentiment_analysis,
     }
 
@@ -144,7 +121,7 @@ async def get_evaluation_transcript(
 @router.post("/recordings/{recording_id}/evaluate")
 async def trigger_evaluation(
     recording_id: str,
-    blueprint_id: Optional[str] = None,
+    blueprint_id: str,
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
     background_tasks: BackgroundTasks = None
@@ -157,7 +134,40 @@ async def trigger_evaluation(
     if not recording:
         raise HTTPException(status_code=404, detail="Recording not found")
     
+    # Avoid duplicate or conflicting processing
+    if recording.status in {RecordingStatus.processing, RecordingStatus.queued, RecordingStatus.failed}:
+        raise HTTPException(
+            status_code=409,
+            detail=f"Recording is currently {recording.status.value}"
+        )
+    
     require_company_access(recording.company_id, current_user)
+
+    existing_evaluation = db.query(Evaluation).filter(
+        Evaluation.recording_id == recording_id
+    ).first()
+
+    # If already completed, return existing result to keep the flow idempotent
+    if existing_evaluation:
+        if existing_evaluation.status in {EvaluationStatus.completed, EvaluationStatus.reviewed}:
+            return {
+                "evaluation_id": existing_evaluation.id,
+                "overall_score": existing_evaluation.overall_score,
+                "overall_passed": existing_evaluation.overall_passed,
+                "confidence_score": existing_evaluation.confidence_score,
+                "status": existing_evaluation.status.value
+            }
+        if existing_evaluation.status == EvaluationStatus.pending:
+            raise HTTPException(status_code=409, detail="Evaluation already in progress")
+        if existing_evaluation.status == EvaluationStatus.failed:
+            raise HTTPException(status_code=409, detail="Existing evaluation failed; please retry after resolving issues")
+
+    # Validate requested blueprint (required)
+    blueprint = db.query(QABlueprint).filter(QABlueprint.id == blueprint_id).first()
+    if not blueprint or blueprint.status != BlueprintStatus.published:
+        raise HTTPException(status_code=400, detail="Blueprint not found or not published")
+    if blueprint.company_id != recording.company_id:
+        raise HTTPException(status_code=403, detail="Blueprint does not belong to this company")
     
     # Enqueue evaluation task
     payload = {
@@ -176,5 +186,6 @@ async def trigger_evaluation(
         "evaluation_id": result.get("evaluation_id"),
         "overall_score": result.get("overall_score"),
         "overall_passed": result.get("overall_passed"),
-        "status": "completed"
+        "confidence_score": result.get("confidence_score"),
+        "status": result.get("status", "completed")
     }
