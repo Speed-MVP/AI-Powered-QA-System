@@ -379,76 +379,14 @@ IMPORTANT:
                     logger.info(f"Successfully validated LLM response for stage {stage_id}: score={validated.stage_score}, confidence={validated.stage_confidence}")
                     return validated.dict()
                 except Exception as e:
-                    logger.warning(f"LLM response validation failed for stage {stage_id}: {e}. Falling back to deterministic.")
-                    # Reduced logging for validation errors
-                    if hasattr(e, 'errors'):
-                        logger.warning(f"Pydantic validation errors: {e.errors()}")
-                    
-                    # Log full data only at debug level
-                    logger.debug(f"Full evaluation_data that failed: {json.dumps(evaluation_data, indent=2, default=str)[:1000]}...")
-                    # Fallback to deterministic
-                    return self._create_deterministic_fallback(
-                        stage_id,
-                        deterministic_results,
-                        f"LLM response validation failed: {str(e)}"
-                    )
+                    logger.error(f"LLM response validation failed for stage {stage_id}: {e}", exc_info=True)
+                    raise
             
             except Exception as e:
                 logger.error(f"LLM API call failed: {e}", exc_info=True)
-                return self._create_deterministic_fallback(
-                    stage_id,
-                    deterministic_results,
-                    f"LLM API error: {str(e)}"
-                )
+                raise
         
         except Exception as e:
             logger.error(f"Stage evaluation failed: {e}", exc_info=True)
-            return self._create_deterministic_fallback(
-                stage_id,
-                deterministic_results,
-                f"Evaluation error: {str(e)}"
-            )
-    
-    def _create_deterministic_fallback(
-        self,
-        stage_id: str,
-        deterministic_results: Dict[str, Any],
-        reason: str
-    ) -> Dict[str, Any]:
-        """Create fallback evaluation using deterministic results"""
-        stage_deterministic = deterministic_results.get("stage_results", {}).get(stage_id, {})
-        step_results = stage_deterministic.get("step_results", [])
-        
-        # Calculate basic score from deterministic results
-        total_steps = len(step_results)
-        passed_steps = sum(1 for s in step_results if s.get("passed"))
-        base_score = (passed_steps / total_steps * 100) if total_steps > 0 else 0
-        
-        # Check for critical violations
-        rule_evaluations = deterministic_results.get("rule_evaluations", [])
-        critical_violation = any(
-            r.get("severity") == "critical" and not r.get("passed")
-            for r in rule_evaluations
-        )
-        
-        return {
-            "evaluation_id": deterministic_results.get("evaluation_id", "unknown"),
-            "flow_version_id": deterministic_results.get("flow_version_id", "unknown"),
-            "recording_id": deterministic_results.get("recording_id", "unknown"),
-            "stage_id": stage_id,
-            "stage_score": int(base_score),
-            "step_evaluations": [
-                {
-                    "step_id": s.get("step_id"),
-                    "passed": s.get("passed", False),
-                    "evidence": s.get("evidence", []),
-                    "rationale": s.get("reason_if_failed") or "Deterministic evaluation"
-                }
-                for s in step_results
-            ],
-            "stage_feedback": [f"LLM evaluation failed - using deterministic fallback: {reason}"],
-            "stage_confidence": 0.5,
-            "critical_violation": critical_violation,
-            "notes": f"LLM failed — using deterministic fallback: {reason}"
-        }
+            raise
 

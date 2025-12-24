@@ -1,102 +1,137 @@
 """
-Confidence Engine - 5-Signal Scoring Algorithm
-MVP Evaluation Improvements - Phase 2
+Confidence Engine - Multi-Signal Scoring Algorithm
+Phase 7: Enhanced confidence scoring for AI evaluations.
 """
 
-import json
 import logging
 from typing import Dict, Any, List, Tuple, Optional
-from difflib import SequenceMatcher
+from statistics import mean, pstdev
 
 logger = logging.getLogger(__name__)
 
 
 class ConfidenceEngine:
     """
-    5-signal confidence scoring algorithm for AI evaluations.
-    Determines when evaluations need human review based on multiple quality indicators.
+    Multi-signal confidence scoring algorithm for AI evaluations.
+    
+    Signals (0-1 each):
+      1) transcript_quality      - ASR confidence / completeness
+      2) detection_agreement     - agreement across exact/semantic/hybrid matches
+      3) llm_consistency         - stage_confidence + internal consistency
+      4) rule_llm_agreement      - alignment between deterministic rules and LLM
+      5) evidence_strength       - quantity / quality of evidence snippets
+      6) stage_variance_factor   - low score variance across stages → higher confidence
+      7) behavior_coverage       - percentage of behaviors with evidence
     """
 
     def __init__(self):
-        # Configurable weights for the 5 signals
+        # Configurable weights for the 7 signals (must sum to 1.0)
         self.weights = {
-            "transcript_quality": 0.25,
-            "llm_reproducibility": 0.25,
-            "rule_llm_agreement": 0.20,
-            "category_consistency": 0.20,
-            "output_schema_valid": 0.10
+            "transcript_quality": 0.15,
+            "detection_agreement": 0.20,
+            "llm_consistency": 0.20,
+            "rule_llm_agreement": 0.15,
+            "evidence_strength": 0.15,
+            "stage_variance_factor": 0.10,
+            "behavior_coverage": 0.05,
         }
 
         # Thresholds for human review routing
         self.thresholds = {
-            "high_confidence": 0.8,      # No review needed
-            "medium_confidence": 0.5,    # Consider review
-            "low_confidence": 0.5        # Human review required
+            "high_confidence": 0.80,   # No review needed
+            "medium_confidence": 0.60, # Show as \"borderline\"
+            "low_confidence": 0.60     # < low_confidence ⇒ human review required
         }
 
     def compute_confidence_score(
         self,
         transcript_confidence: Optional[float],
-        llm_responses: List[Dict[str, Any]],
-        rule_results: Dict[str, Any],
-        category_scores: Dict[str, float],
+        detection_results: Dict[str, Any],
+        llm_stage_evaluations: Dict[str, Any],
+        rule_results: Optional[Dict[str, Any]],
+        stage_scores: List[Dict[str, Any]],
         schema_valid: bool
     ) -> Tuple[float, Dict[str, Any]]:
         """
-        Compute overall confidence score using 5 signals.
+        Compute overall confidence score using multi-signal analysis.
 
         Args:
-            transcript_confidence: Deepgram confidence score (0-1)
-            llm_responses: List of LLM evaluation responses for reproducibility check
-            rule_results: Deterministic rule engine results
-            category_scores: AI-generated category scores
+            transcript_confidence: ASR confidence score (0-1)
+            detection_results: Detection engine output (behaviors, evidence)
+            llm_stage_evaluations: LLM stage outputs with stage_confidence and behaviors
+            rule_results: Deterministic rule engine results / policy_violations
+            stage_scores: List of stage score dicts from scoring engine
             schema_valid: Whether LLM response passed schema validation
 
         Returns:
             Tuple of (confidence_score, detailed_breakdown)
         """
-        signals = {}
+        signals: Dict[str, float] = {}
 
-        # 1. Transcript Quality Signal
-        signals["transcript_quality"] = self._compute_transcript_quality_signal(transcript_confidence)
-
-        # 2. LLM Reproducibility Signal
-        signals["llm_reproducibility"] = self._compute_reproducibility_signal(llm_responses)
-
-        # 3. Rule-LLM Agreement Signal
-        signals["rule_llm_agreement"] = self._compute_rule_agreement_signal(rule_results, category_scores)
-
-        # 4. Category Consistency Signal
-        signals["category_consistency"] = self._compute_category_consistency_signal(category_scores, rule_results)
-
-        # 5. Schema Validity Signal
-        signals["output_schema_valid"] = self._compute_schema_validity_signal(schema_valid)
-
-        # Weighted sum
-        confidence_score = sum(
-            signals[signal_name] * weight
-            for signal_name, weight in self.weights.items()
+        signals["transcript_quality"] = self._compute_transcript_quality_signal(
+            transcript_confidence
+        )
+        signals["detection_agreement"] = self._compute_detection_agreement_signal(
+            detection_results
+        )
+        signals["llm_consistency"] = self._compute_llm_consistency_signal(
+            llm_stage_evaluations
+        )
+        signals["rule_llm_agreement"] = self._compute_rule_agreement_signal(
+            rule_results or {}, stage_scores
+        )
+        signals["evidence_strength"] = self._compute_evidence_strength_signal(
+            detection_results, llm_stage_evaluations
+        )
+        signals["stage_variance_factor"] = self._compute_stage_variance_signal(
+            stage_scores
+        )
+        signals["behavior_coverage"] = self._compute_behavior_coverage_signal(
+            detection_results, llm_stage_evaluations
         )
 
-        # Create detailed breakdown
+        # Schema validity acts as a hard cap: if invalid, clamp confidence down
+        schema_signal = 1.0 if schema_valid else 0.0
+
+        # Weighted sum of signals
+        confidence_score = sum(
+            signals[name] * self.weights.get(name, 0.0)
+            for name in signals.keys()
+        )
+
+        if not schema_valid:
+            # If schema invalid, strongly reduce confidence (but keep some signal)
+            confidence_score *= 0.4
+
+        confidence_score = max(0.0, min(1.0, confidence_score))
+
         breakdown = {
             "confidence_score": round(confidence_score, 3),
-            "signals": signals,
+            "signals": {k: round(v, 3) for k, v in signals.items()},
+            "schema_valid": schema_valid,
+            "schema_signal": schema_signal,
             "weights": self.weights,
             "requires_human_review": confidence_score < self.thresholds["low_confidence"],
             "confidence_level": self._get_confidence_level(confidence_score),
-            "reasoning": self._generate_reasoning(signals, confidence_score)
+            "reasoning": self._generate_reasoning(signals, confidence_score, schema_valid),
         }
 
-        logger.info(f"Confidence score computed: {confidence_score:.3f}, requires_review: {breakdown['requires_human_review']}")
+        logger.info(
+            "Confidence score computed: %.3f (level=%s, requires_review=%s)",
+            confidence_score,
+            breakdown["confidence_level"],
+            breakdown["requires_human_review"],
+        )
         return confidence_score, breakdown
 
-    def _compute_transcript_quality_signal(self, transcript_confidence: Optional[float]) -> float:
-        """Signal 1: Transcript quality based on Deepgram confidence."""
+    def _compute_transcript_quality_signal(
+        self, transcript_confidence: Optional[float]
+    ) -> float:
+        """Signal 1: Transcript quality based on ASR confidence."""
         if transcript_confidence is None:
             return 0.5  # Neutral if no confidence available
 
-        # Normalize confidence score (assuming Deepgram returns 0-1)
+        # Normalize confidence score (assuming ASR returns 0-1)
         # High confidence (>0.8) = high signal, low confidence (<0.6) = low signal
         if transcript_confidence >= 0.8:
             return 1.0
@@ -107,155 +142,208 @@ class ConfidenceEngine:
         else:
             return 0.1
 
-    def _compute_reproducibility_signal(self, llm_responses: List[Dict[str, Any]]) -> float:
-        """Signal 2: LLM reproducibility by comparing multiple runs."""
-        if len(llm_responses) < 2:
-            # If we only have one response, assume reproducibility for now
-            # In production, we'd run LLM twice for each evaluation
+    def _compute_detection_agreement_signal(
+        self, detection_results: Dict[str, Any]
+    ) -> float:
+        """
+        Signal 2: Agreement across exact/semantic/hybrid detections.
+
+        Heuristic:
+          - Higher when many behaviors are detected with high confidence
+          - Penalize when detections are extremely sparse or very low confidence
+        """
+        behaviors = detection_results.get("behaviors", []) or []
+        if not behaviors:
+            return 0.5
+
+        confidences = [
+            b.get("confidence", 0.0) for b in behaviors if b.get("detected", False)
+        ]
+        if not confidences:
+            return 0.3  # No detections → low agreement
+
+        avg_conf = sum(confidences) / len(confidences)
+        detected_ratio = len(confidences) / max(len(behaviors), 1)
+
+        # Combine average confidence and coverage
+        score = 0.6 * avg_conf + 0.4 * detected_ratio
+        return max(0.0, min(1.0, score))
+
+    def _compute_llm_consistency_signal(
+        self, llm_stage_evaluations: Dict[str, Any]
+    ) -> float:
+        """
+        Signal 3: LLM consistency.
+
+        Uses:
+          - stage_confidence values
+          - similarity of stage scores (not wildly different for similar stages)
+        """
+        if not llm_stage_evaluations:
+            return 0.5
+
+        stage_confs = []
+        stage_scores = []
+
+        for stage_id, stage_eval in llm_stage_evaluations.items():
+            stage_confs.append(stage_eval.get("confidence", 0.5))
+            stage_scores.append(stage_eval.get("stage_score", 0))
+
+        if not stage_confs:
+            return 0.5
+
+        avg_conf = sum(stage_confs) / len(stage_confs)
+
+        if len(stage_scores) > 1:
+            # High variance in stage scores may indicate inconsistent evaluation
+            variance = pstdev(stage_scores)
+            # Normalize variance penalty (assuming 0-100 scores)
+            variance_penalty = min(1.0, variance / 25.0)  # 25pts stddev => full penalty
+            variance_factor = 1.0 - (0.7 * variance_penalty)
+        else:
+            variance_factor = 1.0
+
+        score = max(0.0, min(1.0, avg_conf * variance_factor))
+        return score
+
+    def _compute_rule_agreement_signal(
+        self, rule_results: Dict[str, Any], stage_scores: List[Dict[str, Any]]
+    ) -> float:
+        """
+        Signal 4: Agreement between deterministic rules and scoring / stages.
+
+        Heuristic:
+          - If there are many critical/major violations but stages are scored very high,
+            confidence should drop.
+          - If no critical violations and stages are moderate/high, confidence is higher.
+        """
+        if not rule_results:
+            return 0.7  # Slightly positive if no rules evaluated
+
+        violations = rule_results.get("violations", []) or rule_results.get(
+            "rule_evaluations", []
+        )
+        if not violations:
             return 0.8
 
-        try:
-            # Compare overall scores
-            scores = [resp.get("overall_score", 0) for resp in llm_responses]
-            score_diff = abs(scores[0] - scores[1]) if len(scores) >= 2 else 0
+        # Count severities
+        critical = sum(1 for v in violations if v.get("severity") == "critical")
+        major = sum(1 for v in violations if v.get("severity") == "major")
+        minor = sum(1 for v in violations if v.get("severity") == "minor")
 
-            # Compare category scores similarity
-            category_similarities = []
-            if len(llm_responses) >= 2 and "category_scores" in llm_responses[0]:
-                cats1 = llm_responses[0]["category_scores"]
-                cats2 = llm_responses[1]["category_scores"]
+        avg_stage_score = (
+            mean([s.get("score", 0) for s in stage_scores]) if stage_scores else 0.0
+        )
 
-                for category in set(cats1.keys()) | set(cats2.keys()):
-                    score1 = cats1.get(category, 0)
-                    score2 = cats2.get(category, 0)
-                    diff = abs(score1 - score2)
-                    similarity = max(0, 1.0 - (diff / 20.0))  # Normalize difference
-                    category_similarities.append(similarity)
+        # Base on violation severity
+        base = 1.0
+        base -= min(0.6, critical * 0.25 + major * 0.1 + minor * 0.03)
 
-                avg_category_similarity = sum(category_similarities) / len(category_similarities) if category_similarities else 1.0
+        # If many severe violations but very high stage scores, reduce further
+        if (critical + major) > 0 and avg_stage_score > 80:
+            base -= 0.2
 
-                # Combine score difference and category similarity
-                score_similarity = max(0, 1.0 - (score_diff / 10.0))  # 10-point difference = 0 similarity
-                reproducibility = (score_similarity + avg_category_similarity) / 2.0
+        return max(0.0, min(1.0, base))
 
-                return min(1.0, reproducibility)
-            else:
-                # Fallback to score-only comparison
-                score_similarity = max(0, 1.0 - (score_diff / 10.0))
-                return score_similarity
+    def _compute_evidence_strength_signal(
+        self, detection_results: Dict[str, Any], llm_stage_evaluations: Dict[str, Any]
+    ) -> float:
+        """
+        Signal 5: Evidence strength.
 
-        except Exception as e:
-            logger.warning(f"Error computing reproducibility signal: {e}")
-            return 0.5  # Neutral score on error
+        Looks at:
+          - How many behaviors have evidence attached
+          - Number of evidence items per behavior / stage
+        """
+        behaviors = detection_results.get("behaviors", []) or []
+        if not behaviors and not llm_stage_evaluations:
+            return 0.4
 
-    def _compute_rule_agreement_signal(self, rule_results: Dict[str, Any], category_scores: Dict[str, float]) -> float:
-        """Signal 3: Agreement between rule engine hits and LLM category scores."""
-        if not rule_results or not category_scores:
+        behavior_with_evidence = 0
+        total_behaviors = len(behaviors)
+
+        for b in behaviors:
+            ev = b.get("evidence", {}) or {}
+            # evidence may include exact_match / semantic_match etc.
+            has_evidence = any(
+                v for v in ev.values() if v is not None
+            )
+            if has_evidence:
+                behavior_with_evidence += 1
+
+        # Include LLM evidence as well
+        llm_evidence_count = 0
+        llm_behavior_count = 0
+        for stage_eval in llm_stage_evaluations.values():
+            for beh in stage_eval.get("behaviors", []):
+                llm_behavior_count += 1
+                ev_list = beh.get("evidence", [])
+                if isinstance(ev_list, list) and ev_list:
+                    llm_evidence_count += 1
+
+        total_behavior_count = total_behaviors + llm_behavior_count
+        total_with_evidence = behavior_with_evidence + llm_evidence_count
+
+        if total_behavior_count == 0:
             return 0.5
 
-        try:
-            agreements = []
+        coverage = total_with_evidence / total_behavior_count
+        # Evidence strength also scales with absolute count
+        strength = min(1.0, coverage + (total_with_evidence / 20.0))
+        return max(0.0, min(1.0, strength))
 
-            # Check greeting rule vs greeting category score
-            if "greeting_within_15s" in rule_results:
-                greeting_hit = rule_results["greeting_within_15s"].get("hit", False)
-                greeting_score = category_scores.get("Greeting", category_scores.get("greeting", 50))
+    def _compute_stage_variance_signal(
+        self, stage_scores: List[Dict[str, Any]]
+    ) -> float:
+        """
+        Signal 6: Stage variance factor.
 
-                # If rule says greeting missing but AI scores it high (>70), disagreement
-                # If rule says greeting present but AI scores it low (<30), disagreement
-                if greeting_hit and greeting_score < 30:
-                    agreements.append(0.0)  # Disagreement
-                elif not greeting_hit and greeting_score > 70:
-                    agreements.append(0.0)  # Disagreement
-                else:
-                    agreements.append(1.0)  # Agreement
+        Large variance between stage scores can indicate brittle evaluation.
+        """
+        if not stage_scores or len(stage_scores) < 2:
+            return 0.8
 
-            # Check empathy rule vs empathy category score
-            if "apology_or_empathy_present" in rule_results:
-                empathy_hit = rule_results["apology_or_empathy_present"].get("hit", False)
-                empathy_score = category_scores.get("Empathy", category_scores.get("empathy", 50))
+        scores = [s.get("score", 0.0) for s in stage_scores]
+        variance = pstdev(scores)
 
-                if empathy_hit and empathy_score < 40:
-                    agreements.append(0.0)
-                elif not empathy_hit and empathy_score > 80:
-                    agreements.append(0.0)
-                else:
-                    agreements.append(1.0)
+        # 0 variance => 1.0, 20+ stddev => ~0.3
+        penalty = min(1.0, variance / 20.0)
+        factor = 1.0 - 0.7 * penalty
+        return max(0.0, min(1.0, factor))
 
-            # Check hold compliance rule vs professionalism score
-            if "hold_compliance" in rule_results:
-                hold_hit = rule_results["hold_compliance"].get("hit", False)
-                prof_score = category_scores.get("Professionalism", category_scores.get("professionalism", 50))
+    def _compute_behavior_coverage_signal(
+        self, detection_results: Dict[str, Any], llm_stage_evaluations: Dict[str, Any]
+    ) -> float:
+        """
+        Signal 7: Behavior coverage.
 
-                if not hold_hit and prof_score > 80:
-                    agreements.append(0.0)  # High professionalism but hold rule failed
-                else:
-                    agreements.append(1.0)
+        Measures how many defined behaviors were actually evaluated with a clear decision.
+        """
+        detected_behaviors = detection_results.get("behaviors", []) or []
+        total_behaviors = len(detected_behaviors)
 
-            # Return average agreement if we have checks, otherwise neutral
-            if agreements:
-                return sum(agreements) / len(agreements)
-            else:
-                return 0.6  # Slightly positive if no specific rules to check
+        if total_behaviors == 0 and llm_stage_evaluations:
+            # Derive from LLM behaviors
+            all_llm_behaviors = []
+            for stage_eval in llm_stage_evaluations.values():
+                all_llm_behaviors.extend(stage_eval.get("behaviors", []))
+            total_behaviors = len(all_llm_behaviors)
+            satisfied = sum(
+                1
+                for b in all_llm_behaviors
+                if b.get("satisfaction_level") in ("full", "partial")
+            )
+        else:
+            satisfied = sum(1 for b in detected_behaviors if b.get("detected", False))
 
-        except Exception as e:
-            logger.warning(f"Error computing rule agreement signal: {e}")
+        if total_behaviors == 0:
             return 0.5
 
-    def _compute_category_consistency_signal(self, category_scores: Dict[str, float], rule_results: Dict[str, Any]) -> float:
-        """Signal 4: Logical consistency of category scores."""
-        if not category_scores:
-            return 0.5
-
-        try:
-            consistency_checks = []
-
-            # Greeting score should be low if greeting rule failed
-            greeting_score = category_scores.get("Greeting", category_scores.get("greeting"))
-            if greeting_score is not None and "greeting_within_15s" in rule_results:
-                greeting_rule_hit = rule_results["greeting_within_15s"].get("hit", False)
-                if not greeting_rule_hit and greeting_score > 60:
-                    consistency_checks.append(0.2)  # Inconsistent
-                elif greeting_rule_hit and greeting_score < 30:
-                    consistency_checks.append(0.2)  # Inconsistent
-                else:
-                    consistency_checks.append(1.0)
-
-            # Professionalism should be low if multiple rules failed
-            prof_score = category_scores.get("Professionalism", category_scores.get("professionalism"))
-            if prof_score is not None:
-                failed_rules = sum(1 for rule in rule_results.values() if not rule.get("hit", True))
-                if failed_rules > 2 and prof_score > 70:
-                    consistency_checks.append(0.3)  # Too high professionalism with many rule failures
-                elif failed_rules == 0 and prof_score < 60:
-                    consistency_checks.append(0.3)  # Too low professionalism when no rules failed
-                else:
-                    consistency_checks.append(1.0)
-
-            # Overall score should roughly match average of category scores
-            if len(category_scores) > 1:
-                avg_category_score = sum(category_scores.values()) / len(category_scores)
-                overall_score = category_scores.get("Overall", category_scores.get("overall_score"))
-                if overall_score:
-                    score_diff = abs(overall_score - avg_category_score)
-                    if score_diff > 20:  # More than 20 points difference
-                        consistency_checks.append(0.4)
-                    else:
-                        consistency_checks.append(1.0)
-
-            # Return average consistency if we have checks
-            if consistency_checks:
-                return sum(consistency_checks) / len(consistency_checks)
-            else:
-                return 0.7  # Slightly positive if no consistency checks available
-
-        except Exception as e:
-            logger.warning(f"Error computing category consistency signal: {e}")
-            return 0.5
-
-    def _compute_schema_validity_signal(self, schema_valid: bool) -> float:
-        """Signal 5: Schema validation result."""
-        return 1.0 if schema_valid else 0.0
+        coverage = satisfied / total_behaviors
+        # Small boost if many behaviors evaluated
+        size_factor = min(1.0, total_behaviors / 10.0)
+        score = max(0.0, min(1.0, 0.7 * coverage + 0.3 * size_factor))
+        return score
 
     def _get_confidence_level(self, confidence_score: float) -> str:
         """Convert confidence score to human-readable level."""
@@ -266,37 +354,52 @@ class ConfidenceEngine:
         else:
             return "low"
 
-    def _generate_reasoning(self, signals: Dict[str, float], confidence_score: float) -> str:
+    def _generate_reasoning(
+        self, signals: Dict[str, float], confidence_score: float, schema_valid: bool
+    ) -> str:
         """Generate human-readable reasoning for the confidence score."""
-        reasons = []
+        reasons: List[str] = []
 
-        # Transcript quality
-        if signals["transcript_quality"] < 0.5:
+        tq = signals.get("transcript_quality", 0.5)
+        if tq < 0.5:
             reasons.append("low transcript confidence")
-        elif signals["transcript_quality"] > 0.8:
+        elif tq > 0.8:
             reasons.append("high transcript confidence")
 
-        # Reproducibility
-        if signals["llm_reproducibility"] < 0.7:
-            reasons.append("inconsistent AI responses")
-        elif signals["llm_reproducibility"] > 0.9:
-            reasons.append("highly reproducible AI responses")
+        da = signals.get("detection_agreement", 0.5)
+        if da < 0.5:
+            reasons.append("weak or inconsistent behavior detection")
+        elif da > 0.8:
+            reasons.append("strong agreement across detection methods")
 
-        # Rule agreement
-        if signals["rule_llm_agreement"] < 0.5:
-            reasons.append("AI scores disagree with rule checks")
-        elif signals["rule_llm_agreement"] > 0.8:
-            reasons.append("AI scores align with rule checks")
+        lc = signals.get("llm_consistency", 0.5)
+        if lc < 0.5:
+            reasons.append("LLM stage scores are inconsistent")
+        elif lc > 0.8:
+            reasons.append("LLM stage scores are consistent and confident")
 
-        # Category consistency
-        if signals["category_consistency"] < 0.6:
-            reasons.append("inconsistent category scores")
-        elif signals["category_consistency"] > 0.8:
-            reasons.append("logically consistent category scores")
+        ra = signals.get("rule_llm_agreement", 0.5)
+        if ra < 0.5:
+            reasons.append("rule checks disagree with stage scores")
+        elif ra > 0.8:
+            reasons.append("rule checks align with stage scores")
 
-        # Schema validity
-        if not signals["output_schema_valid"]:
-            reasons.append("invalid AI response format")
+        es = signals.get("evidence_strength", 0.5)
+        if es < 0.5:
+            reasons.append("limited evidence to support decisions")
+        elif es > 0.8:
+            reasons.append("strong evidence backing behavior decisions")
+
+        sv = signals.get("stage_variance_factor", 0.5)
+        if sv < 0.5:
+            reasons.append("large variance between stage scores")
+
+        bc = signals.get("behavior_coverage", 0.5)
+        if bc < 0.5:
+            reasons.append("many blueprint behaviors lack clear evaluation")
+
+        if not schema_valid:
+            reasons.append("LLM output failed schema validation (reduced confidence)")
 
         if not reasons:
             reasons.append("all quality checks passed")

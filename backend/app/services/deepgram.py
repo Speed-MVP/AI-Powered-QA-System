@@ -11,10 +11,17 @@ class DeepgramService:
     def __init__(self):
         self.api_key = settings.deepgram_api_key
         self.base_url = "https://api.deepgram.com/v1/listen"
+        if not self.api_key:
+            raise ValueError("Deepgram API key not configured")
+        # Production-safe client timeout (connect + total)
+        self._timeout = aiohttp.ClientTimeout(total=180, connect=15)
     
     async def transcribe(self, file_url: str):
         """Transcribe audio with diarization (alignment removed)"""
         logger.info("Transcription starting - alignment disabled/removed")
+
+        if not file_url or not isinstance(file_url, str):
+            raise ValueError("file_url is required for transcription")
 
         headers = {
             "Authorization": f"Token {self.api_key}",
@@ -31,7 +38,7 @@ class DeepgramService:
             "intents": "false"  # Can enable for intent detection if needed
         }
         
-        async with aiohttp.ClientSession() as session:
+        async with aiohttp.ClientSession(timeout=self._timeout) as session:
             async with session.post(
                 self.base_url,
                 json={"url": file_url},

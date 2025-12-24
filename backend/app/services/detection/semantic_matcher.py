@@ -4,19 +4,40 @@ Embedding-based similarity matching for behaviors
 """
 
 import logging
+import os
 from typing import List, Dict, Any, Optional
 import numpy as np
 from sklearn.metrics.pairwise import cosine_similarity
 
 logger = logging.getLogger(__name__)
 
+# Configurable semantic similarity threshold
+# Default lowered from 0.78 to 0.70 for better recall
+# Can be overridden via environment variable
+DEFAULT_SEMANTIC_THRESHOLD = 0.70
+
 
 class SemanticMatcher:
     """Semantic matching using embeddings"""
     
-    def __init__(self, similarity_threshold: float = 0.78):
-        self.similarity_threshold = similarity_threshold
+    def __init__(self, similarity_threshold: Optional[float] = None):
+        # Allow threshold to be configured via environment variable
+        if similarity_threshold is not None:
+            self.similarity_threshold = similarity_threshold
+        else:
+            env_threshold = os.getenv("SEMANTIC_SIMILARITY_THRESHOLD")
+            if env_threshold:
+                try:
+                    self.similarity_threshold = float(env_threshold)
+                    logger.info(f"Using semantic threshold from env: {self.similarity_threshold}")
+                except ValueError:
+                    logger.warning(f"Invalid SEMANTIC_SIMILARITY_THRESHOLD: {env_threshold}, using default")
+                    self.similarity_threshold = DEFAULT_SEMANTIC_THRESHOLD
+            else:
+                self.similarity_threshold = DEFAULT_SEMANTIC_THRESHOLD
+        
         self.embedding_cache = {}  # Cache embeddings for performance
+        logger.debug(f"SemanticMatcher initialized with threshold: {self.similarity_threshold}")
     
     def match(
         self,
@@ -56,6 +77,7 @@ class SemanticMatcher:
             )
             
             if behavior_semantic is None or utterance_embedding is None:
+                logger.debug(f"Embedding unavailable for semantic match - behavior: {behavior_semantic is not None}, utterance: {utterance_embedding is not None}")
                 return None
             
             # Calculate cosine similarity
@@ -64,6 +86,12 @@ class SemanticMatcher:
                 [utterance_embedding]
             )[0][0]
             
+            # Log similarity score for debugging
+            utterance_preview = utterance_text[:80] if isinstance(utterance_text, str) else str(utterance_text)[:80]
+            behavior_preview = behavior_description[:50] if behavior_description else "N/A"
+            logger.debug(f"SEMANTIC_MATCH: similarity={similarity:.3f}, threshold={self.similarity_threshold}, "
+                        f"behavior='{behavior_preview}...', utterance='{utterance_preview}...'")
+            
             if similarity >= self.similarity_threshold:
                 # Ensure matched_text is a string
                 matched_text = utterance_text
@@ -71,6 +99,9 @@ class SemanticMatcher:
                     matched_text = " ".join(str(item) for item in matched_text)
                 elif not isinstance(matched_text, str):
                     matched_text = str(matched_text) if matched_text is not None else ""
+                
+                logger.info(f"SEMANTIC_MATCH_FOUND: similarity={similarity:.3f} >= threshold={self.similarity_threshold} "
+                           f"for behavior='{behavior_preview}...'")
                 
                 return {
                     "detected": True,

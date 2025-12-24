@@ -196,6 +196,9 @@ async def process_recording_blueprint_task(payload: Dict[str, Any]) -> Dict[str,
         try:
             if evaluation is not None:
                 evaluation.status = EvaluationStatus.failed
+                # Flag for human review if failure is PII-related
+                if "PII" in str(e) or "redaction" in str(e).lower():
+                    evaluation.requires_human_review = True
                 evaluation.final_evaluation = (evaluation.final_evaluation or {})
                 evaluation.final_evaluation["error"] = str(e)
                 db.commit()

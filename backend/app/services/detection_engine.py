@@ -102,6 +102,8 @@ class DetectionEngine:
             if seg.get("speaker") == "agent"
         ]
         
+        logger.info(f"DETECTION_ENGINE: Starting detection for {len(behaviors)} behaviors across {len(agent_utterances)} agent utterances")
+        
         # Detect each behavior
         for behavior in behaviors:
             behavior_id = behavior.get("id")
@@ -113,11 +115,15 @@ class DetectionEngine:
             critical_action = behavior.get("metadata", {}).get("critical_action")
             timing_constraints = behavior.get("metadata", {}).get("timing_requirement")
             
+            logger.debug(f"DETECTION: Checking behavior '{behavior_name}' (id={behavior_id[:8]}..., mode={detection_mode}, "
+                        f"phrases={len(phrases) if phrases else 0})")
+            
             # Try to detect in agent utterances
             detection_result = None
             best_confidence = 0.0
             matched_text = None
             detection_time = None
+            best_utterance_confidence = 0.0
             
             for utterance in agent_utterances:
                 utterance_text_raw = utterance.get("text", "")
@@ -147,13 +153,18 @@ class DetectionEngine:
                         matched_text = match_result.get("matched_text", normalized_text)
                         detection_time = utterance_time
                         detection_result = match_result
+                        best_utterance_confidence = deepgram_confidence
             
             # Evaluate compliance
+            stage_start = None
+            if agent_utterances:
+                stage_start = agent_utterances[0].get("start") or 0
+            
             compliance_result = self.compliance_evaluator.evaluate_behavior(
                 behavior_type=behavior_type,
                 detected=detection_result is not None,
                 detection_time=detection_time,
-                stage_start_time=agent_utterances[0].get("start", 0) if agent_utterances else None,
+                stage_start_time=stage_start,
                 timing_constraints=timing_constraints,
                 critical_action=critical_action
             )
@@ -163,14 +174,24 @@ class DetectionEngine:
                 exact_result=detection_result if detection_result and detection_result.get("match_type") == "exact" else None,
                 semantic_result=detection_result if detection_result and detection_result.get("match_type") == "semantic" else None,
                 compliance_result=compliance_result,
-                deepgram_confidence=1.0,  # Would use actual from utterance
+                deepgram_confidence=best_utterance_confidence,
                 utterance_count=len(agent_utterances)
             )
             
             behavior_result["behavior_id"] = behavior_id
             behavior_result["behavior_name"] = behavior_name
-            behavior_result["start_time"] = detection_time
-            behavior_result["end_time"] = detection_time + 2.0 if detection_time else None  # Estimate
+            behavior_result["start"] = detection_time
+            end_time = detection_time + 2.0 if detection_time else None  # Estimate
+            behavior_result["end"] = end_time
+            
+            # Log detection result
+            detected = behavior_result.get("detected", False)
+            confidence = behavior_result.get("confidence", 0.0)
+            match_type = behavior_result.get("match_type", "none")
+            if detected:
+                logger.info(f"DETECTION_RESULT: '{behavior_name}' DETECTED (confidence={confidence:.2f}, type={match_type}, time={detection_time})")
+            else:
+                logger.debug(f"DETECTION_RESULT: '{behavior_name}' NOT detected")
             
             results["behaviors"].append(behavior_result)
         
@@ -180,6 +201,19 @@ class DetectionEngine:
         detected_count = sum(1 for b in results["behaviors"] if b.get("detected", False))
         behaviors_count = len(results["behaviors"])
         avg_confidence = sum(b.get("confidence", 0) for b in results["behaviors"]) / behaviors_count if behaviors_count > 0 else 0
+        
+        # Log summary
+        logger.info(f"DETECTION_SUMMARY: Detected {detected_count}/{behaviors_count} behaviors "
+                   f"(avg_confidence={avg_confidence:.2f}, duration={duration:.2f}s)")
+        
+        # Log detected behavior names for easy debugging
+        detected_names = [b.get("behavior_name") for b in results["behaviors"] if b.get("detected", False)]
+        if detected_names:
+            logger.info(f"DETECTION_SUMMARY: Detected behaviors: {', '.join(detected_names)}")
+        
+        not_detected_names = [b.get("behavior_name") for b in results["behaviors"] if not b.get("detected", False)]
+        if not_detected_names:
+            logger.debug(f"DETECTION_SUMMARY: Not detected: {', '.join(not_detected_names)}")
         
         # Record metrics (if blueprint_id available)
         # monitoring_service.record_detection_metric(...)

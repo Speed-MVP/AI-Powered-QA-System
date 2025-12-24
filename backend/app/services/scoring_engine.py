@@ -42,7 +42,16 @@ class ScoringEngine:
         Returns:
             Final evaluation snapshot
         """
+        logger.info("SCORING_ENGINE: Starting evaluation computation")
         company_config = company_config or {}
+        
+        # Log input summary
+        num_stages = len(llm_stage_evaluations)
+        num_behaviors = sum(len(s.get("behaviors", [])) for s in llm_stage_evaluations.values())
+        num_categories = len(compiled_rubric.get("categories", []))
+        num_mappings = len(compiled_rubric.get("mappings", []))
+        logger.debug(f"SCORING_INPUT: {num_stages} stages, {num_behaviors} behaviors, "
+                    f"{num_categories} rubric categories, {num_mappings} mappings")
         
         # Step A: Normalize weights
         self._normalize_weights(compiled_rubric)
@@ -53,12 +62,27 @@ class ScoringEngine:
             detection_results,
             compiled_rubric
         )
+        logger.debug(f"SCORING_STEP_B: Computed {len(behavior_scores)} behavior scores")
+        
+        # Log behavior score details
+        for beh_id, beh_data in behavior_scores.items():
+            logger.debug(f"  BEHAVIOR_SCORE: '{beh_data.get('behavior_name')}' - "
+                        f"satisfaction={beh_data.get('satisfaction_level')}, "
+                        f"weight={beh_data.get('weight'):.1f}, "
+                        f"raw_score={beh_data.get('raw_score'):.1f}")
         
         # Step C: Apply confidence adjustment
         behavior_scores = self._apply_confidence_adjustment(behavior_scores, company_config)
         
         # Step D: Aggregate stage scores
         stage_scores = self._aggregate_stage_scores(behavior_scores, compiled_rubric)
+        logger.debug(f"SCORING_STEP_D: Aggregated {len(stage_scores)} stage scores")
+        
+        # Log stage score details
+        for stage in stage_scores:
+            logger.info(f"  STAGE_SCORE: '{stage.get('stage_name')}' - "
+                       f"score={stage.get('score')}, weight={stage.get('weight'):.1f}, "
+                       f"confidence={stage.get('confidence'):.2f}")
         
         # Step E: Apply penalties
         total_penalties = 0
@@ -68,6 +92,8 @@ class ScoringEngine:
                 policy_rule_results,
                 company_config
             )
+            if total_penalties > 0:
+                logger.info(f"SCORING_PENALTIES: Applied {total_penalties} penalty points from {len(penalty_breakdown)} violations")
         
         # Step F: Calculate overall score
         overall_score = self._calculate_overall_score(stage_scores, total_penalties)
@@ -89,6 +115,13 @@ class ScoringEngine:
         
         # Calculate overall confidence
         overall_confidence = self._calculate_overall_confidence(stage_scores)
+        
+        # Log final summary
+        logger.info(f"SCORING_RESULT: overall_score={round(overall_score)}, "
+                   f"passed={overall_passed}, confidence={overall_confidence:.2f}, "
+                   f"penalties={total_penalties}, requires_review={requires_human_review}")
+        if failure_reason:
+            logger.info(f"SCORING_RESULT: failure_reason={failure_reason}")
         
         return {
             "overall_score": round(overall_score),
@@ -133,6 +166,13 @@ class ScoringEngine:
             weight = mapping.get("contribution_weight", 0)
             behavior_weights[step_id] = weight
         
+        logger.debug(f"SCORING_WEIGHTS: Loaded {len(behavior_weights)} behavior weight mappings")
+        if not behavior_weights:
+            logger.warning("SCORING_WEIGHTS: No behavior weight mappings found in rubric! All scores will be 0.")
+        
+        # Track behaviors without weights for debugging
+        missing_weights = []
+        
         # Process LLM evaluations
         for stage_id, stage_eval in llm_evaluations.items():
             behaviors = stage_eval.get("behaviors", [])
@@ -153,6 +193,10 @@ class ScoringEngine:
                 # Get behavior weight
                 weight = behavior_weights.get(behavior_id, 0)
                 
+                # Track missing weights
+                if weight == 0 and behavior_id not in behavior_weights:
+                    missing_weights.append(behavior.get("behavior_name", behavior_id))
+                
                 # Calculate raw score
                 raw_score = weight * multiplier
                 
@@ -168,6 +212,10 @@ class ScoringEngine:
                     # Preserve human-readable stage name for downstream aggregation
                     "stage_name": stage_name,
                 }
+        
+        # Log warning about missing weights
+        if missing_weights:
+            logger.warning(f"SCORING_WEIGHTS: {len(missing_weights)} behaviors have no weight mapping: {missing_weights[:5]}{'...' if len(missing_weights) > 5 else ''}")
         
         return behavior_scores
     
@@ -249,10 +297,19 @@ class ScoringEngine:
                     stage_id = category.get("id")
                     score = 0.0
                     confidence_scores: List[float] = []
+                    total_weight = 0.0
                 else:
                     stage_id = matching_stage.get("stage_id")
-                    score = matching_stage.get("total_score", 0.0)
+                    total_score = matching_stage.get("total_score", 0.0)
+                    total_weight = matching_stage.get("total_weight", 0.0)
                     confidence_scores = matching_stage.get("confidence_scores", [])
+                    
+                    # Calculate stage score as percentage (0-100)
+                    # If total_weight is 0, score is 0 (no behaviors in this stage)
+                    if total_weight > 0:
+                        score = (total_score / total_weight) * 100.0
+                    else:
+                        score = 0.0
 
                 stage_weight = category.get("weight", 0)
                 stage_confidence = mean(confidence_scores or [0.5])
@@ -275,9 +332,16 @@ class ScoringEngine:
 
             for stage_id, stage_data in stage_scores_by_id.items():
                 stage_name = stage_data.get("stage_name") or stage_id
-                score = stage_data.get("total_score", 0.0)
+                total_score = stage_data.get("total_score", 0.0)
+                total_weight = stage_data.get("total_weight", 0.0)
                 confidence_scores = stage_data.get("confidence_scores", [])
                 stage_confidence = mean(confidence_scores or [0.5])
+                
+                # Calculate stage score as percentage (0-100)
+                if total_weight > 0:
+                    score = (total_score / total_weight) * 100.0
+                else:
+                    score = 0.0
 
                 result.append({
                     "stage_id": stage_id,
@@ -335,9 +399,37 @@ class ScoringEngine:
         stage_scores: List[Dict[str, Any]],
         total_penalties: float
     ) -> float:
-        """Calculate overall score"""
-        total_stage_score = sum(s.get("score", 0) for s in stage_scores)
-        overall_score = total_stage_score - total_penalties
+        """
+        Calculate overall score as weighted average of stage scores, then apply penalties.
+        
+        Overall score = (weighted average of stage scores) - penalties
+        Where weighted average = sum(stage_score * stage_weight) / sum(stage_weights)
+        """
+        if not stage_scores:
+            return 0.0
+        
+        # Calculate weighted average of stage scores
+        total_weighted_score = 0.0
+        total_weight = 0.0
+        
+        for stage in stage_scores:
+            stage_score = stage.get("score", 0.0)  # Already a percentage 0-100
+            stage_weight = stage.get("weight", 0.0)
+            
+            total_weighted_score += stage_score * stage_weight
+            total_weight += stage_weight
+        
+        # Calculate weighted average
+        if total_weight > 0:
+            weighted_avg_score = total_weighted_score / total_weight
+        else:
+            weighted_avg_score = 0.0
+        
+        # Apply penalties (penalties are point deductions, not percentages)
+        overall_score = weighted_avg_score - total_penalties
+        
+        logger.debug(f"SCORING_OVERALL: weighted_avg={weighted_avg_score:.1f}, penalties={total_penalties:.1f}, final={overall_score:.1f}")
+        
         return max(0.0, min(100.0, overall_score))
     
     def _determine_pass_fail(

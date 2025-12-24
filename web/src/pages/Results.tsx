@@ -23,6 +23,7 @@ export function Results() {
   const [transcript, setTranscript] = useState<TranscriptResponse | null>(null)
   const [audioUrl, setAudioUrl] = useState<string | null>(null)
   const [isPlaying, setIsPlaying] = useState(false)
+  const [piiBlocked, setPiiBlocked] = useState<string | null>(null)
   const [confirmModal, setConfirmModal] = useState<{ isOpen: boolean; title: string; message: string; onConfirm: () => void } | null>(null)
   const [alertModal, setAlertModal] = useState<{ isOpen: boolean; title: string; message: string; type: 'success' | 'error' | 'info' } | null>(null)
 
@@ -60,15 +61,29 @@ export function Results() {
         
         setRecording(rec)
 
+        // Surface PII/redaction-blocked failures explicitly
+        if (rec.status === 'failed') {
+          const msg = rec.error_message || 'Evaluation failed.'
+          if (msg.toLowerCase().includes('pii') || msg.toLowerCase().includes('redaction')) {
+            setPiiBlocked(msg)
+            setError(null)
+          } else {
+            setError(msg)
+          }
+          setLoading(false)
+          isLoadingRef.current = false
+          return
+        }
+
         if (rec.status !== 'completed') {
           setLoading(false)
           isLoadingRef.current = false
           return
         }
 
-        // Fetch all data in parallel
+        // Fetch all data in parallel (include explanation in evaluation)
         const [evalRes, transcriptRes, dl] = await Promise.all([
-          api.getEvaluation(recordingId),
+          api.getEvaluation(recordingId, { include_explanation: true }),
           api.getTranscript(recordingId).catch(() => null),
           api.getDownloadUrl(recordingId).catch(() => null),
         ])
@@ -126,13 +141,13 @@ export function Results() {
   const handleRefresh = async () => {
     if (!recordingId || refreshing) return
     
-    try {
+      try {
       setRefreshing(true)
       const rec = await api.getRecording(recordingId)
       setRecording(rec)
       if (rec.status === 'completed') {
         const [evalRes, transcriptRes, dl] = await Promise.all([
-          api.getEvaluation(recordingId),
+          api.getEvaluation(recordingId, { include_explanation: true }),
           api.getTranscript(recordingId).catch(() => null),
           api.getDownloadUrl(recordingId).catch(() => null),
         ])
@@ -232,6 +247,9 @@ export function Results() {
     URL.revokeObjectURL(url)
   }
 
+  const explanation = (evaluation as any)?.explanation as any | undefined
+  const confidenceBreakdown = (evaluation as any)?.confidence_breakdown as any | undefined
+
   return (
     <div className="min-h-screen relative">
       <div className="fixed inset-0 -z-10 overflow-hidden pointer-events-none">
@@ -304,6 +322,21 @@ export function Results() {
             <div className="flex items-center space-x-2 text-red-700 dark:text-red-300">
               <FaExclamationCircle className="w-5 h-5" />
               <span>{error}</span>
+            </div>
+          </div>
+        ) : piiBlocked ? (
+          <div className="bg-white dark:bg-gray-800 rounded-lg p-8 border border-orange-200 dark:border-orange-800">
+            <div className="flex items-center space-x-3 text-orange-700 dark:text-orange-300">
+              <FaExclamationCircle className="w-6 h-6" />
+              <div>
+                <h3 className="text-lg font-semibold">Evaluation blocked for privacy</h3>
+                <p className="text-sm mt-1">
+                  {piiBlocked}
+                </p>
+                <p className="text-xs text-slate-600 dark:text-slate-400 mt-2">
+                  No data was sent to the model. Please remove sensitive info or route to a human reviewer.
+                </p>
+              </div>
             </div>
           </div>
         ) : !recording ? null : recording.status !== 'completed' ? (
@@ -425,6 +458,83 @@ export function Results() {
             </div>
 
             <div className="xl:col-span-2 space-y-8">
+              {/* Explanation Panel */}
+              {explanation && (
+                <div className="bg-white dark:bg-slate-800 rounded-lg border border-slate-200 dark:border-slate-700">
+                  <div className="px-6 py-4 border-b border-slate-200 dark:border-slate-700 flex items-center justify-between">
+                    <h3 className="text-lg font-semibold text-slate-900 dark:text-white flex items-center gap-2">
+                      <FaChartBar className="w-5 h-5" />
+                      Why this score?
+                    </h3>
+                  </div>
+                  <div className="p-6 space-y-4">
+                    {/* Overall explanation */}
+                    {explanation.overall_explanation && (
+                      <div>
+                        <p className="text-sm text-slate-700 dark:text-slate-300">
+                          {explanation.overall_explanation.breakdown}
+                        </p>
+                        {Array.isArray(explanation.overall_explanation.stage_contributions) && (
+                          <div className="mt-3 grid grid-cols-1 md:grid-cols-2 gap-3 text-xs">
+                            {explanation.overall_explanation.stage_contributions.map((c: any, idx: number) => (
+                              <div key={idx} className="p-2 bg-slate-50 dark:bg-slate-900/40 rounded border border-slate-200 dark:border-slate-700">
+                                <div className="flex justify-between items-center">
+                                  <span className="font-medium text-slate-900 dark:text-slate-100">
+                                    {c.stage}
+                                  </span>
+                                  <span className="text-slate-600 dark:text-slate-300">
+                                    {c.score}/100 · {c.weight?.toFixed ? c.weight.toFixed(1) : c.weight}% weight
+                                  </span>
+                                </div>
+                                <p className="mt-1 text-slate-600 dark:text-slate-400">
+                                  Contribution ≈ {c.contribution?.toFixed ? c.contribution.toFixed(1) : c.contribution} pts
+                                </p>
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    )}
+
+                    {/* Confidence breakdown */}
+                    {confidenceBreakdown && confidenceBreakdown.signals && (
+                      <div className="mt-4">
+                        <p className="text-xs font-semibold text-slate-700 dark:text-slate-200 mb-2">
+                          Confidence signals
+                        </p>
+                        <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                          {Object.entries(confidenceBreakdown.signals).map(([name, value]: [string, any]) => (
+                            <div
+                              key={name}
+                              className="p-2 bg-slate-50 dark:bg-slate-900/40 rounded border border-slate-200 dark:border-slate-700 text-xs"
+                            >
+                              <div className="flex justify-between mb-1">
+                                <span className="font-medium text-slate-800 dark:text-slate-100">
+                                  {name.replace(/_/g, ' ')}
+                                </span>
+                                <span className="text-slate-600 dark:text-slate-300">
+                                  {Math.round((value as number) * 100)}%
+                                </span>
+                              </div>
+                              <div className="w-full bg-slate-200 dark:bg-slate-700 rounded-full h-1.5">
+                                <div
+                                  className="h-1.5 rounded-full bg-blue-500"
+                                  style={{ width: `${Math.min(100, Math.max(0, (value as number) * 100))}%` }}
+                                />
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                        {confidenceBreakdown.reasoning && (
+                          <p className="mt-2 text-xs text-slate-600 dark:text-slate-400">
+                            {confidenceBreakdown.reasoning}
+                          </p>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
               {/* Stage Scores (Blueprint-based) */}
               {evaluation?.stage_scores && Array.isArray(evaluation.stage_scores) && evaluation.stage_scores.length > 0 ? (
                     <div className="bg-white dark:bg-slate-800 rounded-lg border border-slate-200 dark:border-slate-700">

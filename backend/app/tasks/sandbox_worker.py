@@ -4,13 +4,138 @@ Cloud Tasks handler for sandbox evaluations
 """
 
 import logging
-from typing import Dict, Any
+import re
+from typing import Dict, Any, List, Tuple, Optional
 from sqlalchemy.orm import Session
 from app.database import SessionLocal
 from app.models.sandbox import SandboxRun, SandboxResult, SandboxRunStatus
 from app.models.qa_blueprint import QABlueprint
 
 logger = logging.getLogger(__name__)
+
+
+# Patterns for detecting speaker roles
+CUSTOMER_PATTERNS = [
+    'customer', 'client', 'caller', 'user', 'member', 'patient', 
+    'guest', 'visitor', 'buyer', 'consumer', 'subscriber'
+]
+AGENT_PATTERNS = [
+    'agent', 'rep', 'representative', 'support', 'advisor', 'specialist',
+    'associate', 'operator', 'staff', 'employee', 'csr', 'service'
+]
+
+
+def detect_speaker_role(speaker_label: str) -> str:
+    """
+    Detect if a speaker label refers to an agent or customer.
+    
+    Args:
+        speaker_label: The raw speaker label from the transcript
+        
+    Returns:
+        Either "agent" or "customer"
+    """
+    label_lower = speaker_label.lower().strip()
+    
+    # Check for customer patterns first (more specific)
+    for pattern in CUSTOMER_PATTERNS:
+        if pattern in label_lower:
+            return "customer"
+    
+    # Check for agent patterns
+    for pattern in AGENT_PATTERNS:
+        if pattern in label_lower:
+            return "agent"
+    
+    # Default to agent if unsure
+    return "agent"
+
+
+def parse_transcript_line(line: str) -> Optional[Tuple[str, str]]:
+    """
+    Parse a transcript line to extract speaker and text.
+    
+    Handles formats like:
+    - "Agent: Hello, how can I help?"
+    - "Customer (John): I have a question"
+    - "Rep: What seems to be the issue?"
+    
+    Args:
+        line: A single line of transcript text
+        
+    Returns:
+        Tuple of (speaker_role, text) or None if line is empty/unparseable
+    """
+    if not line or not line.strip():
+        return None
+    
+    line = line.strip()
+    
+    # Try to split by colon
+    if ':' in line:
+        # Find the first colon that's likely a speaker separator
+        # (not part of a time like "10:30" or URL)
+        colon_match = re.match(r'^([^:]{1,50}):\s*(.+)$', line)
+        if colon_match:
+            speaker_raw = colon_match.group(1).strip()
+            text = colon_match.group(2).strip()
+            
+            # Check if this looks like a valid speaker label
+            # (not a time stamp, not too long, contains letters)
+            if (len(speaker_raw) <= 50 and 
+                re.search(r'[a-zA-Z]', speaker_raw) and
+                not re.match(r'^\d{1,2}:\d{2}', speaker_raw)):
+                
+                speaker_role = detect_speaker_role(speaker_raw)
+                return (speaker_role, text)
+    
+    # No valid speaker found - return line as text with default speaker
+    return ("agent", line)
+
+
+def parse_transcript_text(transcript_text: str) -> List[Dict[str, Any]]:
+    """
+    Parse raw transcript text into segments.
+    
+    Args:
+        transcript_text: Raw transcript text with speaker labels
+        
+    Returns:
+        List of segment dictionaries with speaker, text, and timestamps
+    """
+    segments = []
+    lines = transcript_text.strip().split('\n')
+    
+    line_number = 0
+    for line in lines:
+        parsed = parse_transcript_line(line)
+        if parsed is None:
+            continue
+        
+        speaker_role, text = parsed
+        
+        # Skip empty text
+        if not text:
+            continue
+        
+        # Calculate approximate timestamps (10 seconds per segment)
+        start_time = float(line_number * 10)
+        end_time = float((line_number + 1) * 10)
+        
+        segment = {
+            "speaker": speaker_role,
+            "text": text,
+            # Include both timestamp field naming conventions for compatibility
+            "start": start_time,
+            "end": end_time,
+            "start_time": start_time,
+            "end_time": end_time,
+            "confidence": 1.0
+        }
+        segments.append(segment)
+        line_number += 1
+    
+    return segments
 
 
 async def sandbox_evaluate_job_handler(payload: Dict[str, Any]) -> Dict[str, Any]:
@@ -72,44 +197,29 @@ async def sandbox_evaluate_job_handler(payload: Dict[str, Any]) -> Dict[str, Any
                 from app.models.recording import Recording, RecordingStatus
                 import uuid
                 
-                # Parse transcript text into segments (basic parsing - split by lines)
-                lines = transcript_text.strip().split('\n')
-                segments = []
-                for i, line in enumerate(lines):
-                    if ':' in line:
-                        parts = line.split(':', 1)
-                        speaker = parts[0].strip().lower()
-                        text = parts[1].strip()
-                        # Normalize speaker names
-                        if 'customer' in speaker or 'client' in speaker:
-                            speaker_role = "customer"
-                        else:
-                            speaker_role = "agent"
-                        
-                        segments.append({
-                            "speaker": speaker_role,
-                            "text": text,
-                            "start": float(i * 10),  # Approximate timestamps
-                            "end": float((i + 1) * 10),
-                            "confidence": 1.0
-                        })
-                    else:
-                        # If no speaker label, assume agent
-                        segments.append({
-                            "speaker": "agent",
-                            "text": line.strip(),
-                            "start": float(i * 10),
-                            "end": float((i + 1) * 10),
-                            "confidence": 1.0
-                        })
+                # Parse transcript text into segments using improved parser
+                segments = parse_transcript_text(transcript_text)
+                
+                # Log parsing results for debugging
+                agent_count = sum(1 for s in segments if s.get("speaker") == "agent")
+                customer_count = sum(1 for s in segments if s.get("speaker") == "customer")
+                logger.info(f"Parsed transcript: {len(segments)} segments ({agent_count} agent, {customer_count} customer)")
+                
+                if segments:
+                    # Log first few segments for debugging
+                    for i, seg in enumerate(segments[:3]):
+                        logger.debug(f"  Segment {i}: speaker={seg.get('speaker')}, text='{seg.get('text', '')[:50]}...'")
                 
                 if not segments:
                     # Fallback: single segment with all text
+                    logger.warning("No segments parsed from transcript, using fallback single-segment approach")
                     segments = [{
                         "speaker": "agent",
                         "text": transcript_text,
                         "start": 0.0,
                         "end": 10.0,
+                        "start_time": 0.0,
+                        "end_time": 10.0,
                         "confidence": 1.0
                     }]
                 

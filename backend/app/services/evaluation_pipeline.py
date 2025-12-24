@@ -142,13 +142,14 @@ class EvaluationPipeline:
             )
             
             # 6. Prepare transcript for LLM (redact PII, compress if needed)
-            redacted_segments = []
-            for seg in transcript_segments:
-                redacted_text = self.pii_redactor.redact_text(seg.get("text", ""))
-                redacted_segments.append({
-                    **seg,
-                    "text": redacted_text
-                })
+            pii_config = (company_config or {}).get("pii", {})
+            redacted_segments, pii_report = self.pii_redactor.redact_segments(
+                transcript_segments,
+                config={**pii_config, "strict": True},  # fail-closed before LLM
+                return_report=True
+            )
+            if pii_report.get("residual_hits"):
+                raise ValueError("Residual PII detected after redaction; aborting LLM call")
             
             # 7. Run LLM Stage Evaluator
             logger.info(f"Running LLM stage evaluator for recording {recording_id}")

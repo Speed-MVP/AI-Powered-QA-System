@@ -73,6 +73,7 @@ export function Test() {
   const [audioUrl, setAudioUrl] = useState<string | null>(null)
   const [isPlaying, setIsPlaying] = useState(false)
   const [selectedRecordingId, setSelectedRecordingId] = useState<string | null>(null)
+  const [piiBlocked, setPiiBlocked] = useState<string | null>(null)
   const audioRef = useRef<HTMLAudioElement | null>(null)
   const [showHistory, setShowHistory] = useState(false)
   const [audioError, setAudioError] = useState<string | null>(null)
@@ -513,6 +514,7 @@ export function Test() {
 
   // Poll for recording status and results
   const pollRecordingStatus = async (recordingId: string, fileId: string) => {
+    setPiiBlocked(null)
     const maxAttempts = 60 // 5 minutes max (5 second intervals)
     let attempts = 0
 
@@ -586,7 +588,22 @@ export function Test() {
             }
           }
         } else if (recording.status === 'failed') {
-          throw new Error(recording.error_message || 'Processing failed')
+          const msg = recording.error_message || 'Processing failed'
+          if (msg.toLowerCase().includes('pii') || msg.toLowerCase().includes('redaction')) {
+            setPiiBlocked(msg)
+            setIsProcessing(false)
+            setFiles(prev => prev.map(f => 
+              f.id === fileId 
+                ? { 
+                    ...f, 
+                    status: 'error' as const, 
+                    error: 'Evaluation blocked for privacy. Needs human review.' 
+                  } 
+                : f
+            ))
+            return
+          }
+          throw new Error(msg)
         } else if (recording.status === 'processing' || recording.status === 'queued') {
           // Continue polling
           if (attempts < maxAttempts) {
@@ -1180,7 +1197,22 @@ export function Test() {
               </div>
             )}
 
-            {result && (
+            {piiBlocked && (
+              <div className="bg-white dark:bg-slate-800 rounded-lg border border-orange-200 dark:border-orange-800 p-6 mb-6">
+                <div className="flex items-start space-x-3 text-orange-700 dark:text-orange-300">
+                  <FaExclamationCircle className="w-6 h-6 flex-shrink-0" />
+                  <div>
+                    <h3 className="text-lg font-semibold">Evaluation blocked for privacy</h3>
+                    <p className="text-sm mt-1">{piiBlocked}</p>
+                    <p className="text-xs text-slate-600 dark:text-slate-400 mt-2">
+                      No data was sent to the model. Please remove sensitive information or route to a human reviewer.
+                    </p>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {result && !piiBlocked && (
               <div className="space-y-6">
                 {/* Overall Score Card */}
                 <div className="bg-white dark:bg-slate-800 rounded-lg border border-slate-200 dark:border-slate-700">

@@ -65,15 +65,15 @@ class DeterministicRuleEngine:
                 normalized_phrase = self.normalize_text(phrase)
                 
                 if normalized_phrase in normalized_segment:
-                    timestamp = segment.get("start_time")
+                    timestamp = segment.get("start")
                     if timestamp is not None:
                         if earliest_timestamp is None or timestamp < earliest_timestamp:
                             earliest_timestamp = timestamp
                         
                         evidence.append({
                             "text": segment_text,
-                            "start_time": timestamp,
-                            "end_time": segment.get("end_time"),
+                            "start": timestamp,
+                            "end": segment.get("end"),
                             "matched_phrase": phrase
                         })
         
@@ -271,8 +271,8 @@ class DeterministicRuleEngine:
                                     evaluation["evidence"].append({
                                         "type": "transcript_snippet",
                                         "text": segment.get("text", ""),
-                                        "start_time": segment.get("start_time"),
-                                        "end_time": segment.get("end_time"),
+                                        "start": segment.get("start"),
+                                        "end": segment.get("end"),
                                         "match_type": "contains"
                                     })
                                     break
@@ -314,8 +314,8 @@ class DeterministicRuleEngine:
                                     evaluation["evidence"].append({
                                         "type": "transcript_snippet",
                                         "text": segment.get("text", ""),
-                                        "start_time": segment.get("start_time"),
-                                        "end_time": segment.get("end_time"),
+                                        "start": segment.get("start"),
+                                        "end": segment.get("end"),
                                         "match_type": "contains"
                                     })
                                     break
@@ -342,13 +342,13 @@ class DeterministicRuleEngine:
                     evaluation["evidence"] = [
                         {
                             "type": "timestamp",
-                            "start_time": before_timestamp,
-                            "end_time": None
+                            "start": before_timestamp,
+                            "end": None
                         },
                         {
                             "type": "timestamp",
-                            "start_time": after_timestamp,
-                            "end_time": None
+                            "start": after_timestamp,
+                            "end": None
                         }
                     ]
             
@@ -367,7 +367,7 @@ class DeterministicRuleEngine:
                     normalized_target = self.normalize_text(target_id_or_phrase)
                     for segment in scope_segments:
                         if normalized_target in self.normalize_text(segment.get("text", "")):
-                            target_timestamp = segment.get("start_time")
+                            target_timestamp = segment.get("start")
                             break
                 
                 if target_timestamp is None:

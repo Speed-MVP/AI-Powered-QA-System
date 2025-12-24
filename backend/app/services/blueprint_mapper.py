@@ -145,16 +145,20 @@ class BlueprintMapper:
         """Map behavior to FlowStep"""
         detection_mode = behavior_data.get("detection_mode", "semantic")
         
-        # expected_phrases only if detection_mode != semantic
+        # ALWAYS preserve phrases regardless of detection_mode
+        # Phrases provide valuable context for semantic matching too
         expected_phrases = None
-        if detection_mode != "semantic":
-            phrases = behavior_data.get("phrases", [])
-            if phrases:
-                # Convert to array of strings
-                expected_phrases = [
-                    p if isinstance(p, str) else p.get("text", "")
-                    for p in phrases
-                ]
+        phrases = behavior_data.get("phrases", [])
+        if phrases:
+            # Convert to array of strings
+            expected_phrases = [
+                p if isinstance(p, str) else p.get("text", "")
+                for p in phrases
+            ]
+            # Filter out empty strings
+            expected_phrases = [p for p in expected_phrases if p]
+            if not expected_phrases:
+                expected_phrases = None
         
         metadata = behavior_data.get("metadata", {})
         
@@ -203,15 +207,19 @@ class BlueprintMapper:
             # Optional behaviors don't create compliance rules
             return []
         
-        # Get phrases
+        # ALWAYS get phrases regardless of detection_mode
+        # Phrases are valuable for semantic matching context too
         phrases = None
-        if detection_mode != "semantic":
-            phrases_list = behavior_data.get("phrases", [])
-            if phrases_list:
-                phrases = [
-                    p if isinstance(p, str) else p.get("text", "")
-                    for p in phrases_list
-                ]
+        phrases_list = behavior_data.get("phrases", [])
+        if phrases_list:
+            phrases = [
+                p if isinstance(p, str) else p.get("text", "")
+                for p in phrases_list
+            ]
+            # Filter out empty strings
+            phrases = [p for p in phrases if p]
+            if not phrases:
+                phrases = None
         
         # Determine match mode
         match_mode = None
